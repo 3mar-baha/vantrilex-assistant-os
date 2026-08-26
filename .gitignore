@@ -1,0 +1,32 @@
+# Secrets — never commit
+.env
+.env.*
+!.env.example
+config/google_service_account.json
+config/google_oauth_client.json
+.claude/settings.local.json
+*.session
+*.session-journal
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+dist/
+build/
+
+# Working artifacts
+.ingest/
+.claude/plans/
+
+# OS noise
+Thumbs.db
+.DS_Store
+desktop.ini
