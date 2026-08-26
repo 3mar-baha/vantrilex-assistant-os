@@ -1,6 +1,23 @@
 # Phase State — resumable execution record
 
-Fresh sessions: read this file plus `docs/01-ARCHITECTURE.md` §1 before acting.
+## ⚡ SESSION RESUME PROTOCOL (every fresh session executes this BEFORE acting)
+
+1. **Prime context** — read, in order: `CLAUDE.md` → this file → `docs/01-ARCHITECTURE.md` §1
+   (binding mission record) → `docs/03-DECISIONS.md` → `docs/02-BACKLOG.md`. Then `uos status`.
+2. **Sync the OS framework to latest upstream** and verify its surface:
+   `git -C "C:\Projects\Git-hub\Workflow\universal-agentic-os" pull --ff-only`
+   `uos doctor` must be green; confirm subcommands exist (`status`, `graph`, `decide`,
+   `dispatch`, `merge`, `ship`). If toolkit integrity fails, run that repo's
+   `scripts/setup-toolkit.sh` then `scripts/sync-toolkit.sh`.
+3. **Preflight gate (blocking)** — FFmpeg present (`ffmpeg -version`) · OmniRoute
+   `http://localhost:20128/v1/models` HTTP 200 AND pools non-empty (log line
+   "matched no connected models" ⇒ halt and ask the owner to connect free provider
+   credentials) · git identity set · `make gate` green on py -3.12.
+4. **Resume** at the phase marked ← **current** in the lifecycle below. The six discovery
+   rulings recorded here are SETTLED — never re-litigate them.
+5. **Discipline** — report like a leader after every phase (completed / remaining / risks /
+   next action); update this file at every phase exit; end every session resumable from disk.
+
 Updated at every phase exit and every significant turn end.
 
 ## Mission (confirmed 2026-08-26)

@@ -11,8 +11,11 @@ strictly-zero-cost executive AI assistant named **Sara (سارة)**.
 - **Primary Transport**: Telegram (Aiogram 3.x chat + Ogg Opus voice notes; live PyTgCalls calls land in v1.1).
 - **Brain Engine**: OmniRoute Gateway (`http://localhost:20128/v1`, co-located with the core on the VPS).
 - **Knowledge Base**: Git-backed Obsidian vault (PARA + Zettelkasten) via GitHub API / local clone.
-- **Authoritative mission record**: `docs/01-ARCHITECTURE.md` §1. Current lifecycle state: `.claude/PHASE-STATE.md`.
-  Prime context from both before acting — never act on stale or assumed context.
+- **SESSION START PROTOCOL (mandatory)**: your very first action in EVERY session is to execute
+  the ⚡ SESSION RESUME PROTOCOL at the top of `.claude/PHASE-STATE.md` — prime context files,
+  sync the universal-agentic-os framework to latest upstream (`uos doctor` green), clear the
+  preflight gate, then resume the phase marked **current** in that file. Never act on stale or
+  assumed context. Authoritative mission record: `docs/01-ARCHITECTURE.md` §1.
 
 ## 2. Hard Architectural Rules & Invariants
 
