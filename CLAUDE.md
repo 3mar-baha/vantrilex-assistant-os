@@ -13,7 +13,8 @@ strictly-zero-cost executive AI assistant named **Sara (سارة)**.
 - **Knowledge Base**: Git-backed Obsidian vault (PARA + Zettelkasten) via GitHub API / local clone.
 - **SESSION START PROTOCOL (mandatory)**: your very first action in EVERY session is to execute
   the ⚡ SESSION RESUME PROTOCOL at the top of `.claude/PHASE-STATE.md` — prime context files,
-  sync the universal-agentic-os framework to latest upstream (`uos doctor` green), clear the
+  sync the universal-agentic-os framework FROM ITS LOCAL STATE FIRST (that repo often holds
+  uncommitted owner upgrades — NEVER discard them; details in protocol step 2), clear the
   preflight gate, then resume the phase marked **current** in that file. Never act on stale or
   assumed context. Authoritative mission record: `docs/01-ARCHITECTURE.md` §1.
 
