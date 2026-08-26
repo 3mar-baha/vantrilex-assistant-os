@@ -12,6 +12,11 @@ product release tags start independently at v1.0.0.)
 - Socratic discovery record and confirmed mission statement (persona: Sara سارة).
 - Canonical documentation scaffold: CLAUDE.md, README, LICENSE, CONTRIBUTING,
   CHANGELOG, SECURITY, Makefile, CI workflow, and docs/00–05.
+- **Phase 2 implementation specifications** (`docs/specs/sprint-{1..4}.md`): per-task
+  interfaces, behaviors, testable acceptance criteria mapped to pytest targets,
+  error modes, zero-cost checks — drafted by parallel agents and adversarially
+  verified (Guide pass); every finding integrated with disposition appendix.
+- Session-resume protocol baked into CLAUDE.md + checkpoint file.
 - Native stage-gate hooks (`.claude/hooks/`) and resumable phase state
   (`.claude/PHASE-STATE.md`).
 - Credential manifest (`.env.example`) covering core (VPS) and bridge (PC) processes.

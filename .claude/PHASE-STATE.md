@@ -48,7 +48,16 @@ social agent -> v2.0.
 - [x] Phase 1a — Socratic discovery, mission confirmed
 - [x] Phase 1b — scaffold complete; Guide audit findings (3 blockers, 5 minors) all fixed;
       quality gate green; initial commit
-- [ ] Phase 2 — Architect & Guide: specs per backlog task, plan, toolkit assembly  ← **current**
+- [x] Preflight re-check mid-session — OmniRoute brain VERIFIED live (real completion streamed
+      from gemini-3.1-flash-lite free pool); bot token verified via getMe (@Sara_Vantrilex_bot);
+      vault repo created+seeded (3mar-baha/vantrilex-vault); .env filled except owner-side
+      account secrets (Google OAuth, VPS, bridge TLS)
+- [x] Phase 2 — Architect & Guide COMPLETE: 4 per-sprint implementation specs written to
+      docs/specs/sprint-{1..4}.md by parallel draft agents, adversarially verified by Guide
+      agents (all verdicts FIX), every finding integrated inline + disposition appendix per file.
+      Highlights caught pre-code: open_path whitelist bypass (BLOCKER), bot-token log-leak,
+      crash-window email loss, self-WoL impossibility ruling.
+- [ ] Phase 3 entry gate — pending: final commit of specs + Guide formal sign-off statement ← **current**
 - [ ] Phase 3 — Implement & Verify: TDD micro-cycles, worktree per concern (Sprints 1–4 of docs/02-BACKLOG.md)
 - [ ] Phase 4 — Harden & Release: guards, full gate, tag v1.0.0, release report
 

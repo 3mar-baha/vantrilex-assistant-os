@@ -77,3 +77,14 @@ Supersedes draft preference for Google Cloud Run deployment.
 - **Decision**: Ruff handles lint + format checking; no Black/isort duplication.
   Supersedes the draft gate's "ruff + black" pairing.
 - **Consequences**: One tool, one config, same guarantees.
+
+## ADR-13: uos CLI Anchoring & Native Pattern Adoption — **Accepted** (2026-08-26)
+- **Context**: `uos.sh` hardwires `REPO_ROOT` to the universal-agentic-os repo itself
+  (script_dir/..); its project commands (`status/ingest/plan/dispatch/merge/graph/ship`)
+  operate on that repo, not on consumer projects.
+- **Decision**: Use `uos doctor` globally for environment diagnostics; apply the OS's
+  workflow patterns natively inside this repository — plain git worktrees per stream +
+  our `make gate` (functional equivalent of `uos ship`). Revisit a cwd-anchored fork of
+  the CLI only if multi-stream dispatch overhead ever justifies it.
+- **Consequences**: No dependency on OS-repo internals for daily flow; upstream pulls
+  still deliver diagnostics/tooling improvements via `uos doctor` + toolkit sync.
