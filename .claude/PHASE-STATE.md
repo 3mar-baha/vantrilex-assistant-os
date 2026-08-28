@@ -81,6 +81,12 @@ social agent -> v2.0.
   seeded · Google OAuth client delivered at `config/google_oauth_client.json` (gitignored).
 - Remaining owner-side: free-tier VPS provisioning (before Sprint 4); workflow-repo upgrade
   handover (owner finalizing).
+- Delivered (2026-08-26): TELEGRAM_API_ID/API_HASH stored (v1.1 calling ready — session
+  string itself generated at v1.1 login flow) · Google Cloud project `vantrilex-assistant-2008`
+  recorded + OAuth client JSON in place. Sprint-2 first boot will run the one-time consent flow ·
+  PC hardware bound: TARGET_PC_MAC_ADDRESS=08-BF-B8-28-B2-F9, TARGET_PC_IP=192.168.100.73 ·
+  Owner's OPENROUTER_API_KEY routes to the OmniRoute gateway dashboard (upstream provider),
+  NOT into the app .env — brain owns providers, app owns none (architecture boundary).
 
 ## Key file map
 
