@@ -15,16 +15,13 @@
    **HANDOVER COMPLETE (2026-08-26, owner-explicit)**: final workflow pushed & pulled —
    launcher feature series (vantrilex.ps1 multi-agent, 46/46 SelfTest PASS, e2e lifecycle
    suite, `uos doctor` healthy, symlink re-installed via `uos.sh install` after an e2e test
-   left it dangling on a temp path). **NEXT-SESSION STEP 1 — cherry-pick vendoring** (launcher's
-   Install-OsRuntime assumes a fresh project and `Copy-Item -Force` would clobber our
-   contracts; answer N at its prompt and vendor selectively):
-   - ADOPT: `.githooks/*` + `core.hooksPath=.githooks` (Invariant-9 no-AI-attribution
-     enforcement — from then on, NO Co-Authored-By trailers) · `.mcp.json` WITHOUT
-     brave-search (redundant vs native WebSearch; avoids its key) · `scripts/*.sh` ·
-     additional skills · keep PHASE-STATE.md as the checkpoint source-of-truth (their
-     docs/10-CHECKPOINT concept maps 1:1).
-   - REFUSE (existing contracts): our `.claude/settings.json` · our `.github/workflows/ci.yml`
-     · our `.claude/hooks/session-primer.ps1`.
+   left it dangling on a temp path). **CHERRY-PICK VENDORING DONE (2026-08-28, commit `24f8790`)**:
+   `.githooks/{commit-msg,pre-commit}` ADOPTED + `core.hooksPath=.githooks` active (from then on
+   NO Co-Authored-By trailers — enforced by hook) · `scripts/*.sh` vendored · skills: none upstream.
+   PENDING owner action: `.mcp.json` (fetch/sequential-thinking/filesystem/git, WITHOUT
+   brave-search) was blocked by permission classifier — content in session transcript; owner to
+   approve/create. Unchanged REFUSALS: our `.claude/settings.json`, `.github/workflows/ci.yml`,
+   `.claude/hooks/session-primer.ps1`.
 3. **Preflight gate (blocking)** — FFmpeg present (`ffmpeg -version`) · OmniRoute
    `http://localhost:20128/v1/models` HTTP 200 AND pools non-empty (log line
    "matched no connected models" ⇒ halt and ask the owner to connect free provider
@@ -51,6 +48,10 @@
 5. **Cost discipline**: ONE implementer thread per task (no agent swarms during
    implementation — the spec fleet era is over); fast model welcome; Guide review once per
    sprint exit, not per task; zero speculative layers (ponytail).
+   **Model pin (owner directive, binding, 2026-08-28)**: GLM-only —
+   `PRIMARY_MODEL` = `FAST_MODEL` = `z-ai/glm-5.3-flash`; Anthropic/Claude models
+   FORBIDDEN everywhere incl. fallback chains and OmniRoute pool routing;
+   non-GLM spend cap $0.01 absolute.
 
 Updated at every phase exit and every significant turn end.
 
@@ -96,8 +97,10 @@ social agent -> v2.0.
       **Guide sign-off: GRANTED** (conditional-on-commit condition satisfied).
 - [ ] Phase 3 — Implement & Verify  ← **current** — GOVERNED BY the ⚙️ CLOSED-LOOP EXECUTION
       PROTOCOL below (binding, owner-approved). Entry gate: OmniRoute VERIFIED · bot token
-      getMe-verified · ffmpeg installed. First action: create worktree `core-foundation` ONCE,
-      then Sprint 1 task 1.1 per docs/specs/sprint-1.md through the loop until it HALTs.
+      getMe-verified · ffmpeg installed. Worktree `core-foundation` EXISTS (created once,
+      keep using it). DONE: task 1.1 skeleton — commit `221c650` MERGED to main (owner-directed
+      2026-08-28); gate green (13 tests, AC1-AC6), live `--health` proof ok vs OmniRoute.
+      NEXT: task 1.2 (OmniRoute client) per docs/specs/sprint-1.md in the worktree, loop→HALT.
 - [ ] Phase 4 — Harden & Release: guards, full gate, tag v1.0.0, release report
 
 ## Open items / blockers
