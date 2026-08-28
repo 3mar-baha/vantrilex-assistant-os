@@ -34,6 +34,24 @@
 5. **Discipline** — report like a leader after every phase (completed / remaining / risks /
    next action); update this file at every phase exit; end every session resumable from disk.
 
+## ⚙️ CLOSED-LOOP EXECUTION PROTOCOL (binding for ALL implementation — owner-approved 2026-08-26)
+
+1. **One worktree per stream** (`git worktree add ../<stream>`, created once); merge to main
+   only at stream end, after the owner reviews the stream summary. No other worktrees.
+2. **Per-task loop, then mandatory STOP**: write the pre-specified failing test(s) (the
+   AC→pytest mapping in `docs/specs/` IS the test design — never invent new test structure)
+   -> minimal code to green -> `make gate` -> commit -> post a ≤5-line report WITH proof of
+   working behavior -> **HALT. Do not start the next task until the owner replies
+   "التالي"/"next".**
+3. **Sacred floor** (immune to any future methodology amendment):
+   `tests/test_owner_middleware.py` and `tests/test_whitelist_guardrail.py` always exist,
+   always run, and block every merge.
+4. **Circuit breaker** (Invariant 4): 3 failed fix attempts on one defect = full halt + DIR.
+   Loop-burn is structurally impossible.
+5. **Cost discipline**: ONE implementer thread per task (no agent swarms during
+   implementation — the spec fleet era is over); fast model welcome; Guide review once per
+   sprint exit, not per task; zero speculative layers (ponytail).
+
 Updated at every phase exit and every significant turn end.
 
 ## Mission (confirmed 2026-08-26)
@@ -76,11 +94,10 @@ social agent -> v2.0.
 - [x] Phase 2 — Architect & Guide COMPLETE + COMMITTED (`6fa22f7`, 7 files / 1439 insertions):
       docs/specs/sprint-{1..4}.md with every Guide finding integrated; ADR-13 recorded.
       **Guide sign-off: GRANTED** (conditional-on-commit condition satisfied).
-- [ ] Phase 3 — Implement & Verify: TDD micro-cycles, worktree per stream  ← **current**
-      Entry gate status: OmniRoute brain VERIFIED · bot token getMe-verified · ffmpeg installed.
-      First action: worktree `core-foundation`, Sprint 1 task 1.1 red->green->refactor
-      per docs/specs/sprint-1.md. Credentials still owner-side: Google OAuth (before Sprint 2),
-      VPS (before Sprint 4).
+- [ ] Phase 3 — Implement & Verify  ← **current** — GOVERNED BY the ⚙️ CLOSED-LOOP EXECUTION
+      PROTOCOL below (binding, owner-approved). Entry gate: OmniRoute VERIFIED · bot token
+      getMe-verified · ffmpeg installed. First action: create worktree `core-foundation` ONCE,
+      then Sprint 1 task 1.1 per docs/specs/sprint-1.md through the loop until it HALTs.
 - [ ] Phase 4 — Harden & Release: guards, full gate, tag v1.0.0, release report
 
 ## Open items / blockers

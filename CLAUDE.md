@@ -72,6 +72,12 @@ strictly-zero-cost executive AI assistant named **Sara (سارة)**.
 
 - Specification before code: written acceptance criteria exist before any implementation starts.
 - Tests are the contract: no production code without a failing test first.
+- **Closed-loop execution (binding, owner-approved)**: per task — write the pre-specified
+  failing test(s) (AC→pytest mapping in `docs/specs/` is the contract, no new test design)
+  -> minimal code to green -> `make gate` -> commit -> post a ≤5-line report WITH proof of
+  working behavior -> **HALT until the owner replies "التالي"/"next"**. One implementer
+  thread per task (no agent swarms during implementation); Guide review once per sprint
+  exit. The owner-gate and whitelist-guard tests are an untouchable safety floor.
 - Parallel work happens in separate git worktrees, one concern per worktree; merge only after review.
 - Documentation changes in the same commit as the behavior it describes.
 - Ship the smallest abstraction that satisfies the specification — no speculative layers.
