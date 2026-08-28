@@ -77,8 +77,10 @@ social agent -> v2.0.
 
 ## Open items / blockers
 
-- User side: `winget install Gyan.FFmpeg`; start OmniRoute gateway on :20128 (blocking for Phase 3 entry).
-- Credentials: fill `.env` progressively (manifest comments name sources).
+- DONE (2026-08-26): FFmpeg 9.0.1 · OmniRoute verified live · bot token (getMe) · vault repo
+  seeded · Google OAuth client delivered at `config/google_oauth_client.json` (gitignored).
+- Remaining owner-side: free-tier VPS provisioning (before Sprint 4); workflow-repo upgrade
+  handover (owner finalizing).
 
 ## Key file map
 
