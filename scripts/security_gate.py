@@ -11,9 +11,7 @@ import sys
 
 def main() -> int:
     if not pathlib.Path("src").is_dir():
-        print(
-            "Security Gate SKIPPED — no src/ yet (activates with first implementation)."
-        )
+        print("Security Gate SKIPPED — no src/ yet (activates with first implementation).")
         return 0
     result = subprocess.run(
         [

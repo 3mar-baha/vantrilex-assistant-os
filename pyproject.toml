@@ -1,0 +1,8 @@
+# Vantrilex Assistant OS — tool configuration.
+# [tool.pytest.ini_options] lands with Sprint-1 task 1.1 (docs/specs/sprint-1.md).
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+# Vendored agent-harness content (skills/hooks/checkpoint) is not project source;
+# upstream owns its formatting.
+extend-exclude = [".claude"]
