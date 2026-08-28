@@ -8,6 +8,13 @@ product release tags start independently at v1.0.0.)
 
 ## [Unreleased]
 
+### Changed
+- Documentation consolidation (ADR-14): 22 docx drafts retired from the working tree
+  (21 recoverable via git history; 1 via .ingest text); zero-tolerance persona naming
+  enforced across all records; Future Scope parked without version numbers (PC Health
+  Monitor, Voice Read-It-Later, Emotional Context Memory, Silent Vault Backup,
+  on-demand YouTube/Weather/Maps APIs — per-request, free-tier, $0 preserved).
+
 ### Added
 - Socratic discovery record and confirmed mission statement (persona: Sara سارة).
 - Canonical documentation scaffold: CLAUDE.md, README, LICENSE, CONTRIBUTING,

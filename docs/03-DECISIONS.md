@@ -23,7 +23,8 @@ Status legend: Accepted · Superseded · Deferred.
 - **Consequences**: Convenience cost on first use of any app; hard safety floor.
 
 ## ADR-04: Persona Named Sara (سارة) — **Accepted** (2026-08-26)
-- **Context**: Mission brief said Sara; prepared docx drafts said Mona (منى).
+- **Context**: Mission brief said Sara; the prepared docx drafts used a different draft
+  persona name, retired per the zero-tolerance naming rule.
 - **Decision**: Sara is canonical; all draft material renamed during scaffold.
 - **Consequences**: Drafts remain source-of-record with the old name until superseded.
 
@@ -67,11 +68,20 @@ Supersedes draft preference for Google Cloud Run deployment.
 - **Decision**: All environments target Python 3.12 via `py -3.12`.
 - **Consequences**: Predictable wheels; revisit when ecosystem supports 3.14.
 
-## ADR-11: Docx Drafts Retained as Source-of-Record — **Accepted**
+## ADR-11: Docx Drafts Retained as Source-of-Record — **Superseded** by ADR-14
 - **Decision**: The 22 `.docx` planning drafts stay committed untouched until their
   content is superseded by markdown specifications (Phase 2); extraction cache
   `.ingest/` is gitignored.
-- **Consequences**: Provenance preserved; temporary duplication.
+
+## ADR-14: Docx Source Drafts Retired from Working Tree — **Accepted** (2026-08-26)
+- **Context**: Owner-directed consolidation. The smart-documentation audit confirmed the
+  markdown suite is the single most-current state (Sara naming, VPS-primary, Phase-2 specs);
+  no unique content existed in the drafts beyond what `.ingest/` text extracts preserve.
+- **Decision**: Remove all 22 docx from the working tree. The 21 tracked files remain
+  recoverable verbatim from git history; the root `.env.example.docx` (never tracked —
+  swallowed by the `.env.*` ignore rule) survives as text only via `.ingest/.env.example.md`.
+- **Consequences**: Single-source documentation; draft archaeology via
+  `git checkout ff2542b -- '*.docx'`; docs guard unaffected (docx never in canonical list).
 
 ## ADR-12: Single Formatter (Ruff) — **Accepted**
 - **Decision**: Ruff handles lint + format checking; no Black/isort duplication.

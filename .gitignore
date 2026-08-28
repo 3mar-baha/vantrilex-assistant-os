@@ -24,6 +24,7 @@ build/
 # Working artifacts
 .ingest/
 .claude/plans/
+_reference_repo/
 
 # OS noise
 Thumbs.db

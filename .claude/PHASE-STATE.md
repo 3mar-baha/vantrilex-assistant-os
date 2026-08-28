@@ -41,7 +41,7 @@ social agent -> v2.0.
 
 | Q | Ruling |
 |---|---|
-| 1 | Persona = Sara (drafts' Mona renamed) |
+| 1 | Persona = Sara (retired draft persona name replaced everywhere) |
 | 2 | VPS-primary + outbound-only PC bridge (supersedes Cloud Run drafts) |
 | 3 | Owner-only hard allowlist, silent drop |
 | 4 | v1.0 = exec core minus live calls (verbatim scope excludes scout skills) |

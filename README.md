@@ -67,6 +67,19 @@ On the Windows PC (bridge): same repo, fill the `[CORE <-> BRIDGE]` block of `.e
 | **v1.5** | Virtual cloud SIP telephony (landline calling) |
 | **v2.0** | Social media agent (GitHub, LinkedIn, Instagram) |
 
+### Future Scope (unscheduled — no version assigned)
+
+Owner-directed additions parked without release commitment; each lands only through the
+standard spec → TDD pipeline when prioritized:
+
+- **PC Health Monitor** — CPU/GPU/thermals/disk telemetry surfaced to the owner on demand
+- **Voice Read-It-Later** — save links mid-chat; Sara delivers them as narrated voice notes
+- **Emotional Context Memory** — tone-adaptive replies driven by recent owner mood signals
+- **Silent Vault Backup** — background vault integrity snapshots, zero chat noise
+- **On-demand external APIs — YouTube / Weather / Maps** — per-request consumption on
+  free-tier endpoints only; no standing subscriptions, $0.00 invariant preserved.
+  (Morning Briefing is **not** future scope — it ships in v1.0 as the Sprint-2 daily brief.)
+
 ## Security
 
 Owner-only access, whitelist-gated PC execution, outbound-only bridge, secrets never committed.

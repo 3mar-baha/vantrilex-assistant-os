@@ -34,7 +34,7 @@ Live PyTgCalls calling → v1.1 · SIP telephony → v1.5 · social-media agent 
 
 | Q | Ruling |
 |---|---|
-| 1 | Persona = **Sara (سارة)** — drafts' "Mona" renamed everywhere canonical |
+| 1 | Persona = **Sara (سارة)** — retired draft persona name replaced everywhere canonical |
 | 2 | **VPS-primary** topology + outbound-only PC bridge (supersedes draft Cloud Run) |
 | 3 | **Owner-only** hard allowlist; silent drop of all other accounts |
 | 4 | v1.0 = exec core minus live calls (chat, voice notes, Google suite, triage, vault, PC control) |

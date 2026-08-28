@@ -257,7 +257,7 @@ mint consent; ambiguous reply = decline (never guessed as consent).
 
 **Zero-cost check** — rides existing FAST_MODEL path. $0.00.
 
-**Docs impact** — ARCHITECTURE §6 formats + Conversations path + exact prompt string; BACKLOG tick 3.3; CHANGELOG. (Mona-named ingest draft superseded per Q1 ruling — no import of its examples.)
+**Docs impact** — ARCHITECTURE §6 formats + Conversations path + exact prompt string; BACKLOG tick 3.3; CHANGELOG. (The retired-name ingest draft is superseded per Q1 ruling — no import of its examples.)
 
 ---
 

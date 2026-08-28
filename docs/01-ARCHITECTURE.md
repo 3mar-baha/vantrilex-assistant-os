@@ -124,3 +124,9 @@ automatically. Conversations that produce actionable tasks close with Sara askin
 | Mem0 context engine over Firebase Firestore | v1.1 (evaluation) | Vault loop must prove out first |
 | Virtual cloud SIP telephony | v1.5 | Roadmap |
 | Social media agent (GitHub/LinkedIn/Instagram) | v2.0 | Roadmap |
+
+Owner-parked **Future Scope** (no version assigned, each enters via the standard spec pipeline
+when prioritized): PC Health Monitor · Voice Read-It-Later · Emotional Context Memory ·
+Silent Vault Backup · on-demand YouTube/Weather/Maps API calls (per-request only, free-tier
+endpoints — the $0.00 invariant is preserved; no standing subscriptions). Morning Briefing
+already ships in v1.0 (Sprint-2 daily brief).
