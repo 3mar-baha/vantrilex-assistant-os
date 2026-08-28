@@ -12,11 +12,19 @@
    behind. Then `uos doctor` must be green; confirm subcommands (`status`,`graph`,`decide`,
    `dispatch`,`merge`,`ship`). Toolkit integrity failure -> that repo's `scripts/setup-toolkit.sh`
    then `scripts/sync-toolkit.sh`.
-   **Snapshot at Phase-2 close (2026-08-26): 7 modified uncommitted files** — `.gitattributes`,
-   `.github/workflows/ci.yml`, `CHANGELOG.md`, `README.ar.md`, `README.md`, `scripts/uos.sh`,
-   `vantrilex.ps1` (new). **Owner is STILL FINALIZING this major upgrade and will hand over the
-   fully-updated repo explicitly in a future session. Until that explicit handover: do NOT
-   modify, commit, pull, or "clean" that repo — treat its working tree as read-only treasure.**
+   **HANDOVER COMPLETE (2026-08-26, owner-explicit)**: final workflow pushed & pulled —
+   launcher feature series (vantrilex.ps1 multi-agent, 46/46 SelfTest PASS, e2e lifecycle
+   suite, `uos doctor` healthy, symlink re-installed via `uos.sh install` after an e2e test
+   left it dangling on a temp path). **NEXT-SESSION STEP 1 — cherry-pick vendoring** (launcher's
+   Install-OsRuntime assumes a fresh project and `Copy-Item -Force` would clobber our
+   contracts; answer N at its prompt and vendor selectively):
+   - ADOPT: `.githooks/*` + `core.hooksPath=.githooks` (Invariant-9 no-AI-attribution
+     enforcement — from then on, NO Co-Authored-By trailers) · `.mcp.json` WITHOUT
+     brave-search (redundant vs native WebSearch; avoids its key) · `scripts/*.sh` ·
+     additional skills · keep PHASE-STATE.md as the checkpoint source-of-truth (their
+     docs/10-CHECKPOINT concept maps 1:1).
+   - REFUSE (existing contracts): our `.claude/settings.json` · our `.github/workflows/ci.yml`
+     · our `.claude/hooks/session-primer.ps1`.
 3. **Preflight gate (blocking)** — FFmpeg present (`ffmpeg -version`) · OmniRoute
    `http://localhost:20128/v1/models` HTTP 200 AND pools non-empty (log line
    "matched no connected models" ⇒ halt and ask the owner to connect free provider
