@@ -16,6 +16,10 @@ product release tags start independently at v1.0.0.)
   on-demand YouTube/Weather/Maps APIs — per-request, free-tier, $0 preserved).
 
 ### Added
+- **Sprint 1 / task 1.1 — project skeleton**: async `src/` package with pydantic v2
+  `Settings` validating `.env` (fail-fast on the six critical vars, empty-string→unset
+  normalization), one-sink loguru setup, ops health probe (`python -m src.main --health`),
+  and the async entrypoint behind `make run-core`.
 - Socratic discovery record and confirmed mission statement (persona: Sara سارة).
 - Canonical documentation scaffold: CLAUDE.md, README, LICENSE, CONTRIBUTING,
   CHANGELOG, SECURITY, Makefile, CI workflow, and docs/00–05.

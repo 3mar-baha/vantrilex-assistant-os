@@ -36,6 +36,17 @@ make run-bridge     # PC bridge daemon (on the Windows PC)
 The core talks to Telegram via long polling (outbound-only), so local development
 needs no open ports and no public endpoint.
 
+### Health probe
+
+```powershell
+.venv\Scripts\python -m src.main --health
+```
+
+Prints a JSON report (`gateway` / `telegram_token` / `ffmpeg` / `overall`) and exits
+0 when `overall == "ok"`, 1 when degraded. A degraded gateway or missing ffmpeg never
+crashes the process — read the report and decide. Use it after bootstrap and whenever
+Sara seems unreachable.
+
 ## 4. VPS Deployment (production, free tier)
 
 1. Provision a free-tier VPS (e.g., Oracle Cloud Always Free ARM, or GCP e2-micro).

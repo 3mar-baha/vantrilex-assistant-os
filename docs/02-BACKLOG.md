@@ -6,7 +6,7 @@ every task lands red->green->refactor with tests and docs in the same commit.
 
 ## Sprint 1 — Foundation: Gateway + Voice Pipeline + Bot Shell
 
-- [ ] **1.1 Project skeleton**: async Python package (`src/`), pydantic-settings config
+- [x] **1.1 Project skeleton**: async Python package (`src/`), pydantic-settings config
       loading `.env`, Loguru structured logging, health module.
       *AC*: `make setup && make gate` green from clean clone; config validates all vars in `.env.example`.
 - [ ] **1.2 OmniRoute client**: OpenAI-compatible client against `OMNIROUTE_BASE_URL`,

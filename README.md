@@ -58,6 +58,9 @@ make run-core                   # start Sara's core
 On the Windows PC (bridge): same repo, fill the `[CORE <-> BRIDGE]` block of `.env`, then
 `make run-bridge`.
 
+Ops health probe (no Telegram traffic): `python -m src.main --health` prints a JSON report
+(`gateway` / `telegram_token` / `ffmpeg` / `overall`) and exits 0 when ok, 1 when degraded.
+
 ## Roadmap
 
 | Release | Scope |
