@@ -152,12 +152,17 @@ social agent -> v2.0.
       router failure). Settings: medium/heavy required + comma-separated fallback lists
       (fast/medium/heavy_chain); `.env.example` + runtime `.env` migrated to `google/` pins;
       2-slot chain retired. TDD red->green: `tests/test_dispatcher.py` AC1-AC9 (9/9), suite
-      45 green, gate green. Commits `fe4e5ca` (code) + `5ead135` (docs: backlog tick, ADR-16/18
-      consequences LANDED, checkpoint ledger) — PUSHED on `core-foundation`. **Sprint-exit
-      teardown executed**: `.claude/skills/*` wiped, 45 green after teardown, recorded in
-      `docs/10-CHECKPOINT.md`. AC10 live smoke blocked on Google 403 (owner-side). HALTED —
-      next: Sprint 2 (2.2 bot shell -> 2.1 Google foundation -> 2.3/2.3b biometrics+social
-      -> 2.4 triage -> 2.5 transcriber -> 2.6 journaler).
+      45 green, gate green. Commits `fe4e5ca` (code) + `5ead135` (docs) + `643093f`
+      (teardown of tracked skills + RUNBOOK tier-chain signatures) — PUSHED; branch head
+      `643093f`. **Sprint-exit teardown executed**: `.claude/skills/*` wiped, 45 green after
+      teardown, recorded in `docs/10-CHECKPOINT.md`. AC10 live smoke blocked on Google 403
+      (owner-side). HALTED — next: Sprint 2 (2.2 bot shell -> 2.1 Google foundation ->
+      2.3/2.3b biometrics+social -> 2.4 triage -> 2.5 transcriber -> 2.6 journaler).
+      SESSION-CLOSE VERIFICATION (2026-08-29): final `make gate` green (45 passed, security
+      + docs guards OK); both repos clean and pushed (core-foundation `643093f`, docs main
+      `5373255`). NOTE for next session: live `--health` probe at close showed OmniRoute
+      NOT RUNNING (`http://localhost:20128/v1` unreachable) — owner starts OmniRoute before
+      Sprint-2 preflight (protocol step 3) and for the Google-403 live-smoke retest.
 - [ ] Phase 4 — Harden & Release: guards, full gate, tag v1.0.0, release report
 
 ## Open items / blockers
