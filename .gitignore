@@ -23,6 +23,7 @@ build/
 
 # Working artifacts
 .ingest/
+.claude/skills/
 .claude/plans/
 _reference_repo/
 
