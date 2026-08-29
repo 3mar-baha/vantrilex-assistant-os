@@ -30,3 +30,6 @@ _reference_repo/
 Thumbs.db
 .DS_Store
 desktop.ini
+
+# session-scoped skill aids (rotation is per-sprint in core-foundation)
+.claude/skills/
