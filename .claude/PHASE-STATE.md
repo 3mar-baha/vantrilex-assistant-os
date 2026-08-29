@@ -139,6 +139,12 @@ social agent -> v2.0.
       `53d8d71` (social-graph) — ALL pushed to origin/core-foundation; `make gate` green
       (32 tests). Merge to main pending owner review. Task 1.2 AC10 still blocked on
       Google 403 (owner-side).
+      **TASK 1.4 DONE (2026-08-29)**: Sprint-1 skills ingested into `core-foundation/.claude/skills/`
+      (tdd · ponytail/* · clean-code-guard; git-ignored `ff79bad` — provenance in
+      `docs/10-CHECKPOINT.md`); TDD red->green: `tests/test_dialect.py` (3/3 M1 ACs) +
+      `src/dialect.py` (normalize longest-first, never-blocking `learn()`, prompt snapshot) —
+      commit `aa64644` + docs `59c2a7e` + ignore `ff79bad` on branch, PUSHED; `make gate`
+      green (35 tests). HALTED per protocol — next: task 1.5 (3-tier brain + dispatcher).
 - [ ] Phase 4 — Harden & Release: guards, full gate, tag v1.0.0, release report
 
 ## Open items / blockers
