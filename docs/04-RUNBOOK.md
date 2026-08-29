@@ -47,13 +47,23 @@ Prints a JSON report (`gateway` / `telegram_token` / `ffmpeg` / `overall`) and e
 crashes the process — read the report and decide. Use it after bootstrap and whenever
 Sara seems unreachable.
 
-## 4. VPS Deployment (production, free tier)
+## 4. HF Space Deployment (production, free tier — ADR-15)
 
-1. Provision a free-tier VPS (e.g., Oracle Cloud Always Free ARM, or GCP e2-micro).
-2. Install Docker + compose; copy repo; create `.env` from `.env.example`.
-3. Run OmniRoute on the VPS bound to `localhost:20128`; configure free provider pools.
-4. `docker compose up -d` (core container only; the bridge never runs on the VPS).
-5. Verify: bot responds to the owner; `curl -m 5 http://localhost:20128/v1/models` on the box.
+Supersedes VPS deployment (ADR-05). One Docker Space co-locates OmniRoute +
+core; the Space's single public port serves the WSS bridge endpoint + `/health`.
+
+1. Create a private HF Space (Docker, 2 vCPU / 16 GB tier) in the owner account.
+2. Space Dockerfile (Sprint-4 task 4.3): single image supervising OmniRoute
+   (`localhost:20128`) + the core; `app_port` = the public WSS/health port.
+3. All secrets go to **HF Secrets** (bot token, owner ID, OAuth client, bridge
+   token) — never the repo; `.env` is local-only for development.
+4. Configure free provider pools (Gemini dual-brain per ADR-16) in OmniRoute.
+5. **Keep-alive is mandatory**: cron ping `GET /health` every 10 min
+   (e.g., cron-job.org) — free Spaces idle-sleep after prolonged silence.
+6. **Disposable filesystem**: anything that must survive a restart lives in the
+   git-backed vault (ADR-15 invariant); the OAuth token cache is vault-persisted
+   (encrypted) or the owner re-consents after restarts.
+7. Verify: bot responds to the owner; `curl -m 5 <SPACE_URL>/health` returns ok.
 
 ## 5. PC Bridge Daemon (Windows)
 
