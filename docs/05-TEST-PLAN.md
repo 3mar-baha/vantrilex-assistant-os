@@ -20,6 +20,8 @@
 | `test_audio_stream_opus.py` | Real ffmpeg transcode: valid Ogg Opus headers; first-chunk emission <600 ms |
 | `test_owner_middleware.py` | Non-owner updates dropped silently (sacred floor); owner passes through |
 | `test_biometrics.py` | M2/ADR-17: owner voice passes threshold; guest lockdown blocks all tools (sacred floor); message taken + filed; embedding encrypted at rest |
+| `test_social_enrollment.py` | Social graph (§6b): Case A transcript+centroid; Case B owner-present enroll; Case C three-way verdict (adopt/ignore/unknown+flag); ignored never re-matches |
+| `test_story_extractor.py` | Daily narration -> entities filed to `Contacts/{Category}/{Name}.md` + `Daily_Logs/`; ambiguous category confirmed; Ignored not tracked |
 | `test_email_triage.py` | Correct dispatch per tier (drop/text/voice-note/priority-ping); untrusted-body containment |
 | `test_triage_compaction.py` | M7/ADR-19: signatures/boilerplate/quotes stripped; body capped; tier decisions unchanged on compacted input |
 | `test_journal.py` | M3: chronological ledger; randomized once-daily evening trigger; calendar conflict suppresses; thin ledger prompts |

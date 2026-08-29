@@ -77,6 +77,8 @@ PARA = {"projects":"01_Projects","areas":"02_Areas","resources":"03_Resources",
 
 # M6 mandatory set (created on first boot, asserted by guard test):
 MANDATORY_DIRS   = ("Contacts/", "Call_Transcripts/", "Studies/", "Voice_Memos/", "Daily_Logs/")
+CONTACTS_SUBDIRS = ("Contacts/Family/", "Contacts/Friends/", "Contacts/Colleagues/",
+                    "Contacts/Ignored/", "Contacts/Unknown/")   # social-graph taxonomy (2026-08-29 addendum)
 MANDATORY_FILES  = ("02_Areas/Profile/User_Info.md", "02_Areas/Profile/Dialect_Notes.md")
 # Studies/ is TOP-LEVEL (02_Areas/Studies/ migrates once, if present — structural commit).
 
@@ -131,13 +133,52 @@ All logs pass through redact_secret.
 9. AC9 — `daily_log_path` renders `Daily_Logs/YYYY-MM-DD.md` for a known date; guard test file itself is importable without credentials (pure constants). → `test_daily_log_path_dated_and_guard_importable`
 10. AC10 — guard runs inside `make gate` (part of default testpaths) so a missing-dir regression fails CI before any writer depends on it. Evidence: gate output in PR. → `test_vault_dirs_in_default_gate`
 
+**3.1b Social graph: Contacts taxonomy + story extractor** (same directive skill as 2.3b,
+`skill-social-graph-and-voice-enrollment`; vault-side touchpoint)
+
+```python
+# src/skills/social_graph.py
+CONTACT_CATEGORIES = ("Family", "Friends", "Colleagues")   # + Ignored/Unknown (system-managed)
+class ContactDossier(BaseModel):
+    name: str; category: str; relation_tags: list[str] = []
+    voiceprint_ref: str | None = None                  # State/voiceprints/<id>.enc
+    created: date; last_interaction: date | None = None
+class EntityMention(BaseModel):
+    name: str; action_summary: str; mentioned_at: datetime
+    category_inferred: str | None = None               # None => ask owner before filing
+class SocialGraph:
+    async def dossier(self, category: str, name: str) -> ContactDossier | None
+    async def create_dossier(self, d: ContactDossier, *, voiceprint: bytes | None) -> WriteResult
+    async def extract_entities(self, narration: str) -> list[EntityMention]   # FAST-tier, JSON schema
+    async def file_action(self, m: EntityMention) -> list[WriteResult]
+        # appends timestamped section to Contacts/{Category}/{Name}.md AND Daily_Logs/YYYY-MM-DD.md
+```
+
+Dossier template — frontmatter `name/category/relation_tags/voiceprint_ref/created/
+last_interaction`; body sections append-only (## Interaction Log — dated entries). `Ignored/`
+dossiers carry `tracking: false` and NEVER receive appends; `Unknown/` carries
+`security_flag: true` + anonymous embedding ref + timestamped transcripts.
+
+**Behavior** — owner narrates the day -> `extract_entities` (one FAST-tier call, entities +
+inferred category per mention) -> ambiguous/changed category => verbal confirm with owner
+BEFORE filing -> `file_action` appends the timestamped summary to the person's dossier and the
+day's `Daily_Logs` note (one vault commit per source note). Unmatched name with no dossier =>
+propose creating one (Case B flow from 2.3b).
+
+11. AC11 — taxonomy first-boot: `ensure_mandatory_dirs` also creates all five `Contacts/`
+    subdirs (guard extended, idempotent). → `tests/test_vault_dirs.py::test_contacts_taxonomy_created`
+12. AC12 — story extractor: fixture narration -> entities filed as dated sections in BOTH the
+    correct dossiers and `Daily_Logs/YYYY-MM-DD.md`; ambiguous category holds for owner
+    confirmation; `Ignored/` mention produces NO dossier write.
+    → `tests/test_story_extractor.py::test_daily_narration_files_actions_to_contacts_and_log`
+
 **Error modes** — auth errors propagate loudly (no retry); 409 after retry -> VaultConflictError WARN; timeouts propagate after ERROR; malformed YAML wrapped ValueError naming path; missing read -> FileNotFoundError; oversize pre-flight ValueError. Nothing swallowed.
 
 **Zero-cost check** — PyYAML (MIT) only new dep; GitHub free-tier PAT quota ample. $0.00.
 
-**Docs impact** — `.env.example` VAULT_BRANCH; ARCHITECTURE §6 (GitHub Contents API transport +
-M6 mandatory tree + canonical constants); RUNBOOK first-boot vault bootstrap; DATA-MODEL
-frontmatter conventions; CHANGELOG; BACKLOG tick 3.1.
+**Docs impact** — `.env.example` VAULT_BRANCH; ARCHITECTURE §6 + §6b (GitHub Contents API
+transport + M6 mandatory tree + social-graph taxonomy + canonical constants); RUNBOOK
+first-boot vault bootstrap; DATA-MODEL frontmatter conventions; CHANGELOG; BACKLOG tick 3.1.
 
 ---
 

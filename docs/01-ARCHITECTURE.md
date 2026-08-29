@@ -118,7 +118,9 @@ Tier 2 (ADR-16) for briefs and check-ins.
 ```
 01_Projects/   03_Resources/   04_Archives/
 02_Areas/Profile/User_Info.md   02_Areas/Profile/Dialect_Notes.md
-Contacts/       Call_Transcripts/       Studies/       Voice_Memos/       Daily_Logs/
+Contacts/
+  Family/  Friends/  Colleagues/  Ignored/  Unknown/
+Call_Transcripts/       Studies/       Voice_Memos/       Daily_Logs/
 ```
 
 Mandatory directories (master directive 2026-08-29; `02_Areas/Studies/` migrates to top-level
@@ -132,6 +134,38 @@ Voice memos from mobile are transcribed, tagged with YAML frontmatter, and filed
 automatically. Conversations that produce actionable tasks close with Sara asking:
 "هل بتحب ألخص لك شو رح أعمل هسا؟" — then recites the summary and files it
 (suppressed for casual check-ins). Full transcript persistence applies to calls from v1.1.
+
+### 6b. Social Graph & Multi-Speaker Enrollment (`skill-social-graph-and-voice-enrollment`)
+
+The vault's `Contacts/` tree is a structured social graph, each person a dossier with
+relational tags, interaction log, and (when enrolled) an encrypted voiceprint vector:
+
+| Dossier dir | Meaning |
+|---|---|
+| `Contacts/Family/` | Family — relational tags + voiceprint vectors |
+| `Contacts/Friends/` | Social-circle profiles + interaction logs |
+| `Contacts/Colleagues/` | Academic/professional peers and collaborators |
+| `Contacts/Ignored/` | Blacklisted/ignored — no interaction tracking |
+| `Contacts/Unknown/` | Unidentified speakers — anonymous embeddings + timestamped transcripts, security flag |
+
+**Story entity & action extractor**: when the owner narrates their day, Sara extracts
+mentioned entities, infers/updates each one's relationship category, and appends a
+timestamped action summary to the person's `Contacts/{Category}/{Name}.md` AND
+`Daily_Logs/YYYY-MM-DD.md`. Ambiguous category changes are confirmed with the owner first;
+`Ignored/` dossiers are never tracked.
+
+**Voiceprint lifecycle** (extends ADR-17 from owner-only to multi-speaker):
+- **A — known speaker**: incoming voice matching an enrolled contact -> transcript appended
+  to their dossier, embedding stability updated (running centroid). Contact-mode is
+  conversational ONLY — zero privileged calls (no PC, whitelist, Gmail, private vault).
+- **B — new speaker, owner present**: Sara asks verbally — «عمر، هاد أخوك أحمد؟ أعتمد
+  بصمته وأضيفه للعائلة؟» — and on owner confirmation creates the dossier and stores the
+  voiceprint (category per the owner's answer).
+- **C — new speaker, owner absent (Guest Mode)**: message + temporary voiceprint embedding
+  staged under `Voice_Memos/Pending_Speakers/`; at the owner's next interaction Sara briefs
+  verbally — «اتصل شخص حكى إنه أخوك أحمد وتركلك رسالة كذا... أعتمد بصمته وأعمل له ملف؟» —
+  then routes the verdict: confirmed -> `Contacts/{Category}/{Name}.md` + stored voiceprint;
+  «تجاهليه» -> `Contacts/Ignored/`; «ما بعرفه» -> `Contacts/Unknown/` with a security flag.
 
 ## 7. Component Registry (`config/agents_config.json`)
 

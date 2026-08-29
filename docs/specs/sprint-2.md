@@ -239,7 +239,7 @@ class VoiceBiometrics:
     def __init__(self, *, embedding_path: Path, threshold: float = 0.75, executor) -> None
     @property enrolled -> bool
     async def enroll(self, ogg_opus: bytes) -> None   # owner /enroll-voice flow; Fernet-persist
-    async def verify(self, ogg_opus: bytes) -> bool   # <50 ms CPU via executor
+    async def verify(self, ogg_opus: bytes) -> bool   # owner verdict, <50 ms CPU via executor (multi-speaker verdicts: 2.3b)
 GUEST_LOCKDOWN_AR: Final[str]   # «يا هلا، الصوت مش صوت عمر... مين بيحكي معي؟»
 ```
 
@@ -255,9 +255,11 @@ model; exact lib pinned at implementation, py3.12 wheel-verified), embedding fil
 - Enrolled + below threshold, OR verification exception when enrolled -> Guest Mode (fail-closed).
 
 Guest Mode: reply `GUEST_LOCKDOWN_AR`, store exactly ONE staging note
-`{vault_local_path}/State/guest_inbox/YYYY-MM-DDTHHMM.json` (raw transcript placeholder + timestamps)
-and NOTHING else — no gateway calls carrying personal context, no whitelist, no PC actions, no
-vault writes beyond staging. `tests/test_guest_lockdown.py` JOINS the sacred floor
+`{vault_local_path}/Voice_Memos/Pending_Speakers/YYYY-MM-DDTHHMM.json` (transcript placeholder +
+temporary Fernet-encrypted embedding — staging path re-homed 2026-08-29 per directive: guest
+messages must survive HF restarts to be briefed later, ADR-15) and NOTHING else — no gateway
+calls carrying personal context, no whitelist, no PC actions, no other vault writes.
+`tests/test_guest_lockdown.py` JOINS the sacred floor
 (`test_owner_middleware.py`, `test_whitelist_guardrail.py`).
 
 **Acceptance criteria**
@@ -280,6 +282,83 @@ reply still sent (no privileged fallback).
 **Docs impact** — ADR-17 sync (`docs/03-DECISIONS.md`); ARCHITECTURE biometrics section;
 RUNBOOK enrollment procedure; TEST-PLAN rows incl. sacred-floor note; CLAUDE.md rule-9
 cross-ref; CHANGELOG.
+
+---
+
+### 2.3b skill-social-graph-and-voice-enrollment (multi-speaker voiceprint lifecycle)
+
+Stream/worktree: core-foundation | Depends on: 2.3, 3.1 (Contacts taxonomy)
+
+Directive module (2026-08-29 addendum; directive's "Task 2.5 Biometrics" numbering maps
+here — biometrics lives at 2.3 in this sprint). Extends ADR-17 from a single owner voiceprint
+to a **multi-speaker social registry**: every enrolled contact carries an encrypted voiceprint
+vector, and Sara enrolls new speakers dynamically. Vault-side taxonomy + story extractor
+land in Sprint 3.1 (same skill, second touchpoint).
+
+**Interface**
+
+```python
+# src/skills/social_enrollment.py
+class Verdict(BaseModel):
+    role: Literal["owner", "contact", "unknown"]      # contact => recognized speaker
+    name: str | None = None; category: str | None = None   # Family/Friends/Colleagues
+    similarity: float = 0.0
+class VoiceprintRegistry:
+    async def match(self, ogg_opus: bytes) -> Verdict        # <50 ms CPU; owner checked first
+    def enroll(self, name: str, category: str, embedding: bytes) -> Path  # dossier + vector
+    def update_stability(self, name: str, embedding: bytes) -> None       # running centroid
+    def stage_pending(self, embedding: bytes, transcript_hint: str) -> Path
+    def pending_briefs(self) -> list[PendingSpeaker]
+    def resolve_pending(self, pending_id: str, verdict: str) -> WriteResult
+        # "confirm:{category}" -> Contacts/{Category}/{Name}.md + stored voiceprint
+        # "ignore" -> Contacts/Ignored/{Name}.md    "unknown" -> Contacts/Unknown/ + security flag
+CONTACT_MODE_AR: Final[str]   # warm recognized-greeting, message-taking only
+```
+
+Embeddings: Fernet-encrypted at rest under `State/voiceprints/` (VAULT_ENC_KEY), one vector
+per contact referenced from the dossier frontmatter (`voiceprint_ref`); transcripts append to
+the dossier. Every verdict EXCEPT owner keeps the guest containment guarantees: zero gateway
+calls carrying personal context, zero whitelist, zero PC actions — matched contacts get a warm
+conversational reply + message-taking, nothing more.
+
+**Behavior — the three lifecycle cases (binding)**:
+- **Case A — known speaker**: `match` hits a registered contact -> transcript appended to
+  `Contacts/{Category}/{Name}.md` (timestamped section) + `update_stability` running centroid.
+- **Case B — new speaker, owner present**: Sara asks «عمر، هاد أخوك أحمد؟ أعتمد بصمته
+  وأضيفه للعائلة؟» — on owner confirmation: `enroll(name, category_from_owner_answer)` creating
+  the dossier + voiceprint; on decline: staged as Case C (pending brief).
+- **Case C — new speaker, owner absent**: staging note + temp embedding under
+  `Voice_Memos/Pending_Speakers/` (survives HF restarts); at the owner's next interaction Sara
+  briefs «اتصل شخص حكى إنه أخوك أحمد وتركلك رسالة كذا... أعتمد بصمته وأعمل له ملف؟» and routes:
+  confirmed -> dossier + voiceprint; «تجاهليه» -> `Contacts/Ignored/` (blacklisted: never
+  matched, never tracked again); «ما بعرفه» -> `Contacts/Unknown/` with security flag
+  (anonymous embedding + timestamped transcripts, re-matchable for a future enrollment).
+
+**Acceptance criteria**
+
+11. AC11 — Case A: enrolled contact voice -> transcript section appended to their dossier,
+    centroid updated (registry file diff shows stability write); contact reply sent with ZERO
+    privileged calls (gateway/whitelist/subprocess spies uncalled).
+    → `tests/test_social_enrollment.py::test_known_speaker_appends_transcript_and_stabilizes`
+12. AC12 — Cases B+C: owner-present prompt enrolls on confirmation; owner-absent message
+    stages to `Pending_Speakers/`, and the three-way verdict routes to
+    Contacts/{Category}/ · Ignored/ · Unknown/+security-flag respectively; Ignored voices
+    never match again.
+    → `test_new_speaker_owner_present_enrolls_on_confirmation`
+    (+ `::test_owner_brief_three_way_verdict_routing`, `::test_ignored_voice_never_matches`)
+
+Carried-over internals land in the TEST-PLAN catalog (not the 10-AC sprint frame):
+`test_embeddings_encrypted_at_rest`, `test_unknown_profile_carries_security_flag`,
+`test_pending_briefs_survive_restart`, `test_contact_mode_zero_privileged_calls`.
+
+**Error modes** — registry read failure -> treated unenrolled (middleware-only trust, warn);
+staging write failure -> logged, guest reply still sent; enroll failure -> loud error, no
+half-created dossier (dossier create + vector store are one commit).
+
+**Zero-cost check** — same FOSS speaker model as 2.3, local CPU; Fernet already in stack. $0.00.
+
+**Docs impact** — ADR-17 amended (multi-speaker); ARCHITECTURE §6b; CLAUDE.md rule 9;
+TEST-PLAN rows; CHANGELOG.
 
 ---
 
@@ -515,7 +594,9 @@ imported by `src/`, never added to `pyproject.toml`, never referenced at runtime
 This spec supersedes the 2026-08-26 Google-suite-only sprint-2 layout. Old tasks 2.1–2.4
 (OAuth / Gmail / triage / daily brief) merge into 2.1 + 2.4; the master directive adds the four
 skill modules — 2.2 chat streamer, 2.3 voice biometrics + Guest Mode, 2.5 voice-to-vault
-transcriber, 2.6 evening journaler. The daily brief (old 2.4) leaves sprint scope; its facts are
+transcriber, 2.6 evening journaler — and the 2026-08-29 social-graph addendum adds 2.3b
+(multi-speaker enrollment; directive's "Task 2.5 Biometrics" maps to 2.3/2.3b). The daily brief
+(old 2.4) leaves sprint scope; its facts are
 absorbed by the evening journaler ledger (2.6). The AC frame is now sprint-wide (AC1–AC10)
 instead of per-task; prior-spec tests that lost their AC number stay binding as TEST-PLAN
 catalog rows. Token cache/state persistence moves from `data/` to encrypted vault State per
