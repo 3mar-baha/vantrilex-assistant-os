@@ -130,6 +130,15 @@ social agent -> v2.0.
       PROJECT-JOURNEY (§10 addendum), VISION/ARCHITECTURE/CLAUDE.md/AI-INSTRUCTIONS/
       .env.example/agents_config.json all synchronized. Committed on branch
       `core-foundation`, pushed for review; merge to main pending.
+      **THIRD DIRECTIVE (2026-08-29, social-graph addendum)**: `skill-social-graph-and-voice-
+      enrollment` specced in — `Contacts/{Family,Friends,Colleagues,Ignored,Unknown}` taxonomy
+      (ARCH §6b + sprint-3 3.1b), daily story entity extractor (TEST-PLAN
+      `test_story_extractor.py`), multi-speaker voiceprint lifecycle A/B/C (sprint-2 2.3b,
+      guest staging re-homed to `Voice_Memos/Pending_Speakers/` per ADR-15). Final branch
+      state: `79b9563` (3-tier doc/config sync) + `5519a6c` (sprint 2-4 spec re-maps) +
+      `53d8d71` (social-graph) — ALL pushed to origin/core-foundation; `make gate` green
+      (32 tests). Merge to main pending owner review. Task 1.2 AC10 still blocked on
+      Google 403 (owner-side).
 - [ ] Phase 4 — Harden & Release: guards, full gate, tag v1.0.0, release report
 
 ## Open items / blockers
