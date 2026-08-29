@@ -10,7 +10,7 @@ Reproducibility rule: anything a build needs is checked, scripted, and documente
 | Git | 2.54+ | `git --version` |
 | FFmpeg | any recent | `winget install Gyan.FFmpeg` then reopen shell; `ffmpeg -version` |
 | GNU make | 4.4+ | `choco install make` (already present on dev machine) |
-| OmniRoute | latest | clone https://github.com/diegosouzapw/OmniRoute onto VPS; start service bound to localhost:20128 |
+| OmniRoute | latest | clone https://github.com/diegosouzapw/OmniRoute beside the core (co-located in the HF Space, ADR-15; locally for dev); start bound to localhost:20128 |
 | jq (optional) | — | `winget install jqlang.jq` (some uos scripts want it) |
 | uos CLI (optional) | 1.1.x | Local Universal Agentic OS developer CLI (bash) — `uos doctor`, worktree dispatch; not required to build or run Sara |
 
@@ -63,11 +63,11 @@ Supersedes VPS deployment (ADR-05). One Docker Space co-locates OmniRoute +
 core; the Space's single public port serves the WSS bridge endpoint + `/health`.
 
 1. Create a private HF Space (Docker, 2 vCPU / 16 GB tier) in the owner account.
-2. Space Dockerfile (Sprint-4 task 4.3): single image supervising OmniRoute
+2. Space Dockerfile (Sprint-4 task 4.4b): single image supervising OmniRoute
    (`localhost:20128`) + the core; `app_port` = the public WSS/health port.
 3. All secrets go to **HF Secrets** (bot token, owner ID, OAuth client, bridge
    token) — never the repo; `.env` is local-only for development.
-4. Configure free provider pools (Gemini dual-brain per ADR-16) in OmniRoute.
+4. Configure free provider pools (3-tier brain per ADR-16) in OmniRoute.
 5. **Keep-alive is mandatory**: cron ping `GET /health` every 10 min
    (e.g., cron-job.org) — free Spaces idle-sleep after prolonged silence.
 6. **Disposable filesystem**: anything that must survive a restart lives in the
@@ -75,13 +75,24 @@ core; the Space's single public port serves the WSS bridge endpoint + `/health`.
    (encrypted) or the owner re-consents after restarts.
 7. Verify: bot responds to the owner; `curl -m 5 <SPACE_URL>/health` returns ok.
 
+### 4b. Cloud Run fallback (secondary host — documented alternative)
+
+If the Space is unavailable: build the SAME image (4.4b) and deploy to Google Cloud Run
+free tier — container reads `PORT`, min-instances=0 (cold starts noted; the keep-alive
+pinger keeps it warm), all secrets via Cloud Run environment variables. No committed
+terraform/CI for this path in v1.0.0 — activating it is an owner action documented here.
+The bridge daemon's `BRIDGE_SERVER_URL` simply points at the Cloud Run WSS URL instead.
+
 ## 5. PC Bridge Daemon (Windows)
 
 1. `make setup` on the PC; fill `[CORE <-> BRIDGE]` block of `.env`
-   (`BRIDGE_SERVER_URL` points at the VPS WSS endpoint; shared `BRIDGE_TOKEN`).
+   (`BRIDGE_SERVER_URL` points at the Space WSS endpoint; shared `BRIDGE_TOKEN`).
 2. Register as an auto-start task:
    `schtasks /Create /SC ONLOGON /TN VantrilexBridge /TR "pwsh -NoProfile -Command 'cd <repo>; make run-bridge'"`
-3. Confirm zero listening ports: `netstat -ab | findstr LISTENING` — no entry for the daemon.
+3. Listener check (directive: LAN port 8000): the daemon's ONLY listener is the
+   LAN-authenticated port 8000 (telemetry `GET /telemetry/live-state` + executor surface);
+   zero public-facing ports. Verify: `netstat -ab | findstr :8000` shows it bound to the
+   LAN address, and no other LISTENING entry for the daemon.
 4. Enable Wake-on-LAN in the NIC's advanced properties + BIOS ("Wake on Magic Packet"),
    on Ethernet.
 

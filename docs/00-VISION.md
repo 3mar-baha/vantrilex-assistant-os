@@ -14,7 +14,8 @@ An owner-only, strictly $0.00/month executive assistant living 24/7 in a free
 Hugging Face Space (ADR-15 — one Docker container co-locating the OmniRoute
 gateway; all durable state in the git-backed vault) — conversing in Jordanian
 Arabic over Telegram text and Ogg Opus voice notes, reasoning through the
-Gemini dual-brain via OmniRoute's free pools (ADR-16), triaging Gmail into
+3-tier multi-model brain via OmniRoute's free pools (ADR-16: fast reflex / tool
+execution / heavy planning behind the Fast Front-Door Dispatcher, ADR-18), triaging Gmail into
 text/voice-note escalations, driving Calendar/Drive/Contacts/Tasks, verifying
 the owner's voiceprint with a warm Guest-Mode fallback (M2), keeping a daily
 ledger with a randomized evening check-in (M3), and filing everything into a
@@ -40,6 +41,8 @@ Wake-on-LAN.
 | KPI | Target |
 |---|---|
 | Voice-note response latency | < 600 ms to first audible chunk |
+| Tier-1 reflex reply latency (TTFT) | < 250 ms (Fast Front-Door Dispatcher, ADR-18) |
+| Voice biometric verification | < 50 ms per chunk, CPU-only (ADR-17) |
 | Monthly infrastructure cost | Exactly $0.00 |
 | Unauthorized execution of non-whitelisted desktop actions | 0% |
 | Non-owner Telegram accounts processed | 0 (silent drop) |

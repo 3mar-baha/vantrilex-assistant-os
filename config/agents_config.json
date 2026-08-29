@@ -6,8 +6,20 @@
     "personality": "Warm, executive, polymath tutor (10 languages & sciences), supportive friend; affectionate banter, strictly no romantic roleplay",
     "brain": {
       "gateway": "omniroute",
-      "primary_model": "gemini/gemini-3.7-flash",
-      "fast_model": "gemini/gemini-3.5-flash-lite"
+      "routing": "3-tier behind fast-frontdoor-dispatcher (ADR-16/ADR-18)",
+      "tier1_fast": {
+        "model": "google/gemini-3.5-flash-lite",
+        "fallbacks": ["meta-llama/llama-3.3-70b-instruct", "nemotron-3.5-lightning"],
+        "ttft_target_ms": 250
+      },
+      "tier2_medium": {
+        "model": "google/gemini-3.7-flash",
+        "fallbacks": ["z-ai/glm-5.3-flash"]
+      },
+      "tier3_heavy": {
+        "model": "nvidia/nemotron-3-ultra-550b",
+        "fallbacks": ["google/gemini-3.7-flash", "google/gemini-3.1-pro"]
+      }
     },
     "auth": {
       "owner_allowlist": "AUTHORIZED_USER_ID",

@@ -7,11 +7,14 @@
   Spaces runtime host, 2026-08-29**) · owner-only access (Q3) ·
   v1.0 = exec core minus live calls (Q4) · $0.00 absolute + Telegram confirmation fallback
   for whitelist misses (Q5) · credential manifest filled progressively (Q6).
-- **OmniRoute gateway**: `http://localhost:20128/v1`, co-located with the core on the VPS;
-  aggregates 90+ free provider pools (DeepSeek V3/R1, Gemini Flash, Groq Llama 3.3) with
-  quota-aware auto-fallback. Adapter: `src/gateway.py` (`OmniRouteClient`) — the only module
-  speaking LLM wire format; SSE streaming, PRIMARY->FAST model fallback, quota/transient/fatal
-  classification; consumers get plain text deltas or `GatewayError`.
+- **OmniRoute gateway**: `http://localhost:20128/v1`, co-located with the core;
+  aggregates 90+ free provider pools with quota-aware auto-fallback. Adapter:
+  `src/gateway.py` (`OmniRouteClient`) — the only module speaking LLM wire format;
+  SSE streaming, 3-tier model chain (ADR-16), quota/transient/fatal classification
+  (mid-stream SSE error events classified, never swallowed); consumers get plain text
+  deltas or `GatewayError`. The **Fast Front-Door Dispatcher** (ADR-18) answers with
+  Tier 1 (<250 ms TTFT) and routes single/dual-tool work to Tier 2, multi-step DAGs to
+  Tier 3.
 - **Telegram voice/chat architecture**: Aiogram 3.x long-polling Markdown chat; Edge-TTS
   (`ar-JO-SanaNeural`) streamed in-memory via `io.BytesIO`, transcoded by ffmpeg to native
   Ogg Opus voice bubbles (<600 ms first-chunk target); live bidirectional calls via PyTgCalls
@@ -31,8 +34,11 @@ graph TD
     TG <--> Core[HF Space: Aiogram 3.x Core + Orchestrator]
 
     subgraph Space [HF Space Docker - 24/7, keep-alive ping /health 10min]
-        Core <--> Omni[OmniRoute :20128]
-        Omni <--> Pools[Gemini dual-brain + free pools]
+        Core <--> Disp[Fast Front-Door Dispatcher ADR-18]
+        Disp <--> Omni[OmniRoute :20128 - 3-tier ADR-16]
+        Omni <--> T1[Tier1 FAST: gemini-3.5-flash-lite]
+        Omni <--> T2[Tier2 MEDIUM: gemini-3.7-flash]
+        Omni <--> T3[Tier3 HEAVY: nemotron-3-ultra-550b]
         Core <--> TTS[Edge-TTS -> BytesIO -> ffmpeg -> Ogg Opus]
         Core <--> Bio[Voice biometrics ECAPA-TDNN + Guest Mode]
         Core <--> G[Google Suite clients: Calendar / Gmail / Drive / Contacts / Tasks]
@@ -102,6 +108,11 @@ Windows-MCP and notify -> NOT whitelisted => confirmation prompt on Telegram
 بتأكدلي صراحة؟") => explicit approval recorded (confirmation ID persisted to vault)
 => execute. Idle >20 min => Sara offers shutdown/sleep by message.
 
+The same bridge channel (LAN port 8000, authenticated WSS + `BRIDGE_TOKEN`) serves the
+**desktop telemetry protocol**: `GET /telemetry/live-state` returns the active foreground
+window, running whitelisted processes, and daily categorized screen time — consumed by
+Tier 2 (ADR-16) for briefs and check-ins.
+
 ## 6. Knowledge Vault Layout (PARA + Zettelkasten)
 
 ```
@@ -160,10 +171,13 @@ already ships in v1.0 (Sprint-2 daily brief).
 
 Binding spec: `docs/specs/master-directive-2026-08-29.md` (M1-M9) — adaptive Jordanian
 dialect engine (Sprint 1.4) · speaker verification + Guest Mode with zero-trust lockdown
-(Sprint 2.6; lockdown test on the sacred floor) · daily activity ledger + randomized
-evening check-in (Sprint 2.7) · triage token compaction (Sprint 2.4) · mandatory vault
-directories + dynamic taxonomy expansion (Sprint 3.1/3.4) · dynamic capability expansion
-with natural-language Arabic cron (Sprint 4.1) · >=85% coverage gate (Sprint 4.2) ·
-HF Spaces packaging (Sprint 4.3, ADR-15) · VAD + barge-in on live calls (v1.1, M8) ·
-polymath tutor persona (continuous; artifacts filed to `Studies/`). Hosting and dual-brain
-rulings: ADR-15 / ADR-16 in `docs/03-DECISIONS.md`.
+(Sprint 2.6, ADR-17; lockdown test on the sacred floor) · daily activity ledger +
+randomized evening check-in (Sprint 2.7) · triage token compaction (Sprint 2.4, ADR-19) ·
+mandatory vault directories + dynamic taxonomy expansion (Sprint 3.1/3.4, ADR-21) ·
+dynamic capability expansion with natural-language Arabic cron (Sprint 4.2, M4) ·
+syllabus PDF-to-DAG parser (Sprint 4.1, TIER3) · polymath tutor (Sprint 4.3, M9;
+artifacts filed to `Studies/`) · >=85% coverage gate (Sprint 4.4a) · HF Spaces
+packaging (Sprint 4.4b, ADR-15) · per-sprint skill rotation + teardown
+(`.claude/skills/` wiped at sprint exit, outcomes in `docs/10-CHECKPOINT.md`) ·
+VAD + barge-in on live calls (v1.1, M8). Hosting and brain-routing rulings: ADR-15 / ADR-16 / ADR-17 / ADR-18 /
+ADR-19 / ADR-20 / ADR-21 in `docs/03-DECISIONS.md`.

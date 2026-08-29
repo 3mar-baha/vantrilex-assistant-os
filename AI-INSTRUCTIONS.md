@@ -16,11 +16,15 @@ Read, in order:
    capability map (§9).
 4. `docs/03-DECISIONS.md` — ADRs. Note ADR-15 (HF Spaces runtime host — one
    Docker Space co-locating OmniRoute + core; disposable filesystem → all
-   durable state in the git-backed vault) and ADR-16 (Gemini dual-brain:
-   `gemini/gemini-3.7-flash` primary / `gemini/gemini-3.5-flash-lite` fast).
+   durable state in the git-backed vault), ADR-16 (3-tier multi-model brain:
+   FAST/MEDIUM/HEAVY via OmniRoute) + ADR-18 (Fast Front-Door Dispatcher),
+   ADR-17 (voice biometrics + Guest Mode), ADR-19/20/21 (TokenJuice compaction,
+   in-memory Opus, 5-directory vault).
 5. `docs/02-BACKLOG.md` + `docs/specs/` — task contracts; the AC→pytest mapping
    is the test design (no new test structure). New capabilities: M1-M9 in
-   `docs/specs/master-directive-2026-08-29.md`.
+   `docs/specs/master-directive-2026-08-29.md`. Skills rotate per sprint into
+   `.claude/skills/` and are WIPED at sprint exit (teardown protocol,
+   `docs/10-CHECKPOINT.md`).
 
 Non-negotiables, compressed: respond only to the owner (`AUTHORIZED_USER_ID`,
 silent drop otherwise — plus voice biometrics with Guest Mode lockdown);

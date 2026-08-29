@@ -10,7 +10,8 @@ for live lifecycle state see `.claude/PHASE-STATE.md`.
 ## 1. What This Project Is
 
 **Vantrilex Assistant OS v1.1.0 "Sara (سارة)"** — an owner-only, strictly $0.00/month
-executive AI assistant living on a free-tier VPS 24/7: Telegram chat + Ogg Opus voice notes
+executive AI assistant living 24/7 on a free-tier host (founding ruling: VPS — superseded
+2026-08-29 by HF Spaces, ADR-15; §10 addendum): Telegram chat + Ogg Opus voice notes
 in warm Jordanian Arabic (`ar-JO-SanaNeural`), reasoning through OmniRoute free provider pools,
 Google Workspace integration with tiered email triage, a git-backed PARA+Zettelkasten Obsidian
 vault, and whitelisted PC control over an outbound-only Windows bridge daemon.
@@ -29,6 +30,19 @@ Live PyTgCalls calling → v1.1 · SIP telephony → v1.5 · social-media agent 
 | Guide Audit #2 | All four verdicts FIX; 1 BLOCKER + 12 MAJOR + ~20 MINOR findings — every one integrated into the specs with disposition appendices |
 | Credentials | Bot token stored + verified via `getMe`; vault repo created & PARA-seeded; `.env` manifest filled (15 values) |
 | Resilience | Safety-classifier outage mid-session: all remaining deliverables completed through file-tools + web-fetch workarounds; nothing blocked permanently |
+
+## 2b. Session Timeline (2026-08-28 → 2026-08-29)
+
+| Step | Outcome |
+|---|---|
+| Sprint 1.1 (08-28) | Async skeleton merged to `main` (`221c650`) — owner-directed; gate green, live `--health` proof |
+| Closed-loop protocol | Owner-approved binding execution loop (per-task: red→green→`make gate`→commit→report→HALT until "التالي"); sacred floor + circuit breaker pinned |
+| Model pin (08-28/29) | Two-layer ruling: harness GLM-only (`z-ai/glm-5.3-flash`); Sara's brain via OmniRoute |
+| Sprint 1.2 (08-29) | OmniRoute client (`3e44f1c`): SSE streaming + fallback; live-wired against the real gateway; mid-stream SSE error events classified (silent-empty defect found & fixed); Gemini pools blocked upstream (Google 403 — owner-side fix pending) |
+| Sprint 1.3 (08-29) | Voice pipeline (`4d0aefa` + `0e796fd`): in-memory Edge-TTS → Ogg Opus, first encoded chunk ~30 ms (probesize amendment documented); AC1-AC8 green |
+| First directive (08-29) | MASTER-DIRECTIVE overhaul (`71a17ca` + `fef6246`): ADR-15 (HF Spaces host) + ADR-16 (brain routing); backlog re-map; M1-M9 spec; docs/config sync |
+| Second directive (08-29) | MASTER ARCHITECTURAL DIRECTIVE: 3-tier brain + dispatcher (ADR-16 amended, ADR-17..21 appended), 6 upstream toolkits, per-sprint skill rotation + teardown, sprint specs 1-4 rewritten, full doc/config overhaul |
+| Atomic commits (08-29) | Owner-ordered split: voice feature, gateway fix, runbook docs, checkpoint — pushed; working tree clean for shutdown |
 
 ## 3. Binding Discovery Rulings
 
@@ -102,3 +116,27 @@ Phase 3 — Implement & Verify opens with stream `core-foundation`: Sprint-1 tas
 (config/logging/health skeleton) in its own git worktree, strict TDD per
 `docs/specs/sprint-1.md`. Every session resumes via the ⚡ SESSION RESUME PROTOCOL at the top
 of `.claude/PHASE-STATE.md`.
+
+## 10. Addendum — 2026-08-29: Two Master Directives + Phase 3 under way
+
+**Phase 3 progress (closed-loop, one task per gate):** task 1.1 skeleton merged to main
+(`221c650`); task 1.2 OmniRoute client + live-wiring with SSE-error hardening (`3e44f1c`);
+task 1.3 Edge-TTS → Ogg Opus in-memory pipeline (`4d0aefa`) — AC1-AC8 green, with the
+measured `-probesize 32` amendment that keeps the first encoded chunk truly streaming
+(default probesize gates all ffmpeg output until EOF). Merge to main awaits owner review.
+
+**Master directive #1 (2026-08-29, morning):** ADR-15 (HF Spaces runtime host — supersedes
+the founding VPS ruling) + ADR-16 (brain via OmniRoute); backlog re-mapped to the new sprint
+DAG; M1-M9 capability spec (`docs/specs/master-directive-2026-08-29.md`); canonical docs +
+configs synchronized.
+
+**Master directive #2 (2026-08-29):** the brain upgraded to a **3-tier multi-model routing**
+system (ADR-16 amended in place: Tier 1 fast reflex TTFT<250 ms · Tier 2 tool executor ·
+Tier 3 heavy DAG/tutoring) behind the **Fast Front-Door Dispatcher** (ADR-18) — new Sprint-1
+task 1.5. New ADRs: 17 (voice biometrics + Guest Mode lockdown), 19 (TokenJuice compaction),
+20 (in-memory Opus pipeline), 21 (5-directory vault contract). **Per-sprint skill rotation**
+into `.claude/skills/` with a binding sprint-exit **teardown protocol**, ledgered in
+`docs/10-CHECKPOINT.md` (new). Sprint specs 2-4 exhaustively re-mapped (AC1-AC10 each);
+`config/whitelist.json` seeded; `.env.example` carries the FAST/MEDIUM/HEAVY tier pins.
+Numbering note: the directive's draft ADR-04..07 collide with settled ledger entries and are
+recorded as ADR-19/20/21 (see ledger note).

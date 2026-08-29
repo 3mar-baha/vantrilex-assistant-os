@@ -118,14 +118,73 @@ Supersedes draft preference for Google Cloud Run deployment.
   mandatory config, documented in RUNBOOK. (3) Sprint-4 packaging = Space Dockerfile with
   `app_port`, single-image OmniRoute+core supervision.
 
-## ADR-16: Gemini Dual-Brain via OmniRoute — **Accepted** (2026-08-29, MASTER DIRECTIVE)
-- **Decision**: Sara's brain is Gemini exclusively, wired through OmniRoute free pools:
-  `PRIMARY_MODEL=gemini/gemini-3.7-flash` (extended thinking — deep agentic workflows,
-  multi-step tool planning, polymath tutoring) with `gemini/gemini-3.1-pro`-class pool
-  failover; `FAST_MODEL=gemini/gemini-3.5-flash-lite` (<600 ms TTS text generation, email
-  classification, entity/YAML parsing, casual banter). Harness (Claude Code) remains
-  GLM-only per the 2026-08-28 owner rule — two distinct layers, never conflated.
-- **Consequences**: `.env` pins updated both repos; adapter `src/gateway.py` unchanged
-  (2-slot chain; 3.1-pro failover happens at OmniRoute pool level); AC10 live smoke awaits
-  a valid Gemini pool credential in OmniRoute (all pools returned upstream `API key not
-  valid` 2026-08-29 — owner-side fix).
+## ADR-16: Multi-Model Brain Routing via OmniRoute (3-Tier) — **Accepted** (2026-08-29, MASTER DIRECTIVE; supersedes the same-day Gemini dual-brain wording)
+- **Decision**: Sara's brain routes through three OmniRoute tiers, selected by the Fast
+  Front-Door Dispatcher (ADR-18):
+
+  | Tier | Env pin | Model (OmniRoute ID) | Fallbacks | Role |
+  |---|---|---|---|---|
+  | 1 — FAST | `FAST_MODEL` | `google/gemini-3.5-flash-lite` | `meta-llama/llama-3.3-70b-instruct` (Groq) · `nemotron-3.5-lightning` | Conversational reflex; instant Jordanian dialogue; fast acknowledgment («من عيوني هسا ببدأ...») while heavier work dispatches; TTFT < 250 ms |
+  | 2 — MEDIUM | `MEDIUM_MODEL` | `google/gemini-3.7-flash` | `z-ai/glm-5.3-flash` | Tool executor: WoL, whitelist actions, Obsidian CRUD + `Daily_Logs/`, Gmail triage L1-L3, telemetry (`GET /telemetry/live-state`) |
+  | 3 — HEAVY | `HEAVY_MODEL` | `nvidia/nemotron-3-ultra-550b` (NVIDIA NIM) | `google/gemini-3.7-flash` (extended thinking) · `google/gemini-3.1-pro` | Multi-step chained DAG planning, polymath tutoring in 10 languages, syllabus PDF-to-DAG, deep coding with self-correction |
+
+  Harness (Claude Code) remains GLM-only per the 2026-08-28 owner rule — two distinct
+  layers, never conflated.
+- **Consequences**: `src/gateway.py` extends from the 2-slot PRIMARY/FAST chain to the
+  3-slot chain + dispatcher (new Sprint-1 task 1.5); the runtime `.env` migrates from the
+  `gemini/` model-ID prefix to the directive's `google/` pins in that same task; pool-level
+  failover still covers intra-tier provider outages. AC10 live smoke remains blocked
+  upstream (Google 403 "project denied access" on all Gemini pools 2026-08-29 — owner-side
+  fix in Google Cloud).
+
+## ADR-17: Voice Biometrics & Guest Mode — **Accepted** (2026-08-29, MASTER DIRECTIVE)
+- **Context**: The Telegram-ID allowlist cannot tell WHO is speaking inside the owner's
+  account (shared device, stolen session).
+- **Decision**: Local speaker verification (SpeechBrain ECAPA-TDNN; Resemblyzer fallback)
+  scores inbound voice on CPU (<50 ms KPI) against the owner's encrypted voiceprint
+  (one-time 5-10 s enrollment, vault-persisted). Composes with the Telegram-ID allowlist:
+  matching voice = full access; non-matching voice inside the owner's account = **Guest
+  Mode** — warm greeting («يا هلا، الصوت مش صوت عمر... مين بيحكي معي؟»), zero-trust
+  lockdown of PC control, Gmail, Calendar and private vault, message-taking filed to
+  `Voice_Memos/` or `Contacts/`. The guest-lockdown test joins the sacred floor.
+- **Consequences**: $0 preserved (local inference, no cloud biometrics); false-reject risk
+  accepted (re-prompt, never fail-open).
+
+## ADR-18: Fast Front-Door Dispatcher — **Accepted** (2026-08-29, MASTER DIRECTIVE)
+- **Context**: One model for everything either lags simple replies or under-thinks hard
+  planning; free pools make large-model latency worse.
+- **Decision**: Tier 1 always answers first (<250 ms TTFT) with an instant acknowledgment
+  («من عيوني هسا ببدأ...») while classifying intent: single/dual-tool requests route to
+  Tier 2; multi-step chained DAGs (tutoring, syllabus builds, deep coding) route to
+  Tier 3. Fire-and-forget from the owner's perspective — Sara always speaks immediately.
+- **Consequences**: New Sprint-1 task 1.5 (dispatcher module + 3-tier config pins);
+  perceived latency collapses to Tier-1 TTFT even for heavy jobs.
+
+## ADR-19: TokenJuice-Style Compaction Before LLM Triage — **Accepted** (2026-08-29, MASTER DIRECTIVE)
+- **Decision**: Email bodies are compacted BEFORE any LLM classification: signatures,
+  disclaimers, tracking boilerplate and quoted reply chains are stripped deterministically
+  and the remainder capped to the classification budget.
+- **Consequences**: Free-pool token burn drops sharply without changing tier decisions;
+  classification runs on clean signal.
+
+## ADR-20: Fully In-Memory Ogg Opus Voice Pipeline — **Accepted** (2026-08-29; verified Sprint 1.3)
+- **Decision**: Edge-TTS MP3 streams straight into an ffmpeg child (`io.BytesIO`, asyncio
+  subprocess, `-probesize 32`); the first encoded Ogg Opus chunk surfaces in ~30 ms and is
+  handed to the Telegram sender immediately — zero disk writes anywhere in the path.
+- **Consequences**: Binding Q1 (<600 ms first audio chunk) is met by construction; the HF
+  Spaces disposable filesystem never sees audio temp files.
+
+## ADR-21: Obsidian 5-Directory Vault Contract — **Accepted** (2026-08-29, MASTER DIRECTIVE)
+- **Decision**: The vault carries five mandatory top-level directories — `Contacts/`,
+  `Call_Transcripts/` (written from v1.1), `Studies/`, `Voice_Memos/`, `Daily_Logs/` —
+  plus `02_Areas/Profile/User_Info.md` and `02_Areas/Profile/Dialect_Notes.md`; a
+  first-boot guard test asserts every one exists. Taxonomy expansion is dynamic (Sara
+  grows dirs/tags as domains emerge, each change an auditable git commit); the PARA
+  backbone is expansion-only. `02_Areas/Studies/` migrates to top-level `Studies/`.
+- **Consequences**: ADR-15's disposable-filesystem rule has a single durable home for all
+  state; the guard test blocks regressions.
+
+> Numbering note: the directive's draft ADR-04..07 (TokenJuice, In-Memory Opus, 5-Dir
+> Vault, Owner-only Drop) collide with settled ledger entries (ADR-04 Persona, ADR-05
+> VPS — superseded by ADR-15, ADR-06 Owner-only, ADR-07 v1.0 scope). They are recorded
+> here as ADR-19/20/21; owner-only drop remains ADR-06.

@@ -9,6 +9,14 @@ product release tags start independently at v1.0.0.)
 ## [Unreleased]
 
 ### Changed
+- **Second master-directive alignment (2026-08-29)**: ADR-16 amended in place to the
+  3-tier multi-model brain (FAST/MEDIUM/HEAVY via OmniRoute) + ADR-17..21 appended
+  (voice biometrics/Guest Mode, front-door dispatcher, TokenJuice, in-memory Opus,
+  5-directory vault); Fast Front-Door Dispatcher specced as Sprint-1 task 1.5;
+  per-sprint skill rotation with the teardown protocol (`docs/10-CHECKPOINT.md`);
+  sprint specs 2-4 exhaustively re-mapped; `.env.example`/`agents_config.json`
+  re-pinned to the tier models; `config/whitelist.json` seeded; KPIs add
+  Tier-1 TTFT < 250 ms and biometric < 50 ms.
 - Documentation consolidation (ADR-14): 22 docx drafts retired from the working tree
   (21 recoverable via git history; 1 via .ingest text); zero-tolerance persona naming
   enforced across all records; Future Scope parked without version numbers (PC Health

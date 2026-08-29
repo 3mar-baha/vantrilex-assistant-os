@@ -12,8 +12,10 @@
 > بتكلفة شهرية صفرية تماماً ($0.00).
 
 Vantrilex Assistant OS is an owner-only personal executive assistant named **Sara (سارة)** —
-Chief of Staff, polymath tutor, tech scout, and PC automation companion — running 24/7 on a
-free-tier VPS, speaking warm Jordanian Arabic over Telegram, at exactly **$0.00/month**.
+Chief of Staff, polymath tutor, tech scout, and PC automation companion — running 24/7 in a
+free Hugging Face Space (ADR-15), speaking warm Jordanian Arabic over Telegram, reasoning
+through a 3-tier multi-model brain behind a fast front-door dispatcher (ADR-16/18), at
+exactly **$0.00/month**.
 
 ## What Sara does (v1.0)
 
@@ -31,11 +33,14 @@ free-tier VPS, speaking warm Jordanian Arabic over Telegram, at exactly **$0.00/
 ## Architecture (one glance)
 
 ```
-Owner ⇄ Telegram ⇄ [Free-tier VPS 24/7]           [Windows PC]
-                     ├─ Aiogram 3.x core            └─ Bridge daemon (outbound-only WSS)
-                     ├─ OmniRoute brain :20128          ├─ Windows-MCP executor
-                     ├─ Edge-TTS → ffmpeg → Opus        ├─ Wake-on-LAN sender
-                     ├─ Google Suite clients            └─ Idle monitor (20 min)
+Owner ⇄ Telegram ⇄ [HF Space 24/7 (ADR-15)]        [Windows PC]
+                     ├─ Aiogram 3.x core             └─ Bridge daemon (outbound-only WSS)
+                     ├─ Dispatcher → OmniRoute :20128    ├─ Windows-MCP executor
+                     │   ├─ Tier1 fast (reflex, <250ms)  ├─ Wake-on-LAN sender
+                     │   ├─ Tier2 medium (tools)         └─ Idle monitor (20 min)
+                     │   └─ Tier3 heavy (DAG/tutoring)
+                     ├─ Edge-TTS → ffmpeg → Opus
+                     ├─ Google Suite clients
                      └─ Obsidian vault (GitHub-backed)
 ```
 
@@ -65,7 +70,7 @@ Ops health probe (no Telegram traffic): `python -m src.main --health` prints a J
 
 | Release | Scope |
 |---|---|
-| **v1.0** | Chat + voice notes, OmniRoute reasoning, Google suite + triage, Obsidian vault, whitelisted PC control |
+| **v1.0** | Chat + voice notes, 3-tier OmniRoute brain + dispatcher, voice biometrics + Guest Mode, Google suite + triage, Obsidian vault, whitelisted PC control |
 | **v1.1** | Live bidirectional PyTgCalls calls · tech-hardware-scout · career-project-incubator · Mem0/Firestore memory evaluation |
 | **v1.5** | Virtual cloud SIP telephony (landline calling) |
 | **v2.0** | Social media agent (GitHub, LinkedIn, Instagram) |
