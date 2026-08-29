@@ -34,10 +34,11 @@ Upstream toolkit inventory: `worldflowai/everything-claude-code`, `mattpocock/sk
       *AC*: `test_audio_stream_opus.py` proves Ogg Opus bytes without disk writes; latency budget asserted in integration smoke.
       Done 2026-08-29: AC1-AC8 green (`src/voice.py`); `-probesize 32` amendment keeps the
       first encoded chunk truly streaming (default probesize gates output until EOF).
-- [ ] **1.4 Adaptive Jordanian dialect engine (foundation)** — M1, Part 2 (Part 1 = the
+- [x] **1.4 Adaptive Jordanian dialect engine (foundation)** — M1, Part 2 (Part 1 = the
       2026-08-29 docs overhaul, ✅): `src/dialect.py` normalization before TTS,
       `Dialect_Notes.md` ingestion loop, snapshot injection into prompt.
       *AC*: `tests/test_dialect.py` per master-directive spec M1.
+      Done 2026-08-29: 3/3 ACs green; pure sync module, vault wiring lands in 3.1.
 - [ ] **1.5 3-tier brain + Fast Front-Door Dispatcher** — ADR-16/18: extend
       `src/gateway.py` to the FAST/MEDIUM/HEAVY chain (`google/gemini-3.5-flash-lite` /
       `google/gemini-3.7-flash` / `nvidia/nemotron-3-ultra-550b` + fallbacks), add the

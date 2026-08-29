@@ -18,8 +18,9 @@ Upstream toolkit inventory: `worldflowai/everything-claude-code` · `mattpocock/
   · `ponytail/skills/*` · `guard-skills/clean-code-guard` · `everything-claude-code/agents/python-specialist`
 - **Deliverables so far**: task 1.1 skeleton (merged to main, `221c650`) · task 1.2 gateway
   + SSE hardening (`3e44f1c`, live-wired) · task 1.3 voice pipeline (`4d0aefa`) · docs
-  overhaul commits (`71a17ca`, `fef6246`, `0e796fd`)
-- **Remaining**: 1.4 Part 2 (dialect engine) · 1.5 (3-tier brain + front-door dispatcher)
+  overhaul commits (`71a17ca`, `fef6246`, `0e796fd`) · task 1.4 dialect engine M1
+  (`src/dialect.py`, 3/3 ACs)
+- **Remaining**: 1.5 (3-tier brain + front-door dispatcher)
 - **Teardown**: pending sprint exit — wipe `.claude/skills/*`, verify sacred floor green,
   record outcome here.
 

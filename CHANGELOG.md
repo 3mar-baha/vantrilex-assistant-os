@@ -24,6 +24,11 @@ product release tags start independently at v1.0.0.)
   on-demand YouTube/Weather/Maps APIs — per-request, free-tier, $0 preserved).
 
 ### Added
+- **Sprint 1 / task 1.4 — adaptive Jordanian dialect engine** (`src/dialect.py`): M1
+  notes-driven pronunciation normalization before Edge-TTS (longest-term-first),
+  never-blocking ingestion of owner teach-lines («تعلمي: term -> phonetic (context)»)
+  into `Dialect_Notes.md` YAML entries (term/phonetic/context/date), and the compact
+  system-prompt dialect snapshot; pure sync transforms, vault persistence wired at 3.1.
 - **Sprint 1 / task 1.3 — voice pipeline** (`src/voice.py`): Edge-TTS -> ffmpeg -> Ogg Opus
   fully in memory as an async byte-chunk iterator; first encoded chunk surfaces immediately
   (time-to-first-encoded-chunk, <600 ms budget — binding Q1; tiny `-probesize 32` keeps the
