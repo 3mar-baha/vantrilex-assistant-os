@@ -24,6 +24,16 @@ product release tags start independently at v1.0.0.)
   on-demand YouTube/Weather/Maps APIs — per-request, free-tier, $0 preserved).
 
 ### Added
+- **Sprint 1 / task 1.5 — 3-tier brain + Fast Front-Door Dispatcher** (`src/dispatcher.py`,
+  `src/gateway.py` chains): per ADR-16/18 — `Tier` FAST/MEDIUM/HEAVY chains walked per
+  request (quota -> immediate advance, transient -> capped retries, fatal -> loud stop,
+  unchanged per-tier), one Tier-1 router call classifies (tiny JSON verdict) and yields the
+  instant Jordanian ack («من عيوني هسا ببدأ...») as the first delta (<250 ms TTFT budget);
+  simple chat answered fully at Tier 1, single/dual-tool intents stream Tier 2, multi-step
+  DAGs stream Tier 3; unparsable/failed routing degrades safely to Tier 2 with a loud log.
+  Settings carries the tier pins + comma-separated fallback lists (boot fails fast on gaps);
+  `.env.example` and the runtime `.env` migrated to the `google/`-prefixed pins; the 2-slot
+  PRIMARY/FAST chain retired. AC10 live smoke pending the upstream Google 403 owner-side fix.
 - **Sprint 1 / task 1.4 — adaptive Jordanian dialect engine** (`src/dialect.py`): M1
   notes-driven pronunciation normalization before Edge-TTS (longest-term-first),
   never-blocking ingestion of owner teach-lines («تعلمي: term -> phonetic (context)»)

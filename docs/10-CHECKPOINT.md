@@ -12,17 +12,23 @@ Upstream toolkit inventory: `worldflowai/everything-claude-code` · `mattpocock/
 
 ---
 
-## Sprint 1 — Foundation (gateway + voice + dialect + dispatcher) — IN PROGRESS
+## Sprint 1 — Foundation (gateway + voice + dialect + dispatcher) — COMPLETE (2026-08-29)
 
-- **Skills ingested**: `mattpocock-skills/skills/tdd` · `mattpocock-skills/skills/diagnosing-bugs`
-  · `ponytail/skills/*` · `guard-skills/clean-code-guard` · `everything-claude-code/agents/python-specialist`
-- **Deliverables so far**: task 1.1 skeleton (merged to main, `221c650`) · task 1.2 gateway
+- **Skills ingested**: `mattpocock-skills/skills/tdd` · `ponytail/skills/*` ·
+  `guard-skills/clean-code-guard` (tdd + clean-code-guard SKILL.md read in full and applied;
+  diagnosed-bugs and python-specialist never needed — tasks landed without them)
+- **Deliverables**: task 1.1 skeleton (merged to main, `221c650`) · task 1.2 gateway
   + SSE hardening (`3e44f1c`, live-wired) · task 1.3 voice pipeline (`4d0aefa`) · docs
   overhaul commits (`71a17ca`, `fef6246`, `0e796fd`) · task 1.4 dialect engine M1
-  (`src/dialect.py`, 3/3 ACs)
-- **Remaining**: 1.5 (3-tier brain + front-door dispatcher)
-- **Teardown**: pending sprint exit — wipe `.claude/skills/*`, verify sacred floor green,
-  record outcome here.
+  (`aa64644`) · task 1.5 3-tier brain + Fast Front-Door Dispatcher (`fe4e5ca`; runtime
+  `.env` migrated, 2-slot chain retired) · social-graph + sprint re-map commits
+  (`79b9563`, `5519a6c`, `53d8d71`)
+- **Teardown (executed 2026-08-29)**: `.claude/skills/*` wiped; full suite green after
+  teardown (45 passed). Sacred-floor note: `test_owner_middleware.py` +
+  `test_whitelist_guardrail.py` are born with Sprint-2 task 2.2 / Sprint-3 task 3.4 —
+  until then the full suite IS the floor.
+- **Carry-over**: AC10 live smoke (task 1.2 gateway + 1.5 dispatcher TTFT) blocked on the
+  Google 403 "project denied access" owner-side fix in Google Cloud.
 
 ## Sprint 2 — Telegram suite, biometrics, triage, logs — QUEUED
 

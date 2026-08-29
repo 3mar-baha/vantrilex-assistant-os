@@ -8,8 +8,9 @@ every task lands red->green->refactor with tests and docs in the same commit.
 specs carry the binding AC→pytest contracts; new capabilities specced in
 `docs/specs/master-directive-2026-08-29.md` (M1-M9) + ADR-16..21.
 
-**Status matrix (2026-08-29)**: Completed ✅ 1.1 · 1.2 · 1.3 · 1.4 Part 1 (docs
-overhaul) — In Progress 🔄 1.4 Part 2 (dialect engine) — queued: 1.5 dispatcher.
+**Status matrix (2026-08-29)**: Completed ✅ 1.1 · 1.2 · 1.3 · 1.4 · 1.5 — **Sprint 1
+complete**, teardown executed (see `docs/10-CHECKPOINT.md`) — next: Sprint 2 (bot shell 2.2 →
+Google foundation 2.1 → biometrics 2.3/2.3b → triage 2.4 → transcriber 2.5 → journaler 2.6).
 
 **Skill rotation**: each sprint ingests upstream skills into `.claude/skills/` for its
 duration and applies the **teardown protocol at sprint exit** — wipe `.claude/skills/*`,
@@ -39,12 +40,14 @@ Upstream toolkit inventory: `worldflowai/everything-claude-code`, `mattpocock/sk
       `Dialect_Notes.md` ingestion loop, snapshot injection into prompt.
       *AC*: `tests/test_dialect.py` per master-directive spec M1.
       Done 2026-08-29: 3/3 ACs green; pure sync module, vault wiring lands in 3.1.
-- [ ] **1.5 3-tier brain + Fast Front-Door Dispatcher** — ADR-16/18: extend
+- [x] **1.5 3-tier brain + Fast Front-Door Dispatcher** — ADR-16/18: extend
       `src/gateway.py` to the FAST/MEDIUM/HEAVY chain (`google/gemini-3.5-flash-lite` /
       `google/gemini-3.7-flash` / `nvidia/nemotron-3-ultra-550b` + fallbacks), add the
       dispatcher (Tier-1 ack «من عيوني هسا ببدأ...» <250 ms TTFT, route single/dual-tool
       → Tier 2, DAG → Tier 3), migrate `.env` pins to `google/` prefix.
       *AC*: `tests/test_dispatcher.py` routing + fallback ordering; TTFT budget smoke.
+      Done 2026-08-29: AC1-AC9 green (9/9; AC10 live smoke pending the Google 403 owner-side
+      fix); runtime `.env` migrated to the tier pins; 2-slot chain retired.
 
 ## Sprint 2 — Bot Shell + Google Suite + Triage + Biometrics + Evening Ledger
 

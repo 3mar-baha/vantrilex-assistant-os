@@ -130,9 +130,9 @@ Supersedes draft preference for Google Cloud Run deployment.
 
   Harness (Claude Code) remains GLM-only per the 2026-08-28 owner rule — two distinct
   layers, never conflated.
-- **Consequences**: `src/gateway.py` extends from the 2-slot PRIMARY/FAST chain to the
-  3-slot chain + dispatcher (new Sprint-1 task 1.5); the runtime `.env` migrates from the
-  `gemini/` model-ID prefix to the directive's `google/` pins in that same task; pool-level
+- **Consequences**: LANDED (task 1.5, 2026-08-29, commit `fe4e5ca`): `src/gateway.py` walks
+  the 3-tier chains + `src/dispatcher.py` routes behind the ADR-18 front door; the runtime
+  `.env` migrated from the retired 2-slot pins to the `google/`-prefixed tier pins. Pool-level
   failover still covers intra-tier provider outages. AC10 live smoke remains blocked
   upstream (Google 403 "project denied access" on all Gemini pools 2026-08-29 — owner-side
   fix in Google Cloud).
@@ -157,8 +157,8 @@ Supersedes draft preference for Google Cloud Run deployment.
   («من عيوني هسا ببدأ...») while classifying intent: single/dual-tool requests route to
   Tier 2; multi-step chained DAGs (tutoring, syllabus builds, deep coding) route to
   Tier 3. Fire-and-forget from the owner's perspective — Sara always speaks immediately.
-- **Consequences**: New Sprint-1 task 1.5 (dispatcher module + 3-tier config pins);
-  perceived latency collapses to Tier-1 TTFT even for heavy jobs.
+- **Consequences**: Landed as `src/dispatcher.py` + the 3-tier config pins (Sprint-1 task
+  1.5, 2026-08-29); perceived latency collapses to Tier-1 TTFT even for heavy jobs.
 
 ## ADR-19: TokenJuice-Style Compaction Before LLM Triage — **Accepted** (2026-08-29, MASTER DIRECTIVE)
 - **Decision**: Email bodies are compacted BEFORE any LLM classification: signatures,
