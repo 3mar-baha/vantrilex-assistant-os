@@ -117,6 +117,19 @@ social agent -> v2.0.
       RUNBOOK / .env.example / agents_config.json / AI-INSTRUCTIONS.md synchronized.
       MERGE to main pending owner review. Task 1.2 AC10 live smoke still awaits valid
       Gemini pool credential (upstream 400 "API key not valid" — owner-side fix in OmniRoute).
+      **SECOND MASTER DIRECTIVE (2026-08-29)**: brain upgraded to 3-TIER multi-model
+      routing (ADR-16 amended in place: FAST `google/gemini-3.5-flash-lite` TTFT<250ms /
+      MEDIUM `google/gemini-3.7-flash` / HEAVY `nvidia/nemotron-3-ultra-550b` + fallbacks)
+      behind the **Fast Front-Door Dispatcher** (ADR-18) — new Sprint-1 task 1.5 (3-tier
+      gateway chain + dispatcher + `.env` `google/`-prefix migration); ADR-17 (voice
+      biometrics + Guest Mode), ADR-19 (TokenJuice), ADR-20 (in-memory Opus), ADR-21
+      (5-dir vault) appended; **per-sprint skill rotation** into `.claude/skills/` with
+      binding sprint-exit teardown, ledgered in new `docs/10-CHECKPOINT.md`;
+      `config/whitelist.json` seeded; sprint specs 2-4 exhaustively re-mapped (AC1-AC10
+      each); TEST-PLAN (85% branch gate), RUNBOOK (Cloud Run fallback + LAN :8000),
+      PROJECT-JOURNEY (§10 addendum), VISION/ARCHITECTURE/CLAUDE.md/AI-INSTRUCTIONS/
+      .env.example/agents_config.json all synchronized. Committed on branch
+      `core-foundation`, pushed for review; merge to main pending.
 - [ ] Phase 4 — Harden & Release: guards, full gate, tag v1.0.0, release report
 
 ## Open items / blockers
