@@ -144,7 +144,20 @@ social agent -> v2.0.
       `docs/10-CHECKPOINT.md`); TDD red->green: `tests/test_dialect.py` (3/3 M1 ACs) +
       `src/dialect.py` (normalize longest-first, never-blocking `learn()`, prompt snapshot) —
       commit `aa64644` + docs `59c2a7e` + ignore `ff79bad` on branch, PUSHED; `make gate`
-      green (35 tests). HALTED per protocol — next: task 1.5 (3-tier brain + dispatcher).
+      green (35 tests).
+      **TASK 1.5 DONE — SPRINT 1 COMPLETE (2026-08-29)**: 3-tier chains in `src/gateway.py`
+      (Tier FAST/MEDIUM/HEAVY walked per request) + `src/dispatcher.py` (ADR-18 front door:
+      Tier-1 router verdict -> instant ack «من عيوني هسا ببدأ...» as first delta <250ms TTFT,
+      direct stays Tier 1, tier2/tier3 stream after the ack, safe-default tier2 + loud log on
+      router failure). Settings: medium/heavy required + comma-separated fallback lists
+      (fast/medium/heavy_chain); `.env.example` + runtime `.env` migrated to `google/` pins;
+      2-slot chain retired. TDD red->green: `tests/test_dispatcher.py` AC1-AC9 (9/9), suite
+      45 green, gate green. Commits `fe4e5ca` (code) + `5ead135` (docs: backlog tick, ADR-16/18
+      consequences LANDED, checkpoint ledger) — PUSHED on `core-foundation`. **Sprint-exit
+      teardown executed**: `.claude/skills/*` wiped, 45 green after teardown, recorded in
+      `docs/10-CHECKPOINT.md`. AC10 live smoke blocked on Google 403 (owner-side). HALTED —
+      next: Sprint 2 (2.2 bot shell -> 2.1 Google foundation -> 2.3/2.3b biometrics+social
+      -> 2.4 triage -> 2.5 transcriber -> 2.6 journaler).
 - [ ] Phase 4 — Harden & Release: guards, full gate, tag v1.0.0, release report
 
 ## Open items / blockers
