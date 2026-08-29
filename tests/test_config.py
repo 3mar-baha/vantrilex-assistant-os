@@ -6,8 +6,9 @@ from pydantic import ValidationError
 CRITICAL_FIELDS = (
     "omniroute_base_url",
     "omniroute_api_key",
-    "primary_model",
     "fast_model",
+    "medium_model",
+    "heavy_model",
     "telegram_bot_token",
     "authorized_user_id",
 )
@@ -18,8 +19,9 @@ def test_settings_accept_all_env_example_vars(make_settings):
     s = make_settings()
     assert s.omniroute_base_url == "http://localhost:20128/v1"
     assert s.omniroute_api_key == "sk-omniroute-local-key"
-    assert s.primary_model == "auto/best-coding"
-    assert s.fast_model == "auto/best-free"
+    assert s.fast_model == "google/gemini-3.5-flash-lite"
+    assert s.medium_model == "google/gemini-3.7-flash"
+    assert s.heavy_model == "nvidia/nemotron-3-ultra-550b"
     assert s.telegram_bot_token.startswith("1234567890:")
     assert s.authorized_user_id == 123456789
     assert s.voice_name == "ar-JO-SanaNeural"

@@ -1,13 +1,15 @@
 """OmniRoute brain adapter — the only module that speaks LLM wire format.
 
-Free-pool survival: quota -> immediate fallback, transient -> capped-backoff retries,
-fatal -> loud stop. Sprint 2+ consume this blindly.
+3-tier model chains (ADR-16) walked per request; free-pool survival: quota ->
+immediate fallback, transient -> capped-backoff retries, fatal -> loud stop.
+Sprint 2+ consume this blindly.
 """
 
 import asyncio
 import json
 import re
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Mapping, Sequence
+from enum import Enum
 from typing import Final, Literal, Self
 
 import httpx
@@ -19,6 +21,14 @@ BACKOFF_CAP_S: Final[float] = 8.0
 REQUEST_TIMEOUT_S: Final[float] = 120.0
 
 _sleep: Final = asyncio.sleep  # test seam; monkeypatched to instant in backoff tests
+
+
+class Tier(str, Enum):
+    """Brain tier per ADR-16: FAST reflex/ack, MEDIUM tool execution, HEAVY planning."""
+
+    FAST = "fast"
+    MEDIUM = "medium"
+    HEAVY = "heavy"
 
 
 class GatewayError(RuntimeError):
@@ -64,8 +74,7 @@ class OmniRouteClient:
         base_url: str,
         api_key: str,
         *,
-        primary_model: str,
-        fast_model: str,
+        chains: Mapping[Tier, Sequence[str]],
         timeout_s: float = REQUEST_TIMEOUT_S,
         transport: httpx.AsyncBaseTransport | None = None,
     ) -> None:
@@ -75,8 +84,9 @@ class OmniRouteClient:
             timeout=timeout_s,
             transport=transport,
         )
-        self._primary = primary_model
-        self._fast = fast_model
+        self._chains: dict[Tier, list[str]] = {
+            tier: list(models) for tier, models in chains.items()
+        }
 
     async def __aenter__(self) -> Self:
         return self
@@ -88,22 +98,40 @@ class OmniRouteClient:
         await self._client.aclose()
 
     def stream_chat(
-        self, messages: list[dict[str, str]], *, temperature: float = 0.7, max_tokens: int = 2048
+        self,
+        messages: list[dict[str, str]],
+        *,
+        tier: Tier = Tier.FAST,
+        temperature: float = 0.7,
+        max_tokens: int = 2048,
     ) -> AsyncIterator[str]:
-        return self._stream(messages, temperature=temperature, max_tokens=max_tokens)
+        """Stream through the tier's own fallback chain (ADR-16 order)."""
+        return self._stream(
+            self._chains[tier], messages, temperature=temperature, max_tokens=max_tokens
+        )
 
     async def chat(
-        self, messages: list[dict[str, str]], *, temperature: float = 0.7, max_tokens: int = 2048
+        self,
+        messages: list[dict[str, str]],
+        *,
+        tier: Tier = Tier.FAST,
+        temperature: float = 0.7,
+        max_tokens: int = 2048,
     ) -> str:
         parts: list[str] = []
         async for delta in self.stream_chat(
-            messages, temperature=temperature, max_tokens=max_tokens
+            messages, tier=tier, temperature=temperature, max_tokens=max_tokens
         ):
             parts.append(delta)
         return "".join(parts)
 
     async def _stream(
-        self, messages: list[dict[str, str]], *, temperature: float, max_tokens: int
+        self,
+        chain: Sequence[str],
+        messages: list[dict[str, str]],
+        *,
+        temperature: float,
+        max_tokens: int,
     ) -> AsyncIterator[str]:
         payload = {
             "messages": messages,
@@ -112,7 +140,7 @@ class OmniRouteClient:
             "stream": True,
         }
         last_cause = "unknown"
-        for model in (self._primary, self._fast):
+        for model in chain:
             delay = BACKOFF_BASE_S
             for attempt in range(1, RETRY_ATTEMPTS + 1):
                 deltas = 0
@@ -176,9 +204,7 @@ class OmniRouteClient:
                             RETRY_ATTEMPTS,
                             exc,
                         )
-        raise GatewayError(
-            f"all models exhausted ({self._primary}, {self._fast}); last cause: {last_cause}"
-        )
+        raise GatewayError(f"all models exhausted ({', '.join(chain)}); last cause: {last_cause}")
 
     async def _attempt(self, model: str, payload: dict) -> AsyncIterator[str]:
         request = self._client.build_request(

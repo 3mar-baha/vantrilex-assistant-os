@@ -9,7 +9,7 @@ import httpx
 import pytest
 from loguru import logger
 
-from src.gateway import GatewayError, OmniRouteClient
+from src.gateway import GatewayError, OmniRouteClient, Tier
 
 PRIMARY = "primary-x"
 FAST = "fast-y"
@@ -57,8 +57,7 @@ def _client(script: _Scripted) -> OmniRouteClient:
     return OmniRouteClient(
         "http://gw.test/v1",
         "test-key",
-        primary_model=PRIMARY,
-        fast_model=FAST,
+        chains={Tier.FAST: [PRIMARY, FAST], Tier.MEDIUM: ["medium-x"], Tier.HEAVY: ["heavy-x"]},
         transport=script.transport(),
     )
 

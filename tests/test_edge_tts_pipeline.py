@@ -23,8 +23,9 @@ def _settings() -> Settings:
     return Settings(
         omniroute_base_url="http://gw/v1",
         omniroute_api_key="k",
-        primary_model="p",
         fast_model="f",
+        medium_model="m",
+        heavy_model="h",
         telegram_bot_token="t",
         authorized_user_id=1,
     )
