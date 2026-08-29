@@ -216,3 +216,25 @@ async def test_chat_aggregates_deltas():
     async with _client(script) as client:
         reply = await client.chat([{"role": "user", "content": "hi"}])
     assert reply == "أهلا بك يا أستاذ"
+
+
+async def test_sse_error_event_classified_loud_stop():
+    """Regression (live 2026-08-29): mid-stream `data: {"error": ...}` events must never be
+    swallowed — embedded status classifies (403 -> fatal -> loud stop, FAST never contacted)."""
+    script = _Scripted(
+        httpx.Response(
+            200,
+            content=_sse(
+                _null_delta(),
+                "data: "
+                + json.dumps(
+                    {"error": {"message": "[gemini/x] [403]: Your project has been denied access"}}
+                ),
+                done=False,
+            ),
+        ),
+    )
+    async with _client(script) as client:
+        with pytest.raises(GatewayError, match="denied access"):
+            await _collect(client.stream_chat([{"role": "user", "content": "hi"}]))
+    assert script.models() == [PRIMARY]

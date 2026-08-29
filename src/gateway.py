@@ -6,6 +6,7 @@ fatal -> loud stop. Sprint 2+ consume this blindly.
 
 import asyncio
 import json
+import re
 from collections.abc import AsyncIterator
 from typing import Final, Literal, Self
 
@@ -43,6 +44,18 @@ def _classify(status_code: int, body_snippet: str) -> Literal["fatal", "quota", 
     if status_code in (408, 409, 425) or status_code >= 500:
         return "transient"
     return "fatal"
+
+
+_EMBEDDED_STATUS: Final = re.compile(r"\[(\d{3})\]")
+
+
+def _raise_for_gateway_error(model: str, kind: str, source: str, detail: str) -> None:
+    if kind == "quota":
+        raise _QuotaExhausted(f"{source}: {detail}")
+    if kind == "transient":
+        raise _TransientFailure(f"{source}: {detail}")
+    logger.error("gateway fatal | model={} {} :: {}", model, source, detail)
+    raise GatewayError(f"fatal {source} on {model}: {detail}")
 
 
 class OmniRouteClient:
@@ -182,14 +195,7 @@ class OmniRouteClient:
                 await response.aclose()
             snippet = response.text[:500]
             kind = _classify(response.status_code, snippet)
-            if kind == "quota":
-                raise _QuotaExhausted(f"HTTP {response.status_code}: {snippet}")
-            if kind == "transient":
-                raise _TransientFailure(f"HTTP {response.status_code}: {snippet}")
-            logger.error(
-                "gateway fatal | model={} HTTP {} :: {}", model, response.status_code, snippet
-            )
-            raise GatewayError(f"fatal HTTP {response.status_code} on {model}: {snippet}")
+            _raise_for_gateway_error(model, kind, f"HTTP {response.status_code}", snippet)
 
         received = 0
         done_seen = False
@@ -211,6 +217,14 @@ class OmniRouteClient:
                 except json.JSONDecodeError:
                     logger.warning("gateway malformed SSE line skipped: {!r}", data[:120])
                     continue
+                if chunk.get("error"):
+                    # Gateways stream upstream failures as 200 + SSE error events; swallowing
+                    # them would deliver silent-empty replies instead of fallback/loud stop.
+                    message = str(chunk["error"].get("message", chunk["error"]))
+                    match = _EMBEDDED_STATUS.search(message)
+                    status = int(match.group(1)) if match else 0
+                    kind = _classify(status, message)
+                    _raise_for_gateway_error(model, kind, f"SSE error [{status}]", message[:500])
                 choices = chunk.get("choices") or [{}]
                 content = (choices[0].get("delta") or {}).get("content")
                 if content:
