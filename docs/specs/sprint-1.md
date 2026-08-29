@@ -436,3 +436,9 @@ Reviewer: independent Guide agent, adversarial pass, 2026-08-26. Dispositions:
 - **MINOR — silent truncation / empty-reply edges**: RESOLVED — missing-[DONE] warning behavior added to 1.2 (AC8) and empty-buffer fallback added to 1.4 (AC9).
 - **MINOR — test-target hygiene**: RESOLVED — `test_scaffold.py` declared in module tree; AC5 stubs machine-dependent probes; HealthReport alias dropped (plain dict).
 - **Open questions — rulings**: Q1 APPROVED (<600ms = time-to-first-encoded-chunk; ARCH §3 rewording mandatory in 1.3 commit) · Q3 APPROVED (سارة wins; retired-name ingest drafts superseded; no legacy-persona social-hook examples this sprint) · Q4 APPROVED (ffmpeg hard dependency owned by RUNBOOK; NO raw-MP3 fallback) · Q5 APPROVED (CI proves fallback ordering via MockTransport; live smoke manual + recorded).
+
+**Amendment (2026-08-29, task 1.3 implementation)**: `-analyzeduration 0 -probesize 32`
+prepended to the specced ffmpeg input options. Measured: default probesize gates ALL output
+until EOF on piped MP3 (first chunk at ~1.0s = producer close), violating binding Q1
+(<600 ms time-to-first-encoded-chunk); with the tiny probe the first encoded chunk surfaces
+in ~30ms while stdin is still open. All other args verbatim.

@@ -49,13 +49,21 @@ graph TD
     end
 ```
 
-## 3. Audio Pipeline (voice notes)
+## 3. Audio Pipeline (voice notes) — `src/voice.py`
 
-1. Response text finalized by the orchestrator.
-2. `edge-tts` streams `ar-JO-SanaNeural` audio chunks into `io.BytesIO` (no disk writes).
-3. ffmpeg (`subprocess` under an executor) transcodes PCM/MP3 chunks -> Ogg Opus
-   (48 kHz, 20 ms frames) as a stream, emitting the first chunk before full encode.
-4. First chunk is dispatched to Telegram immediately (<600 ms target); remainder follows.
+1. Response text is dialect-normalized (M1 `src/dialect.py`, from Sprint 1.4) and
+   finalized by the orchestrator.
+2. `VoicePipeline.synthesize_stream(text)`: Edge-TTS streams `ar-JO-SanaNeural` MP3
+   chunks straight into the ffmpeg child's stdin — zero disk writes anywhere.
+3. ffmpeg runs via asyncio subprocess (natively non-blocking) transcoding MP3 -> Ogg
+   Opus (48 kHz mono, 20 ms frames, 24k VBR voip); tiny `-probesize 32` keeps output
+   flowing from the first frames (the default probesize gates ALL output until EOF —
+   measured 2026-08-29).
+4. Latency metric (binding, Q1): **time-to-first-encoded-chunk** — Telegram Bot API
+   cannot progressively upload one voice bubble, so the first Ogg Opus chunk is
+   handed to the sender as soon as it is encoded (<600 ms target); the remainder
+   follows. Caller sends via
+   `await message.answer_voice(BufferedInputFile(ogg_bytes, filename="sara.ogg"))`.
 5. Dialect notes (`Dialect_Notes.md`) tune pronunciation/colloquialism over time.
 
 ## 4. Tiered Email Triage Matrix

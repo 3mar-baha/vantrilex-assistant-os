@@ -19,10 +19,13 @@ sprint's entry gate from that file + this backlog. Sprint-1 spec is frozen for i
       streaming completions, model fallback (`PRIMARY_MODEL` -> `FAST_MODEL` = Gemini dual-brain
       per ADR-16), retry/quota handling.
       *AC*: streaming works against live gateway; unit tests mock fallback ordering. Code+tests
-      committed; AC10 live proof pending valid Gemini pool credential (owner-side).
-- [ ] **1.3 Edge-TTS -> Ogg Opus pipeline**: `io.BytesIO` streaming, ffmpeg subprocess
+      committed; live-wired 2026-08-29 (SSE-error hardening in); Gemini pools blocked
+      upstream by Google (403 project denied — owner-side fix).
+- [x] **1.3 Edge-TTS -> Ogg Opus pipeline**: `io.BytesIO` streaming, ffmpeg subprocess
       transcode, first-chunk dispatch. Zero-disk audio invariant.
       *AC*: `test_audio_stream_opus.py` proves Ogg Opus bytes without disk writes; latency budget asserted in integration smoke.
+      Done 2026-08-29: AC1-AC8 green (`src/voice.py`); `-probesize 32` amendment keeps the
+      first encoded chunk truly streaming (default probesize gates output until EOF).
 - [ ] **1.4 Adaptive Jordanian dialect engine (foundation)** — M1: `src/dialect.py`
       normalization before TTS, `Dialect_Notes.md` ingestion loop, snapshot injection into prompt.
       *AC*: `tests/test_dialect.py` per master-directive spec M1.

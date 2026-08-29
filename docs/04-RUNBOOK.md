@@ -47,6 +47,16 @@ Prints a JSON report (`gateway` / `telegram_token` / `ffmpeg` / `overall`) and e
 crashes the process — read the report and decide. Use it after bootstrap and whenever
 Sara seems unreachable.
 
+### Voice latency smoke
+
+```powershell
+.venv\Scripts\python -c "import asyncio; from src.voice import VoicePipeline; p=VoicePipeline(voice='ar-JO-SanaNeural', rate='+0%', pitch='+0Hz'); asyncio.run(lambda: None)()"
+```
+
+Simpler: run the transcode proof — `pytest tests/test_audio_stream_opus.py -q` asserts
+real ffmpeg emits Ogg Opus from an in-memory stream with the first encoded chunk
+surfacing before producer completion (<600 ms first-chunk budget, binding Q1).
+
 ## 4. HF Space Deployment (production, free tier — ADR-15)
 
 Supersedes VPS deployment (ADR-05). One Docker Space co-locates OmniRoute +
