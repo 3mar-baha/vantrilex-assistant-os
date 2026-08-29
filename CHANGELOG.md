@@ -16,6 +16,10 @@ product release tags start independently at v1.0.0.)
   on-demand YouTube/Weather/Maps APIs — per-request, free-tier, $0 preserved).
 
 ### Added
+- **Sprint 1 / task 1.2 — OmniRoute client** (`src/gateway.py`): OpenAI-compatible SSE
+  streaming as async text-delta iterator; PRIMARY->FAST model fallback; free-pool survival
+  (quota -> immediate fallback, transient -> capped-backoff retries, fatal -> loud stop);
+  mid-stream failures never restart a partially-yielded reply; missing-[DONE] guard.
 - **Sprint 1 / task 1.1 — project skeleton**: async `src/` package with pydantic v2
   `Settings` validating `.env` (fail-fast on the six critical vars, empty-string→unset
   normalization), one-sink loguru setup, ops health probe (`python -m src.main --health`),

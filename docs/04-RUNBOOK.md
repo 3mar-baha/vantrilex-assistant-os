@@ -91,6 +91,8 @@ plugin (optional REST key), `python -c "import secrets; print(secrets.token_urls
 | Bot silent for everyone except owner | By design (ADR-06) | None — owner-only allowlist |
 | Non-whitelisted app request stalls | Confirmation pending | Approve/deny on Telegram; or add app to `config/whitelist.json` |
 | Voice note fails to send | ffmpeg missing/mispath | Re-run preflight; check `ffmpeg -version` inside the venv shell |
+| `GatewayError: all models exhausted (P, F)` | Both brain models down/quota — pools drained or OmniRoute offline | Check OmniRoute dashboard pools + `curl -m 5 http://localhost:20128/v1/models`; the log line above names the last cause per model |
+| `GatewayError: fatal HTTP 401/403 on <model>` | Bad/missing gateway key | Verify `OMNIROUTE_API_KEY` in `.env`; never appears in logs (only status + body snippet) |
 
 ## 8. Operational Safety
 

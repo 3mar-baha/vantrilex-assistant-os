@@ -9,7 +9,7 @@ every task lands red->green->refactor with tests and docs in the same commit.
 - [x] **1.1 Project skeleton**: async Python package (`src/`), pydantic-settings config
       loading `.env`, Loguru structured logging, health module.
       *AC*: `make setup && make gate` green from clean clone; config validates all vars in `.env.example`.
-- [ ] **1.2 OmniRoute client**: OpenAI-compatible client against `OMNIROUTE_BASE_URL`,
+- [x] **1.2 OmniRoute client**: OpenAI-compatible client against `OMNIROUTE_BASE_URL`,
       streaming completions, model fallback (`PRIMARY_MODEL` -> `FAST_MODEL`), retry/quota handling.
       *AC*: streaming works against live gateway; unit tests mock fallback ordering.
 - [ ] **1.3 Edge-TTS -> Ogg Opus pipeline**: `io.BytesIO` streaming, ffmpeg subprocess

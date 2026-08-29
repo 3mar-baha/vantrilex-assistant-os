@@ -8,7 +8,9 @@
   for whitelist misses (Q5) · credential manifest filled progressively (Q6).
 - **OmniRoute gateway**: `http://localhost:20128/v1`, co-located with the core on the VPS;
   aggregates 90+ free provider pools (DeepSeek V3/R1, Gemini Flash, Groq Llama 3.3) with
-  quota-aware auto-fallback.
+  quota-aware auto-fallback. Adapter: `src/gateway.py` (`OmniRouteClient`) — the only module
+  speaking LLM wire format; SSE streaming, PRIMARY->FAST model fallback, quota/transient/fatal
+  classification; consumers get plain text deltas or `GatewayError`.
 - **Telegram voice/chat architecture**: Aiogram 3.x long-polling Markdown chat; Edge-TTS
   (`ar-JO-SanaNeural`) streamed in-memory via `io.BytesIO`, transcoded by ffmpeg to native
   Ogg Opus voice bubbles (<600 ms first-chunk target); live bidirectional calls via PyTgCalls
