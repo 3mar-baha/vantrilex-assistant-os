@@ -98,3 +98,34 @@ Supersedes draft preference for Google Cloud Run deployment.
   the CLI only if multi-stream dispatch overhead ever justifies it.
 - **Consequences**: No dependency on OS-repo internals for daily flow; upstream pulls
   still deliver diagnostics/tooling improvements via `uos doctor` + toolkit sync.
+
+## ADR-15: HF Spaces as the v1.0 Runtime Host — **Accepted** (2026-08-29, MASTER DIRECTIVE)
+- **Context**: Master directive ordered cloud deployment over free tiers. Candidate hosts
+  evaluated: Hugging Face Spaces (2 vCPU / 16 GB RAM / 50 GB, Docker, no card),
+  Koyeb Nano (0.1 vCPU / 512 MB), Render free (512 MB + 15-min sleep). ADR-05's
+  VPS-primary ruling is superseded by this owner directive.
+- **Decision**: **Hugging Face Spaces** hosts the v1.0 runtime as ONE Docker Space running
+  OmniRoute (`localhost:20128`) + the core co-located — preserving the gateway co-location
+  architecture verbatim; the Space's single public port serves the WSS bridge endpoint and
+  `/health`. Secrets load from HF Secrets (never git). Keep-alive: cron ping on `/health`
+  every 10 min. Rejected: Koyeb/Render — 512 MB cannot host whisper.cpp + speaker
+  verification (<50 ms CPU KPI) + OmniRoute + core; Render adds a cron life-support
+  dependency on top of resource starvation.
+- **Consequences (new hard invariants)**: (1) **Disposable-filesystem rule** — the Space's
+  disk is ephemeral: ALL durable state MUST live in the git-backed vault or be re-derivable;
+  the Google OAuth token cache is vault-persisted (encrypted) or re-consented after restarts.
+  (2) Free Spaces may idle-sleep after prolonged inbound silence — the keep-alive ping is
+  mandatory config, documented in RUNBOOK. (3) Sprint-4 packaging = Space Dockerfile with
+  `app_port`, single-image OmniRoute+core supervision.
+
+## ADR-16: Gemini Dual-Brain via OmniRoute — **Accepted** (2026-08-29, MASTER DIRECTIVE)
+- **Decision**: Sara's brain is Gemini exclusively, wired through OmniRoute free pools:
+  `PRIMARY_MODEL=gemini/gemini-3.7-flash` (extended thinking — deep agentic workflows,
+  multi-step tool planning, polymath tutoring) with `gemini/gemini-3.1-pro`-class pool
+  failover; `FAST_MODEL=gemini/gemini-3.5-flash-lite` (<600 ms TTS text generation, email
+  classification, entity/YAML parsing, casual banter). Harness (Claude Code) remains
+  GLM-only per the 2026-08-28 owner rule — two distinct layers, never conflated.
+- **Consequences**: `.env` pins updated both repos; adapter `src/gateway.py` unchanged
+  (2-slot chain; 3.1-pro failover happens at OmniRoute pool level); AC10 live smoke awaits
+  a valid Gemini pool credential in OmniRoute (all pools returned upstream `API key not
+  valid` 2026-08-29 — owner-side fix).

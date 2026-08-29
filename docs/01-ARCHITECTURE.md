@@ -3,7 +3,8 @@
 ## 1. Confirmed Mission Record (Discovery, 2026-08-26)
 
 - **Project**: Vantrilex Assistant OS — Universal Agentic OS v1.1.0, persona **Sara (سارة)**.
-- **Rulings**: Sara naming (Q1) · VPS-primary topology (Q2) · owner-only access (Q3) ·
+- **Rulings**: Sara naming (Q1) · VPS-primary topology (Q2 — **superseded by ADR-15: HF
+  Spaces runtime host, 2026-08-29**) · owner-only access (Q3) ·
   v1.0 = exec core minus live calls (Q4) · $0.00 absolute + Telegram confirmation fallback
   for whitelist misses (Q5) · credential manifest filled progressively (Q6).
 - **OmniRoute gateway**: `http://localhost:20128/v1`, co-located with the core on the VPS;
@@ -15,24 +16,28 @@
   (`ar-JO-SanaNeural`) streamed in-memory via `io.BytesIO`, transcoded by ffmpeg to native
   Ogg Opus voice bubbles (<600 ms first-chunk target); live bidirectional calls via PyTgCalls
   arrive in v1.1.
-- **Validated deployment path**: free-tier **VPS-primary** hosting core + OmniRoute +
-  Edge-TTS pipeline; **Windows PC Bridge daemon** connects outbound-only (TLS WebSocket,
-  zero inbound ports) executing WoL + Windows-MCP tasks. PC may sleep; Sara stays up.
+- **Validated deployment path (ADR-15, 2026-08-29)**: free-tier **Hugging Face Spaces** hosts
+  ONE Docker Space co-locating core + OmniRoute + Edge-TTS (single public port = WSS bridge
+  endpoint + `/health`; HF Secrets; keep-alive cron ping every 10 min); the Space's filesystem is
+  disposable — all durable state lives in the git-backed vault; **Windows PC Bridge daemon**
+  connects outbound-only (TLS WebSocket, zero inbound ports) executing WoL + Windows-MCP tasks.
+  PC may sleep; Sara stays up.
 
 ## 2. Component Topology
 
 ```mermaid
 graph TD
     User([Owner]) <-->|Chat / Voice Notes / v1.1 Calls| TG[Telegram]
-    TG <--> Core[VPS: Aiogram 3.x Core + Orchestrator]
+    TG <--> Core[HF Space: Aiogram 3.x Core + Orchestrator]
 
-    subgraph VPS [Free-tier VPS - 24/7]
+    subgraph Space [HF Space Docker - 24/7, keep-alive ping /health 10min]
         Core <--> Omni[OmniRoute :20128]
-        Omni <--> Pools[DeepSeek / Gemini Flash / Groq free pools]
+        Omni <--> Pools[Gemini dual-brain + free pools]
         Core <--> TTS[Edge-TTS -> BytesIO -> ffmpeg -> Ogg Opus]
+        Core <--> Bio[Voice biometrics ECAPA-TDNN + Guest Mode]
         Core <--> G[Google Suite clients: Calendar / Gmail / Drive / Contacts / Tasks]
         Core <--> Vault[(Git-backed Obsidian Vault via GitHub API)]
-        Core --> WSS[TLS WebSocket endpoint :8443]
+        Core --> WSS[Space public port: WSS bridge endpoint + /health]
     end
 
     WSS <-->|outbound-only link| Bridge[Windows PC Bridge Daemon]
@@ -63,6 +68,9 @@ graph TD
 | Critical / urgent / VIP | VIP sender or urgency keywords | Priority voice note + repeat ping until acknowledged | **Immediate PyTgCalls outbound call** |
 
 Classifier input is untrusted data: parsed email bodies can never trigger PC actions.
+Before any LLM classification the body is compacted (M7, TokenJuice pattern): signatures,
+disclaimers, tracking boilerplate and quoted chains are stripped and the body is capped to
+the classification budget — cutting free-pool token burn without changing tier decisions.
 
 ## 5. Whitelist Guardrail (PC control)
 
@@ -89,10 +97,17 @@ Windows-MCP and notify -> NOT whitelisted => confirmation prompt on Telegram
 ## 6. Knowledge Vault Layout (PARA + Zettelkasten)
 
 ```
-01_Projects/   02_Areas/Studies/   02_Areas/Profile/User_Info.md
-02_Areas/Profile/Dialect_Notes.md   03_Resources/   04_Archives/
-Contacts/       Call_Transcripts/(v1.1)      Voice_Memos/
+01_Projects/   03_Resources/   04_Archives/
+02_Areas/Profile/User_Info.md   02_Areas/Profile/Dialect_Notes.md
+Contacts/       Call_Transcripts/       Studies/       Voice_Memos/       Daily_Logs/
 ```
+
+Mandatory directories (master directive 2026-08-29; `02_Areas/Studies/` migrates to top-level
+`Studies/`): `Contacts/`, `Call_Transcripts/` (written from v1.1), `Studies/`, `Voice_Memos/`,
+`Daily_Logs/YYYY-MM-DD.md` — a first-boot guard test asserts all exist. The vault taxonomy
+itself is dynamic (M5): Sara creates new sub-directories/tag ontologies as domains emerge,
+every structural change landing as an auditable git commit; the PARA backbone is
+expansion-only.
 
 Voice memos from mobile are transcribed, tagged with YAML frontmatter, and filed
 automatically. Conversations that produce actionable tasks close with Sara asking:
@@ -132,3 +147,15 @@ when prioritized): PC Health Monitor · Voice Read-It-Later · Emotional Context
 Silent Vault Backup · on-demand YouTube/Weather/Maps API calls (per-request only, free-tier
 endpoints — the $0.00 invariant is preserved; no standing subscriptions). Morning Briefing
 already ships in v1.0 (Sprint-2 daily brief).
+
+## 9. Master-Directive Capability Map (2026-08-29)
+
+Binding spec: `docs/specs/master-directive-2026-08-29.md` (M1-M9) — adaptive Jordanian
+dialect engine (Sprint 1.4) · speaker verification + Guest Mode with zero-trust lockdown
+(Sprint 2.6; lockdown test on the sacred floor) · daily activity ledger + randomized
+evening check-in (Sprint 2.7) · triage token compaction (Sprint 2.4) · mandatory vault
+directories + dynamic taxonomy expansion (Sprint 3.1/3.4) · dynamic capability expansion
+with natural-language Arabic cron (Sprint 4.1) · >=85% coverage gate (Sprint 4.2) ·
+HF Spaces packaging (Sprint 4.3, ADR-15) · VAD + barge-in on live calls (v1.1, M8) ·
+polymath tutor persona (continuous; artifacts filed to `Studies/`). Hosting and dual-brain
+rulings: ADR-15 / ADR-16 in `docs/03-DECISIONS.md`.
