@@ -176,6 +176,10 @@ class OmniRouteClient:
         except httpx.HTTPError as exc:
             raise _TransientFailure(f"transport: {exc}") from exc
         if response.status_code != 200:
+            try:
+                await response.aread()  # stream=True leaves error bodies unread
+            finally:
+                await response.aclose()
             snippet = response.text[:500]
             kind = _classify(response.status_code, snippet)
             if kind == "quota":

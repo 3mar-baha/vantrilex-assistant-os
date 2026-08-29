@@ -102,6 +102,23 @@ async def test_quota_on_primary_switches_to_fast_immediately():
     assert script.models() == [PRIMARY, FAST]
 
 
+async def test_quota_on_streaming_error_body_falls_back():
+    """Regression: non-200 body arrives as an unread stream (real-gateway shape) -> must be
+    read before classification, not raise ResponseNotRead."""
+
+    async def err_body():
+        yield b'{"error": {"message": "quota exceeded for free pool"}}'
+
+    script = _Scripted(
+        httpx.Response(402, content=err_body()),
+        httpx.Response(200, content=_sse(_chunk("تم"))),
+    )
+    async with _client(script) as client:
+        deltas = await _collect(client.stream_chat([{"role": "user", "content": "hi"}]))
+    assert deltas == ["تم"]
+    assert script.models() == [PRIMARY, FAST]
+
+
 async def test_transient_errors_retry_then_fallback(monkeypatch):
     """AC3: primary 500 x3 (backoff stubbed short) -> 3 attempts then FAST first-try success."""
     script = _Scripted(
