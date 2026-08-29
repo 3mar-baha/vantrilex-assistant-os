@@ -48,10 +48,12 @@
 5. **Cost discipline**: ONE implementer thread per task (no agent swarms during
    implementation — the spec fleet era is over); fast model welcome; Guide review once per
    sprint exit, not per task; zero speculative layers (ponytail).
-   **Model pin (owner directive, binding, 2026-08-28)**: GLM-only —
-   `PRIMARY_MODEL` = `FAST_MODEL` = `z-ai/glm-5.3-flash`; Anthropic/Claude models
-   FORBIDDEN everywhere incl. fallback chains and OmniRoute pool routing;
-   non-GLM spend cap $0.01 absolute.
+   **Model pin (owner directives 2026-08-28/29 + MASTER DIRECTIVE 2026-08-29)**: two layers —
+   (a) HARNESS (Claude Code's own calls): GLM-only `z-ai/glm-5.3-flash`; Anthropic/Claude
+   FORBIDDEN; non-GLM spend cap $0.01. (b) SARA'S BRAIN (Gemini via OmniRoute, per master
+   directive): `PRIMARY_MODEL=gemini/gemini-3.7-flash` (extended thinking; deep agentic/
+   tutoring), `FAST_MODEL=gemini/gemini-3.5-flash-lite` (<600ms TTS text, classification);
+   pool-level failover covers the gemini-3.1-pro class.
 
 Updated at every phase exit and every significant turn end.
 
@@ -100,7 +102,21 @@ social agent -> v2.0.
       getMe-verified · ffmpeg installed. Worktree `core-foundation` EXISTS (created once,
       keep using it). DONE: task 1.1 skeleton — commit `221c650` MERGED to main (owner-directed
       2026-08-28); gate green (13 tests, AC1-AC6), live `--health` proof ok vs OmniRoute.
-      NEXT: task 1.2 (OmniRoute client) per docs/specs/sprint-1.md in the worktree, loop→HALT.
+      DONE 1.2: client + SSE-error hardening (`3e44f1c`); live-wired 2026-08-29 — Gemini
+      pools blocked upstream by Google (403 "project denied access" — OWNER fixes in
+      Google: enable Generative Language API / unflag the key's project). DONE 1.3
+      (2026-08-29): `src/voice.py` AC1-AC8 green, gate green — commits `4d0aefa` (voice)
+      + `0e796fd` (docs) on branch `core-foundation`, PUSHED; awaiting owner merge decision
+      + HALT per protocol.
+      **MASTER-DIRECTIVE OVERHAUL (2026-08-29)**: committed on branch `core-foundation`
+      (pushed for review: `71a17ca` + `fef6246` on top of task-1.2 commits) — ADR-15 (HF
+      Spaces host) + ADR-16 (Gemini dual-brain) in 03-DECISIONS; BACKLOG re-mapped to the new
+      sprint DAG (bot shell → Sprint 2.1; biometrics 2.6, evening ledger 2.7, dialect engine
+      1.4, vault dirs 3.1, expansion 4.1, coverage 85% 4.2, Space deploy 4.3); M1-M9 spec at
+      docs/specs/master-directive-2026-08-29.md; CLAUDE.md / 01-ARCHITECTURE / 00-VISION /
+      RUNBOOK / .env.example / agents_config.json / AI-INSTRUCTIONS.md synchronized.
+      MERGE to main pending owner review. Task 1.2 AC10 live smoke still awaits valid
+      Gemini pool credential (upstream 400 "API key not valid" — owner-side fix in OmniRoute).
 - [ ] Phase 4 — Harden & Release: guards, full gate, tag v1.0.0, release report
 
 ## Open items / blockers
