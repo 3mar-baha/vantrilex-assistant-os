@@ -185,6 +185,13 @@ timestamped action summary to the person's `Contacts/{Category}/{Name}.md` AND
   then routes the verdict: confirmed -> `Contacts/{Category}/{Name}.md` + stored voiceprint;
   «تجاهليه» -> `Contacts/Ignored/`; «ما بعرفه» -> `Contacts/Unknown/` with a security flag.
 
+LANDED (sprint-2 2.3b, `src/skills/social_enrollment.py`): `VoiceprintRegistry` —
+`match_vector` (owner checked first, <50 ms cosine), `enroll`/`update_stability`
+(Fernet-sealed vectors under `State/voiceprints/`, dossier frontmatter `voiceprint_ref`),
+`stage_pending`/`pending_briefs`/`resolve_pending` (three-way verdict routing above),
+`record_transcript` (timestamped dossier section). Bot wiring: `verify_or_lockdown`
+routes matched contacts to `CONTACT_MODE_AR` (message-taking only) before Guest Mode.
+
 ## 7. Component Registry (`config/agents_config.json`)
 
 ```json

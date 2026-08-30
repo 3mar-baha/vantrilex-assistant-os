@@ -155,7 +155,11 @@ Supersedes draft preference for Google Cloud Run deployment.
   lockdown of PC control, Gmail, Calendar and private vault, message-taking filed to
   `Voice_Memos/` or `Contacts/`. The guest-lockdown test joins the sacred floor.
 - **Consequences**: $0 preserved (local inference, no cloud biometrics); false-reject risk
-  accepted (re-prompt, never fail-open).
+  accepted (re-prompt, never fail-open). Landed sprint-2 2.3 (`src/skills/voice_biometric_auth.py`,
+  speechbrain ECAPA pinned; Resemblyzer fallback not needed — wheel-verified on py3.12) and
+  extended to the multi-speaker registry in 2.3b (`src/skills/social_enrollment.py`):
+  per-contact encrypted vectors + three-way pending verdicts (confirm/ignore/unknown-flag),
+  guest containment preserved for every non-owner verdict.
 
 ## ADR-18: Fast Front-Door Dispatcher — **Accepted** (2026-08-29, MASTER DIRECTIVE)
 - **Context**: One model for everything either lags simple replies or under-thinks hard

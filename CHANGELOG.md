@@ -9,6 +9,15 @@ product release tags start independently at v1.0.0.)
 ## [Unreleased]
 
 ### Added
+- **Sprint 2 / task 2.3b — skill-social-enrollment (multi-speaker registry, §2.3b)**:
+  `src/skills/social_enrollment.py` — `VoiceprintRegistry` extends ADR-17 beyond the
+  owner: per-contact Fernet-sealed vectors under `State/voiceprints/` with dossier
+  frontmatter (`voiceprint_ref`), owner-first `match` (<50 ms cosine), running-centroid
+  stability, transcript appends, and the three-way pending lifecycle — known contact ->
+  warm `CONTACT_MODE_AR` message-taking reply (zero privileged calls, bot-wired through
+  `verify_or_lockdown`); unknown owner-absent -> `Voice_Memos/Pending_Speakers/` staging;
+  verdicts `confirm:{Category}` -> dossier+voiceprint, `ignore` -> `Contacts/Ignored/`
+  (never matches again), `unknown` -> `Contacts/Unknown/` + security flag (re-matchable).
 - **Sprint 2 / task 2.3 — skill-voice-biometric-auth + Guest Mode (ADR-17)**:
   `src/skills/voice_biometric_auth.py` — sealed single-owner ECAPA-TDNN voiceprint
   (speechbrain pinned, py3.12 wheel-verified; lazy model load, CPU executor, ffmpeg

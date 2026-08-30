@@ -166,6 +166,24 @@ Deterministic template, no model call. Verify without waiting: check
 the last successful send (failed sends retry the same day; a healthy daily brief
 updates it every morning).
 
+### Voice enrollment + social registry (owner, Telegram)
+
+1. Send `/enroll-voice` to Sara, then ONE short voice note — she seals your
+   ECAPA-TDNN voiceprint to `{VAULT_LOCAL_PATH}/State/owner_voiceprint.enc`
+   (Fernet-encrypted with `VAULT_ENC_KEY`). Every later voice note is then
+   biometrically verified (<50 ms CPU, `VOICEPRINT_THRESHOLD=0.75`).
+2. Non-owner voices: a recognized contact (enrolled in `State/voiceprints/`)
+   gets the warm message-taking reply only; anyone unknown lands in Guest
+   Mode — one staging note under `Voice_Memos/Pending_Speakers/` (encrypted
+   embedding + placeholder transcript) and zero privileged effects.
+3. Brief management: each `Pending_Speakers/YYYY-MM-DDTHHMM.json` note is a
+   pending brief (`claimed_name` + transcript hint). Route it by verdict:
+   `confirm:{Category}` -> `Contacts/{Category}/{Name}.md` + stored voiceprint;
+   `ignore` -> `Contacts/Ignored/` (never matches again); `unknown` ->
+   `Contacts/Unknown/` with a security flag (re-matchable embedding).
+4. Re-enroll after voice changes: run `/enroll-voice` again — the new note
+   atomically replaces the sealed owner voiceprint.
+
 ## 7. Troubleshooting
 
 | Symptom | Cause | Fix |

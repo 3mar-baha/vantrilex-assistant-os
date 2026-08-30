@@ -70,11 +70,12 @@ Skills ingested (Sprint 2): `mattpocock/skills` TDD · `guard-skills` clean-code
       <50 ms CPU), encrypted owner embedding in vault, Guest Mode lockdown + message-taking.
       *AC*: `tests/test_voice_biometric_auth.py` + `tests/test_guest_lockdown.py` (sacred
       floor); done 2026-08-30 — speechbrain pinned, `/enroll-voice` wired, fail-closed.
-- [ ] **2.3b `skill-social-enrollment`** — multi-speaker voiceprint registry (§2.3b):
+- [x] **2.3b `skill-social-enrollment`** — multi-speaker voiceprint registry (§2.3b):
       known-contact match → transcript append + centroid stabilize; unknown → owner
       confirm/ignore/unknown three-way verdict; owner-absent events staged in
       `Voice_Memos/Pending_Speakers/` and briefed later; ignored voices never re-match.
       *AC*: `tests/test_social_enrollment.py` per spec §2.3b.
+      Done 2026-08-30: `src/skills/social_enrollment.py` + bot contact-mode routing green.
 - [ ] **2.4 `skill-tiered-email-triage`** — M7 / ADR-19: four tiers; Low=drop,
       Semi=Markdown text, Important=voice note, Critical=priority voice note + repeat ping
       (v1.0); TokenJuice compaction (signatures/boilerplate/quotes stripped, body capped)

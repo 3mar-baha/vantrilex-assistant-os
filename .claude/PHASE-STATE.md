@@ -302,6 +302,34 @@ social agent -> v2.0.
       RUNBOOK/TEST-PLAN/BACKLOG/CHANGELOG updated ✓, google_oauth_client +
       data/ gitignored ✓; live smoke pending owner credentials. HALTED —
       next per owner: Sprint 3 (vault client 3.1 first).
+      **SPRINT-2 RE-OPENED + REORDERED (2026-08-30, owner ruling on the authoritative
+      re-mapped spec)**: daily brief KEPT as built; order = 2.3 biometrics -> 2.3b social ->
+      TokenJuice (2.4 remainder) -> 2.5 transcriber -> 2.6 journaler; **sprint-level HALT**
+      (no per-task stops), ~10 granular commits per part; GitHub default branch switched
+      back to `main` and core-foundation fully MERGED into main (`e7e0f2f`, unified
+      code+docs single tree — both worktrees synced).
+      **TASK 2.3 DONE (2026-08-30, sprint-2 §2.3 voice biometrics)**: speechbrain pinned
+      (py3.12 wheel-verified 1.1.1 + torch 2.13.0 CPU); `src/skills/voice_biometric_auth.py`
+      (lazy ECAPA load in executor, in-memory ffmpeg Ogg->16k mono PCM decode, cosine vs
+      Fernet-sealed `{vault}/State/owner_voiceprint.enc`, fail-closed -> Guest Mode);
+      `stage_guest_note` (ONE `Voice_Memos/Pending_Speakers/` note, encrypted embedding,
+      collision-suffixed); `/enroll-voice` wiring in `src/bot.py`. Sacred floor gained
+      `tests/test_guest_lockdown.py` (spy-proven zero privileged effects). Commits
+      `01678b4`+`76f7066`+`ed21bb6`+`08470db`+`52ff96a`+`5e2c063`+`fc24e43` (missing
+      implementation slice recovered — tests had landed before src) + `112eba5` (real-ffmpeg
+      decode contract fix + test). Gate green (126).
+      **TASK 2.3b DONE (2026-08-30, sprint-2 §2.3b social enrollment)**:
+      `src/skills/social_enrollment.py` — `VoiceprintRegistry` (owner-first match_vector
+      <50 ms, `enroll`/`update_stability` running centroid + `record_transcript`, Fernet
+      vectors under `State/voiceprints/` + dossier `voiceprint_ref` frontmatter,
+      `stage_pending`/`pending_briefs`/`resolve_pending` three-way verdicts -> Contacts/
+      {Category} | Ignored (never re-matches) | Unknown+security_flag re-matchable);
+      bot contact-mode routing via `verify_or_lockdown(registry=...)` -> CONTACT_MODE_AR
+      message-taking only. Tests `tests/test_social_enrollment.py` AC11/AC12 + carried
+      internals (encrypted-at-rest, unknown-flag, restart-survival, zero-privileged
+      contact mode). Commits `112eba5`+`583e3c9`+`ff5d92e`+`a799e0e` + docs. Gate green
+      (126 passed, Security Gate OK, Docs Guard OK). NEXT: TokenJuice compaction (2.4
+      remainder, ADR-19) -> 2.5 transcriber -> 2.6 journaler; HALT only at sprint exit.
 - [ ] Phase 4 — Harden & Release: guards, full gate, tag v1.0.0, release report
 
 ## Open items / blockers
