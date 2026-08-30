@@ -6,7 +6,7 @@ fire-once-per-local-day: the date persists to GmailState only after a
 successful send, so a failed send retries the same day.
 """
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from aiogram import Bot
@@ -14,7 +14,7 @@ from loguru import logger
 from pydantic import BaseModel
 
 from src.config import Settings
-from src.email_triage import escape_mdv2
+from src.email_triage import Tier, escape_mdv2
 from src.gmail import EmailMessage, GmailInbox
 from src.google_suite import CalendarEvent, GoogleSuite, TaskItem
 
@@ -110,3 +110,27 @@ class BriefComposer:
                 mail += f" — أبرزها: «{escape_mdv2(first.subject)}» من {escape_mdv2(sender)}"
             lines.append(mail)
         return "\n".join(lines)
+
+    async def collect(self, now: datetime) -> BriefData:
+        """Assemble the mail picture deterministically — heuristic only, no LLM."""
+        events = await self._suite.list_events(now, now + timedelta(hours=24))
+        all_tasks = await self._suite.list_tasks()
+        local_today = now.astimezone(self._tz).date()
+        tasks = [
+            task
+            for task in all_tasks
+            if not task.completed
+            and task.due is not None
+            and task.due.astimezone(self._tz).date() == local_today
+        ]
+        unread_total, _unseen = await self._inbox.unread_digest()
+        important: list[EmailMessage] = []
+        for message in await self._inbox.peek_unread():
+            decision = self._classifier.heuristic(message)
+            if decision.tier in (Tier.IMPORTANT, Tier.CRITICAL):
+                important.append(message)
+            if len(important) >= HIGHLIGHT_CAP:
+                break
+        return BriefData(
+            events=events, tasks=tasks, unread_total=unread_total, important_items=important
+        )
