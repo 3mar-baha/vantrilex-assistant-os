@@ -46,6 +46,7 @@ class EmailMessage(BaseModel):
 class GmailState(BaseModel):
     seen_ids: list[str] = []
     history_id: str | None = None
+    last_brief_date: str | None = None  # ISO local date of last daily brief (§2.4)
 
 
 class StateStore:
@@ -221,9 +222,13 @@ class GmailInbox:
         )
         return self.parse_message(payload, max_chars=self._settings.triage_body_max_chars)
 
+    def save_state(self) -> None:
+        """Persist state outside the dispatch-then-mark flow (daily brief date)."""
+        self._store.save(self.state)
+
     def mark_seen(self, messages: list[EmailMessage]) -> None:
         """Persist cursor + seen ids — call ONLY after dispatch completed (AC8)."""
-        self._store.save(self.state)
+        self.save_state()
         logger.debug(
             "gmail state persisted: {} seen, cursor {}",
             len(self.state.seen_ids),
@@ -235,6 +240,16 @@ class GmailInbox:
         ids = [ref.get("id") for ref in data.get("messages", [])]
         unseen = [mid for mid in ids if mid not in self.state.seen_ids]
         return len(ids), len(unseen)
+
+    async def peek_unread(self, max_n: int = 25) -> list[EmailMessage]:
+        """Read-only recent unread snapshot (daily brief) — never touches cursor/seen."""
+        data = await self._session.request(
+            "GET",
+            MESSAGES_URL,
+            params={"q": f"is:unread newer_than:{self._settings.gmail_sweep_days}d"},
+        )
+        refs = [ref.get("id", "") for ref in data.get("messages", [])[:max_n]]
+        return [await self._get_message(mid) for mid in refs]
 
     @staticmethod
     def parse_message(payload: dict, max_chars: int) -> EmailMessage:
