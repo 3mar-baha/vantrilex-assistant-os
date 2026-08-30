@@ -30,6 +30,7 @@ class Settings(BaseSettings):
     heavy_model_fallbacks: str | None = None  # HEAVY_MODEL_FALLBACKS
     telegram_bot_token: str  # TELEGRAM_BOT_TOKEN
     authorized_user_id: int  # AUTHORIZED_USER_ID (coerced from string)
+    stream_edit_interval_ms: int = 750  # STREAM_EDIT_INTERVAL_MS (§2.2 coalesced edits)
 
     # Declared now (validates every var in .env.example); consumed by later sprints.
     # Optional fields become required in the commit whose task first consumes them.

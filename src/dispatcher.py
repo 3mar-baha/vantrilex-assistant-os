@@ -55,7 +55,7 @@ class FrontDoorDispatcher:
         self._gateway = gateway
         self._settings = settings
 
-    async def handle(self, user_text: str) -> AsyncIterator[str]:
+    async def handle(self, user_text: str, *, system: str | None = None) -> AsyncIterator[str]:
         route, ack = "tier2", DEFAULT_ACK_AR  # safe default: degraded routing, never a hang
         try:
             reply = await self._gateway.chat(
@@ -80,7 +80,8 @@ class FrontDoorDispatcher:
         yield ack
         if route == "direct":
             return
-        async for delta in self._gateway.stream_chat(
-            [{"role": "user", "content": user_text}], tier=_ROUTES[route]
-        ):
+        messages = ([{"role": "system", "content": system}] if system else []) + [
+            {"role": "user", "content": user_text}
+        ]
+        async for delta in self._gateway.stream_chat(messages, tier=_ROUTES[route]):
             yield delta
