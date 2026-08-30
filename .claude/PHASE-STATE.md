@@ -328,8 +328,20 @@ social agent -> v2.0.
       message-taking only. Tests `tests/test_social_enrollment.py` AC11/AC12 + carried
       internals (encrypted-at-rest, unknown-flag, restart-survival, zero-privileged
       contact mode). Commits `112eba5`+`583e3c9`+`ff5d92e`+`a799e0e` + docs. Gate green
-      (126 passed, Security Gate OK, Docs Guard OK). NEXT: TokenJuice compaction (2.4
-      remainder, ADR-19) -> 2.5 transcriber -> 2.6 journaler; HALT only at sprint exit.
+      (126 passed, Security Gate OK, Docs Guard OK).
+      **TASK 2.4-COMPACTION DONE (2026-08-30, sprint-2 §2.4 TokenJuice remainder, ADR-19)**:
+      pure `tokenjuice_compact(body_text, *, max_chars)` in `src/email_triage.py` — quoted
+      reply chains (`> `), signature blocks (standard `--` delimiter), legal footers/tracking
+      boilerplate (fixed case-insensitive phrase list) stripped, whitespace collapsed, capped
+      with `[…]` marker inside budget. Wired to feed BOTH the heuristic body-keyword scan and
+      the FAST `_refine_messages` payload. Settings `TOKENJUICE_MAX_CHARS=4000` (config +
+      .env.example + conftest mirror). Tests: `tests/test_triage_compaction.py` (M7 trio
+      signature_and_quotes_stripped / body_capped_at_budget /
+      classification_unchanged_on_compacted_input + footer/whitespace/keyword-survival) +
+      `test_email_triage.py::test_tokenjuice_strips_before_llm` + `test_vip_skips_llm_refinement`
+      (AC8). Commits `67c9d7a` (red) + `b8f2c5c` (green) + docs. Gate green (134 passed,
+      Security Gate OK, Docs Guard OK). NEXT: 2.5 voice-to-vault transcriber -> 2.6 journaler;
+      HALT only at sprint exit (then merge core-foundation -> main + push per owner directive).
 - [ ] Phase 4 — Harden & Release: guards, full gate, tag v1.0.0, release report
 
 ## Open items / blockers

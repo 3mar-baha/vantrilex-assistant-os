@@ -155,6 +155,10 @@ Triage (§2.3) reads five optional variables; edit, then restart the core to app
 - `CRITICAL_PING_INTERVAL_MIN` — repeat-ping spacing for Critical mail (default 5).
 - `CRITICAL_PING_MAX` — pings per Critical message before Sara stops (default 6;
   `0` = unlimited until you press «تم الاطلاع» or send any activity).
+- `TOKENJUICE_MAX_CHARS` — classification budget for the compacted body (default 4000):
+  before scoring and the model call, quoted reply chains, signature blocks, legal
+  footers and tracking boilerplate are stripped and the remainder capped. Raise it
+  only if long legit bodies lose needed context.
 
 ### Daily brief schedule (owner, `.env`)
 

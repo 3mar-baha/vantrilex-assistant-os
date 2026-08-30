@@ -42,6 +42,12 @@ product release tags start independently at v1.0.0.)
   (fire-once-per-local-day Jordanian digest — events, due tasks, mail picture —
   deterministic template, per-section degradation). Settings: GOOGLE_VIP_SENDERS,
   TRIAGE_KEYWORDS_*, CRITICAL_PING_*, BRIEF_ENABLED, BRIEF_LOCAL_TIME.
+- **Sprint 2 / task 2.4 remainder — TokenJuice compaction (ADR-19)**: pure
+  `tokenjuice_compact` (quoted reply chains, signature blocks, legal footers and
+  tracking boilerplate stripped; whitespace collapsed; body capped with a truncation
+  marker) now feeds BOTH the heuristic body-keyword scan and the FAST refinement
+  payload — less free-pool token burn, identical tier decisions. Settings:
+  TOKENJUICE_MAX_CHARS=4000.
 
 ### Changed
 - **Second master-directive alignment (2026-08-29)**: ADR-16 amended in place to the

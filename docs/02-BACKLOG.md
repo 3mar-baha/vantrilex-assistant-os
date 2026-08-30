@@ -9,8 +9,8 @@ specs carry the binding AC→pytest contracts; new capabilities specced in
 `docs/specs/master-directive-2026-08-29.md` (M1-M9) + ADR-16..21.
 
 **Status matrix (2026-08-30)**: Sprint 1 complete ✅ (teardown in `docs/10-CHECKPOINT.md`).
-Sprint 2 in progress: 2.1 · 2.2 · 2.3 · 2.4-triage+daily-brief done ✅ — next: 2.3b →
-TokenJuice (2.4 remainder) → 2.5 → 2.6, sprint-level HALT at exit.
+Sprint 2 in progress: 2.1 · 2.2 · 2.3 · 2.3b · 2.4 (triage + daily brief + TokenJuice)
+done ✅ — next: 2.5 → 2.6, sprint-level HALT at exit.
 
 **Skill rotation**: each sprint ingests upstream skills into `.claude/skills/` for its
 duration and applies the **teardown protocol at sprint exit** — wipe `.claude/skills/*`,
@@ -76,12 +76,13 @@ Skills ingested (Sprint 2): `mattpocock/skills` TDD · `guard-skills` clean-code
       `Voice_Memos/Pending_Speakers/` and briefed later; ignored voices never re-match.
       *AC*: `tests/test_social_enrollment.py` per spec §2.3b.
       Done 2026-08-30: `src/skills/social_enrollment.py` + bot contact-mode routing green.
-- [ ] **2.4 `skill-tiered-email-triage`** — M7 / ADR-19: four tiers; Low=drop,
+- [x] **2.4 `skill-tiered-email-triage`** — M7 / ADR-19: four tiers; Low=drop,
       Semi=Markdown text, Important=voice note, Critical=priority voice note + repeat ping
       (v1.0); TokenJuice compaction (signatures/boilerplate/quotes stripped, body capped)
       before LLM classification.
       *AC*: `test_email_triage.py` + `tests/test_triage_compaction.py` per spec M7.
-      Partial done 2026-08-30: triage + daily brief green; TokenJuice compaction remains.
+      Done 2026-08-30: triage + daily brief + `tokenjuice_compact` (feeds heuristic
+      scoring AND the FAST refinement payload) green; settings `TOKENJUICE_MAX_CHARS=4000`.
 - [ ] **2.5 `skill-voice-to-vault-transcriber`**: inbound voice notes transcribed via LOCAL
       Whisper (STT decision settled — no cloud probe) → YAML-frontmattered Markdown in
       `Voice_Memos/`.
