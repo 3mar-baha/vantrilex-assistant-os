@@ -153,6 +153,65 @@ async def test_enroll_voice_flow_and_biometric_gate(fake_bot, make_shell, monkey
         _ENROLL_PENDING.clear()
 
 
+class FakeTranscriber:
+    """2.5 double: deterministic transcript, records calls, reports filed notes."""
+
+    def __init__(self, text="رتبلي اجتماع بكرة الصبح") -> None:
+        self.text = text
+        self.ogg_calls: list[bytes] = []
+        self.notes: list[dict] = []
+
+    async def transcribe(self, ogg):
+        self.ogg_calls.append(ogg)
+        return self.text
+
+    async def file_note(self, text, *, received_at, duration_s, source="telegram-voice"):
+        self.notes.append({"text": text, "duration_s": duration_s, "source": source})
+        from pathlib import Path
+
+        return Path("note.md")
+
+
+async def test_owner_voice_transcribed_filed_and_streamed(fake_bot, make_shell, monkeypatch, tmp_path):
+    """2.5 wiring: enrolled owner voice -> LOCAL transcriber -> memo filed ->
+    transcript enters the standard text pipeline (streamed brain reply)."""
+    monkeypatch.chdir(tmp_path)
+    transcriber = FakeTranscriber()
+    shell = make_shell(
+        VAULT_ENC_KEY=Fernet.generate_key().decode(),
+        router_replies=[_router("direct", "تم")],
+        stream_programs=[StreamProgram(deltas=("رتبت",))],
+        transcriber=transcriber,
+    )
+    bot = fake_bot()
+
+    async def fake_download(file, destination=None, **kwargs):
+        destination.write(b"FAKE-OGG")
+
+    monkeypatch.setattr(bot, "download", fake_download)
+    monkeypatch.setattr(VoiceBiometrics, "_embed_sync", lambda self, ogg: [0.6, 0.8, 0.0])
+    try:
+        await _run(shell, bot, make_update(1, OWNER_ID, "/enroll-voice", command=True))
+        await _run(shell, bot, make_update(2, OWNER_ID, voice=True))
+        assert bot.session.sent("SendMessage")[-1].method.text == ENROLL_DONE_AR
+
+        await _run(shell, bot, make_update(3, OWNER_ID, voice=True))
+        assert transcriber.ogg_calls == [b"FAKE-OGG"]  # only after the biometric gate
+        assert len(transcriber.notes) == 1  # memo filed with transcript + duration
+        assert transcriber.notes[0]["text"] == transcriber.text
+        assert shell.gateway.stream_calls, "transcript entered the text pipeline"
+        brain_messages = shell.gateway.stream_calls[0][0]
+        assert any(transcriber.text in m["content"] for m in brain_messages)
+
+        # Guest containment: below-threshold voice never reaches the transcriber.
+        monkeypatch.setattr(VoiceBiometrics, "_embed_sync", lambda self, ogg: [0.8, -0.6, 0.0])
+        await _run(shell, bot, make_update(4, OWNER_ID, voice=True))
+        assert bot.session.sent("SendMessage")[-1].method.text == GUEST_LOCKDOWN_AR
+        assert len(transcriber.ogg_calls) == 1
+    finally:
+        _ENROLL_PENDING.clear()
+
+
 async def test_new_owner_message_cancels_inflight_stream(fake_bot, make_shell):
     """Interjection: a newer owner message cancels the in-flight stream; partial kept."""
     gate = asyncio.Event()
