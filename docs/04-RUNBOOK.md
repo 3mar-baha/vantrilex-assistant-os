@@ -114,6 +114,16 @@ Triage (§2.3) reads five optional variables; edit, then restart the core to app
 - `CRITICAL_PING_MAX` — pings per Critical message before Sara stops (default 6;
   `0` = unlimited until you press «تم الاطلاع» or send any activity).
 
+### Daily brief schedule (owner, `.env`)
+
+`BRIEF_ENABLED=true` + `BRIEF_LOCAL_TIME=07:30` (24h, local `TZ`): once per day Sara
+sends one Jordanian-Arabic digest — today's events (24h window), uncompleted tasks due
+today, and the mail picture (unread count + up to 3 heuristic IMPORTANT+ highlights).
+Deterministic template, no model call. Verify without waiting: check
+`{VAULT_LOCAL_PATH}/State/gmail_state.json` — `last_brief_date` holds the ISO date of
+the last successful send (failed sends retry the same day; a healthy daily brief
+updates it every morning).
+
 ## 7. Troubleshooting
 
 | Symptom | Cause | Fix |

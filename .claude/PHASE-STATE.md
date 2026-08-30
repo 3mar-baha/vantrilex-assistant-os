@@ -278,6 +278,30 @@ social agent -> v2.0.
       `438bfb3` on core-foundation. Docs: ARCHITECTURE §4 refinement lane +
       ping cap, RUNBOOK §6 triage tuning, TEST-PLAN row. HALTED — next per
       owner: 2.4 daily brief composer.
+
+      **TASK 2.4 DONE (2026-08-30, sprint-2 §2.4 — sprint-2 CLOSED)**:
+      `src/daily_brief.py` — BriefData (None section = degraded),
+      BriefComposer(suite, inbox, classifier, bot, chat_id, settings):
+      render PURE MarkdownV2 Arabic template (Amman zoneinfo, Arabic weekday
+      + Levantine month names, escaped dynamics), collect (suite.list_events
+      now..now+24h, uncompleted tasks due Amman-today, unread_digest +
+      peek_unread -> heuristic IMPORTANT+ capped 3, NO LLM), fire_if_due
+      (enabled + past BRIEF_LOCAL_TIME + last_brief_date != today, Amman
+      local), fire_once (send -> persist date ONLY on success -> same-day
+      retry), run_forever (30s tick, exception-surviving). gmail.py gained
+      last_brief_date on GmailState + save_state + read-only peek_unread
+      (never touches cursor/seen — cannot suppress dispatcher delivery).
+      config: brief_enabled=true, brief_local_time="07:30" with loud HH:MM
+      validator; tzdata dependency added (zoneinfo on Windows). Tests
+      AC1-AC5 per spec mapping (+ send-failure persistence error mode).
+      NEW OWNER RULING: every task ships ~10 granular pushed commits — 2.4
+      delivered 11 (9 core + 2 docs). Gate green (108 passed, Security Gate
+      OK, Docs Guard OK). Core commits 98a9617..56325bd. Docs: TEST-PLAN
+      row, RUNBOOK daily-brief schedule, BACKLOG 2.1-2.4 ticked. SPRINT-2
+      EXIT CHECKLIST: gate green ✓, backlog ACs mapped ✓, .env.example/
+      RUNBOOK/TEST-PLAN/BACKLOG/CHANGELOG updated ✓, google_oauth_client +
+      data/ gitignored ✓; live smoke pending owner credentials. HALTED —
+      next per owner: Sprint 3 (vault client 3.1 first).
 - [ ] Phase 4 — Harden & Release: guards, full gate, tag v1.0.0, release report
 
 ## Open items / blockers

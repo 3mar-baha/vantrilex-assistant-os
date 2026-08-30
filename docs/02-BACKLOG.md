@@ -21,15 +21,15 @@ every task lands red->green->refactor with tests and docs in the same commit.
 
 ## Sprint 2 — Google Suite + Tiered Email Triage
 
-- [ ] **2.1 Google OAuth bootstrap**: consent flow, token cache, Calendar read/write,
+- [x] **2.1 Google OAuth bootstrap**: consent flow, token cache, Calendar read/write,
       Tasks CRUD, Drive listing, Contacts read.
       *AC*: integration test against sandbox project; refresh-token reuse proven.
-- [ ] **2.2 Gmail watch + fetch**: Pub/Sub push or polling fallback; parse to internal model.
+- [x] **2.2 Gmail watch + fetch**: Pub/Sub push or polling fallback; parse to internal model.
       *AC*: fixture emails parse; dedupe on message ID.
-- [ ] **2.3 Triage classifier + dispatcher**: four tiers per `docs/01-ARCHITECTURE.md` §4;
+- [x] **2.3 Triage classifier + dispatcher**: four tiers per `docs/01-ARCHITECTURE.md` §4;
       Low=drop, Semi=Markdown text, Important=voice note, Critical=priority voice note + repeat ping (v1.0).
       *AC*: `test_email_triage.py` asserts correct dispatch per urgency class incl. untrusted-body containment.
-- [ ] **2.4 Daily brief**: calendar + triage digest at configured time.
+- [x] **2.4 Daily brief**: calendar + triage digest at configured time.
       *AC*: brief composes from mocked calendar/gmail clients.
 
 ## Sprint 3 — Obsidian Vault + PC Bridge + Whitelist
