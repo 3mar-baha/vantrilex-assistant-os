@@ -8,6 +8,19 @@ product release tags start independently at v1.0.0.)
 
 ## [Unreleased]
 
+### Added
+- **Sprint 2 — Google integration + tiered email triage (tasks 2.1-2.4)**:
+  `src/google_auth.py` (OAuth consent + Fernet-sealed token cache, proactive/401
+  single-flight refresh), `src/google_suite.py` (Calendar/Tasks/Drive/Contacts typed
+  clients, UTC-normalized), `src/gmail.py` (sweep/incremental fetch with dedupe and
+  sweep fallback, dispatch-then-mark redelivery, watch registration, read-only
+  peek_unread), `src/email_triage.py` (heuristic tiers + one FAST_MODEL refinement
+  with untrusted-data containment and never-downgrade merge; dispatch matrix
+  drop/text/voice/critical-ping with ack + owner-activity stops), `src/daily_brief.py`
+  (fire-once-per-local-day Jordanian digest — events, due tasks, mail picture —
+  deterministic template, per-section degradation). Settings: GOOGLE_VIP_SENDERS,
+  TRIAGE_KEYWORDS_*, CRITICAL_PING_*, BRIEF_ENABLED, BRIEF_LOCAL_TIME.
+
 ### Changed
 - **Second master-directive alignment (2026-08-29)**: ADR-16 amended in place to the
   3-tier multi-model brain (FAST/MEDIUM/HEAVY via OmniRoute) + ADR-17..21 appended
