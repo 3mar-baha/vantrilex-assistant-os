@@ -106,6 +106,8 @@ strictly-zero-cost executive AI assistant named **Sara (سارة)**.
   working behavior -> **HALT until the owner replies "التالي"/"next"**. One implementer
   thread per task (no agent swarms during implementation); Guide review once per sprint
   exit. The owner-gate and whitelist-guard tests are an untouchable safety floor.
-- Parallel work happens in separate git worktrees, one concern per worktree; merge only after review.
+- **Branch directive (owner, 2026-08-31, binding)**: ALL commits land directly on `main`
+  and are pushed immediately — the per-stream worktree/branch merge pattern is retired.
+  The `core-foundation` worktree is a reference checkout only (never commit new work on it).
 - Documentation changes in the same commit as the behavior it describes.
 - Ship the smallest abstraction that satisfies the specification — no speculative layers.
