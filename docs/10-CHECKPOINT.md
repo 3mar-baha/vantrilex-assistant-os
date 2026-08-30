@@ -30,11 +30,31 @@ Upstream toolkit inventory: `worldflowai/everything-claude-code` · `mattpocock/
 - **Carry-over**: AC10 live smoke (task 1.2 gateway + 1.5 dispatcher TTFT) blocked on the
   Google 403 "project denied access" owner-side fix in Google Cloud.
 
-## Sprint 2 — Telegram suite, biometrics, triage, logs — QUEUED
+## Sprint 2 — Telegram suite, biometrics, triage, logs — COMPLETE (2026-08-31)
 
-- **Skills to ingest**: `mattpocock-skills/skills/tdd` · `guard-skills/clean-code-guard` ·
-  `everything-claude-code/agents/api-integrator`
-- **Teardown**: clean session skills, update checkpoint.
+- **Skills ingested**: `mattpocock/skills` TDD · `guard-skills/clean-code-guard` ·
+  `everything-claude-code` api-integrator (session aids, never committed; diagnosing-bugs
+  ingested but unused — no sprint-2 bug required its loop)
+- **Deliverables** (all on `core-foundation`): task 2.1 Google OAuth + suite clients
+  (`11c733f`) + Gmail watch/poll (`ae48aea`) · task 2.2 progressive chat streamer + bot
+  shell (`0a5ae11`) · task 2.3 voice biometrics + Guest Mode (`e0fd30e`→`08470db`,
+  PCM decode fix `112eba5`) · 2.3b social enrollment registry + verdicts (`583e3c9`,
+  `ff5d92e`) · task 2.4 triage classifier + dispatcher (`438bfb3`) + daily brief
+  (`98a9617`..`62c1174`) + TokenJuice (`67c9d7a`, `b8f2c5c`) · task 2.5 local-whisper
+  voice-to-vault (`ed03b03`, `afc8975`) · task 2.6 evening journaler (`c619e12`,
+  `0959333`) — docs rides along each task (`a928dc0`, `4ba0183`, `ba55d76`, `2570400`,
+  `e45e5ee`, `a70a7a5`, `aa2885f`, `52f9e12`, `30381d9`)
+- **Teardown (executed 2026-08-31)**: `.claude/skills/*` wiped (untracked session aids);
+  full suite green after teardown — **150 passed**; sacred floor green
+  (`test_owner_middleware.py` + `test_guest_lockdown.py`, 7 passed;
+  `test_whitelist_guardrail.py` is born with Sprint-3 task 3.4).
+- **Sprint-exit verification (Guide pass)**: full gate green (lint + 150 tests +
+  security gate + docs guard 16 canonical files); AC→pytest contracts all mapped
+  (AC1-AC12, M2/M3/M7, ADR-17/19/22); spec §2.1-§2.6 delivered; docs synced per task.
+- **Carry-over to owner**: OAuth bootstrap + live smokes; Google 403 owner-side fix
+  (blocks AC10 live smoke); Whisper warmup one-liner (RUNBOOK §6).
+- **Outcome**: core-foundation merged to `main` mid-sprint (`e7e0f2f`) and re-merged at
+  sprint close per owner directive; 150 tests green; sprint-level HALT.
 
 ## Sprint 3 — Vault, PC bridge, whitelist — QUEUED
 

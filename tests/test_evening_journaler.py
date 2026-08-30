@@ -7,15 +7,17 @@ import asyncio
 import json
 import random
 from datetime import UTC, date, datetime, time
+from pathlib import Path
 from zoneinfo import ZoneInfo
 
 import pytest
+from pydantic import ValidationError
+
+import src.skills.evening_journaler as journaler_module
 from src.email_triage import TriageClassifier
 from src.gmail import EmailMessage
 from src.google_suite import CalendarEvent, TaskItem
 from src.skills.evening_journaler import EveningJournaler
-
-import src.skills.evening_journaler as journaler_module
 from tests.conftest import OWNER_ID
 from tests.test_daily_brief import FakeInbox
 from tests.test_email_triage import FakeBrain
@@ -24,7 +26,7 @@ AMMAN = ZoneInfo("Asia/Amman")
 TODAY = "2026-08-30"
 NOW = datetime(2026, 8, 30, 15, 35, tzinfo=UTC)  # Amman 18:35 — inside the window
 EARLY = datetime(2026, 8, 30, 14, 0, tzinfo=UTC)  # Amman 17:00 — before the window
-_PIN = lambda lo, hi: lo  # noqa: E731 — slot pinned to window start (deterministic fire)
+_PIN = lambda lo, hi: lo
 
 
 class FakeSuite:
@@ -148,9 +150,7 @@ async def test_section_failure_degrades_but_ledger_lands(make_settings, fake_bot
     """Error mode: failing suite -> «غير متوفر حالياً» sections, ledger + check-in
     still land (degraded busy-check defaults to free)."""
     bot = fake_bot()
-    journaler = _journaler(
-        make_settings, tmp_path, FakeSuite(error=ValueError("google down")), bot
-    )
+    journaler = _journaler(make_settings, tmp_path, FakeSuite(error=ValueError("google down")), bot)
     assert await journaler.fire_once(NOW) is True
     ledger = _ledger(tmp_path)
     assert ledger.count("غير متوفر حالياً") == 2  # calendar + mail degraded
@@ -220,9 +220,7 @@ async def test_disabled_journaler_is_inert(make_settings, fake_bot, tmp_path):
     """journaler_enabled=false -> zero suite/bot calls, no state written."""
     suite = FakeSuite(events=[])
     bot = fake_bot()
-    journaler = _journaler(
-        make_settings, tmp_path, suite, bot, env={"JOURNALER_ENABLED": "false"}
-    )
+    journaler = _journaler(make_settings, tmp_path, suite, bot, env={"JOURNALER_ENABLED": "false"})
     assert await journaler.fire_once(NOW) is False
     assert suite.windows == []
     assert bot.session.calls == []
