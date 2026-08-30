@@ -187,6 +187,19 @@ Deterministic template, no model call. Verify without waiting: check
 the last successful send (failed sends retry the same day; a healthy daily brief
 updates it every morning).
 
+### Evening journaler schedule (owner, `.env`)
+
+`JOURNALER_ENABLED=true` + `JOURNALER_WINDOW_START=18:00` / `JOURNALER_WINDOW_END=19:30`
+(24h, local `TZ`): once per day, at a randomized moment inside that window, Sara sends
+ONE short evening check-in (tasks done, critical mail, voice memos + an open question)
+and files the day's ledger `{VAULT_LOCAL_PATH}/Daily_Logs/YYYY-MM-DD.md` (YAML
+frontmatter `date` + `checkin_sent`). If your calendar is booked through the window she
+skips the message but still writes the ledger. Verify without waiting: check
+`{VAULT_LOCAL_PATH}/State/journaler.json` — `last_checkin_sent` / `last_ledger_date`
+hold the ISO date of the last successful send/ledger (a failed send retries; a healthy
+journaler updates both every evening). `JOURNALER_ENABLED=false` silences the message
+and stops ledger writes.
+
 ### Voice enrollment + social registry (owner, Telegram)
 
 1. Send `/enroll-voice` to Sara, then ONE short voice note — she seals your

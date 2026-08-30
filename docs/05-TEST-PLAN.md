@@ -26,7 +26,7 @@
 | `test_story_extractor.py` | Daily narration -> entities filed to `Contacts/{Category}/{Name}.md` + `Daily_Logs/`; ambiguous category confirmed; Ignored not tracked |
 | `test_email_triage.py` | Heuristic weights/bands/floors (VIP, keywords, bulk); LLM refinement containment + never-downgrade merge + fallback; per-tier dispatch (drop/text/voice/priority-ping); ping stop conditions; MarkdownV2 escaping; AST import-surface scan |
 | `test_triage_compaction.py` | M7/ADR-19: signatures/boilerplate/quotes stripped; body capped; tier decisions unchanged on compacted input |
-| `test_journal.py` | M3: chronological ledger; randomized once-daily evening trigger; calendar conflict suppresses; thin ledger prompts |
+| `test_evening_journaler.py` | §2.6/AC10: slots randomized inside [18:00, 19:30) Amman; calendar-busy suppresses the check-in but the ledger still lands (checkin_sent: false); ledger once per local day with one corrigenda line on state-loss re-run; per-section «غير متوفر حالياً» degradation; send failure never persists the check-in state; loop survives exceptions |
 | `test_voice_to_vault_transcriber.py` | §2.5/AC9: real ffmpeg decode + stubbed-whisper deterministic text -> YAML note filed to `Voice_Memos/` (atomic, same-minute suffix); ZERO outbound STT (AST scan); decode failure chained; empty `(empty)` note; write retry once, never blocks; model-missing names RUNBOOK warmup |
 | `test_google_clients.py` | Calendar/Tasks CRUD shapes; refresh-token reuse; fixture-driven parsing |
 | `test_google_suite.py` | Calendar/Tasks/Drive/Contacts fixtures parse to typed UTC-normalized models |

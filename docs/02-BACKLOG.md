@@ -8,9 +8,9 @@ every task lands red->green->refactor with tests and docs in the same commit.
 specs carry the binding AC→pytest contracts; new capabilities specced in
 `docs/specs/master-directive-2026-08-29.md` (M1-M9) + ADR-16..21.
 
-**Status matrix (2026-08-30)**: Sprint 1 complete ✅ (teardown in `docs/10-CHECKPOINT.md`).
-Sprint 2 in progress: 2.1 · 2.2 · 2.3 · 2.3b · 2.4 · 2.5 done ✅ — next: 2.6,
-sprint-level HALT at exit.
+**Status matrix (2026-08-31)**: Sprint 1 complete ✅ (teardown in `docs/10-CHECKPOINT.md`).
+Sprint 2 complete ✅: 2.1 · 2.2 · 2.3 · 2.3b · 2.4 · 2.5 · 2.6 done — sprint exit
+(teardown + Guide review + core-foundation -> main merge).
 
 **Skill rotation**: each sprint ingests upstream skills into `.claude/skills/` for its
 duration and applies the **teardown protocol at sprint exit** — wipe `.claude/skills/*`,
@@ -90,10 +90,13 @@ Skills ingested (Sprint 2): `mattpocock/skills` TDD · `guard-skills` clean-code
       Done 2026-08-30: `src/skills/voice_to_vault_transcriber.py` (faster-whisper 1.2.1,
       int8 CPU, in-memory ffmpeg decode; atomic same-minute-safe notes) + bot wiring —
       enrolled owner voice → transcribe → file → streamed reply (AC9 + zero-cloud AST scan).
-- [ ] **2.6 `skill-evening-proactive-journaler`** — M3 + daily brief: `Daily_Logs/`
+- [x] **2.6 `skill-evening-proactive-journaler`** — M3 + daily brief: `Daily_Logs/`
       ledger, randomized 18:00-19:30 proactive check-in (fires when the day's ledger is
       sparse, calendar-conflict-guarded), morning/daily brief folded in.
-      *AC*: `tests/test_journal.py` per spec M3; brief composes from mocked clients.
+      *AC*: `tests/test_evening_journaler.py` per spec §2.6; brief composes from mocked clients.
+      Done 2026-08-31: `src/skills/evening_journaler.py` green — randomized
+      calendar-guarded check-in, once-per-day ledger with corrigenda on state loss,
+      per-section degradation, retry-on-send-failure state semantics.
 
 ## Sprint 3 — Obsidian Vault + PC Bridge + Whitelist
 

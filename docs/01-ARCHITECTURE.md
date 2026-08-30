@@ -161,6 +161,16 @@ atomically (YAML frontmatter: `date` (+03:00), `source`, `duration_s`; same-minu
 memos get numeric suffixes). The transcript then enters the standard owner-text
 pipeline — tier selection is the ADR-18 dispatcher's decision, never this module's.
 
+Evening journaler (sprint-2 2.6, `src/skills/evening_journaler.py`): once per local day,
+at a `random.uniform` slot inside `[JOURNALER_WINDOW_START, JOURNALER_WINDOW_END)`
+(Amman), Sara sends ONE short Jordanian check-in (tasks done, critical mail, memos filed
++ one open question) and writes the ledger `Daily_Logs/YYYY-MM-DD.md` — YAML frontmatter
+(`date`, `checkin_sent`) with Calendar / Mail / Voice memos / Notes sections, each
+degrading independently to «غير متوفر حالياً». Calendar-booked owners get no message but
+still get the ledger; send failures retry the next 30 s tick without persisting the
+check-in date; a state-loss same-day re-run appends a corrigenda line instead of
+duplicating. Zero LLM in the hot path, stdlib `zoneinfo` + `asyncio.sleep` scheduling.
+
 ### 6b. Social Graph & Multi-Speaker Enrollment (`skill-social-graph-and-voice-enrollment`)
 
 The vault's `Contacts/` tree is a structured social graph, each person a dossier with

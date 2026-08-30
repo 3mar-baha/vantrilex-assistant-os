@@ -9,6 +9,16 @@ product release tags start independently at v1.0.0.)
 ## [Unreleased]
 
 ### Added
+- **Sprint 2 / task 2.6 — skill-evening-proactive-journaler (§2.6)**:
+  `src/skills/evening_journaler.py` — closes the owner's day: one Jordanian check-in at a
+  `random.uniform` slot inside [18:00, 19:30) Amman (tasks done, critical mail, memos
+  filed + one open question), calendar-guarded (booked -> no message, ledger still
+  lands), plus the daily ledger `Daily_Logs/YYYY-MM-DD.md` (YAML frontmatter + Calendar/
+  Mail/Voice memos/Notes sections, per-section «غير متوفر حالياً» degradation). Once per
+  local day (corrigenda line on state-loss re-run); send failure never persists the
+  check-in date (30 s retry tick); zero LLM in the hot path. Settings:
+  JOURNALER_ENABLED, JOURNALER_WINDOW_START/END, DAILY_LOGS_DIR; state
+  `{vault}/State/journaler.json`.
 - **Sprint 2 / task 2.3b — skill-social-enrollment (multi-speaker registry, §2.3b)**:
   `src/skills/social_enrollment.py` — `VoiceprintRegistry` extends ADR-17 beyond the
   owner: per-contact Fernet-sealed vectors under `State/voiceprints/` with dossier
