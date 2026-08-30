@@ -7,3 +7,4 @@ pydantic>=2.7
 pydantic-settings>=2.3
 loguru>=0.7
 cryptography>=42  # Fernet only (vault state encryption, sprint-2 task 2.1)
+tzdata>=2024.1  # zoneinfo on Windows (daily brief Amman times, sprint-2 task 2.4)

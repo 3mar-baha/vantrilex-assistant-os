@@ -1,5 +1,6 @@
 """Application settings: pydantic v2 validation over .env + process environment."""
 
+from datetime import time
 from functools import lru_cache
 from pathlib import Path
 
@@ -46,6 +47,8 @@ class Settings(BaseSettings):
     triage_keywords_en: str | None = None  # TRIAGE_KEYWORDS_EN (empty -> module default)
     critical_ping_interval_min: int = 5  # CRITICAL_PING_INTERVAL_MIN
     critical_ping_max: int = 6  # CRITICAL_PING_MAX (0 = unlimited)
+    brief_enabled: bool = True  # BRIEF_ENABLED (daily brief, §2.4)
+    brief_local_time: str = "07:30"  # BRIEF_LOCAL_TIME (HH:MM, Amman local)
 
     # Declared now (validates every var in .env.example); consumed by later sprints.
     # Optional fields become required in the commit whose task first consumes them.
@@ -81,6 +84,15 @@ class Settings(BaseSettings):
         if info.field_name in _REQUIRED_FIELDS:
             raise ValueError("must not be empty")
         return None
+
+    @field_validator("brief_local_time")
+    @classmethod
+    def _brief_time_is_hhmm(cls, value: str) -> str:
+        try:
+            time.fromisoformat(value)
+        except ValueError as error:  # loud settings failure (spec §2.4 error modes)
+            raise ValueError("BRIEF_LOCAL_TIME must be HH:MM (24h)") from error
+        return value
 
     @staticmethod
     def _split_fallbacks(raw: str | None) -> list[str]:
