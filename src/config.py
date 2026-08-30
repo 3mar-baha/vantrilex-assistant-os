@@ -41,6 +41,11 @@ class Settings(BaseSettings):
     gmail_poll_seconds: int = 120  # GMAIL_POLL_SECONDS
     gmail_sweep_days: int = 2  # GMAIL_SWEEP_DAYS
     triage_body_max_chars: int = 8000  # TRIAGE_BODY_MAX_CHARS
+    google_vip_senders: str | None = None  # GOOGLE_VIP_SENDERS (comma-separated; empty -> none)
+    triage_keywords_ar: str | None = None  # TRIAGE_KEYWORDS_AR (empty -> module default)
+    triage_keywords_en: str | None = None  # TRIAGE_KEYWORDS_EN (empty -> module default)
+    critical_ping_interval_min: int = 5  # CRITICAL_PING_INTERVAL_MIN
+    critical_ping_max: int = 6  # CRITICAL_PING_MAX (0 = unlimited)
 
     # Declared now (validates every var in .env.example); consumed by later sprints.
     # Optional fields become required in the commit whose task first consumes them.
