@@ -24,6 +24,19 @@ product release tags start independently at v1.0.0.)
   on-demand YouTube/Weather/Maps APIs — per-request, free-tier, $0 preserved).
 
 ### Added
+- **Sprint 2 / task 2.2 — skill-telegram-chat-streamer + bot shell**: progressive delivery
+  replaces the one-shot aggregated reply — `src/skills/telegram_chat_streamer.py`
+  (`ChatStreamer.stream_reply`) sends the placeholder instantly, fires the first edit on the
+  first delta (<250 ms Audio-TTFT), coalesces further deltas at `STREAM_EDIT_INTERVAL_MS`
+  (750 ms), lands the final text verbatim, and honors a cancel event (owner interjection
+  keeps the partial in the bubble). Error modes: edit rate-limit doubles the interval;
+  placeholder failure falls back to the Sprint-1 aggregate send; mid-stream failure -> shell
+  apology with delivered text preserved. Bot shell (`src/bot.py` + `src/middleware.py`,
+  carried from old-1.4): owner-ID silent-drop middleware on `dp.update.outer_middleware`,
+  /start welcome + Ogg voice greeting, /help, voice-note static ack (zero gateway calls),
+  typing indicator, global `dp.errors` handler; `FrontDoorDispatcher.handle` now carries the
+  persona system prompt into the tier stream. Settings: `STREAM_EDIT_INTERVAL_MS=750` in
+  `.env.example`.
 - **Sprint 1 / task 1.5 — 3-tier brain + Fast Front-Door Dispatcher** (`src/dispatcher.py`,
   `src/gateway.py` chains): per ADR-16/18 — `Tier` FAST/MEDIUM/HEAVY chains walked per
   request (quota -> immediate advance, transient -> capped retries, fatal -> loud stop,

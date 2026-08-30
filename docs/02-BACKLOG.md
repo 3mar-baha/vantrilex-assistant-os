@@ -59,8 +59,9 @@ Skills ingested (Sprint 2): `mattpocock/skills` TDD · `guard-skills` clean-code
       read/write, Tasks CRUD, Drive listing, Contacts read; Gmail watch (Pub/Sub or
       polling fallback) parsing to the internal model, dedupe on message ID.
       *AC*: refresh-token reuse proven; fixture emails parse; dedupe test.
-- [ ] **2.2 `skill-telegram-chat-streamer`**: Aiogram 3.x long polling, owner-ID middleware
-      (silent drop), live token streaming to chat, voice-note replies via
+- [x] **2.2 `skill-telegram-chat-streamer`**: Aiogram 3.x long polling, owner-ID middleware
+      (silent drop), progressive token streaming to chat (placeholder -> ack <250 ms ->
+      coalesced edits -> final), voice-note replies via
       `message.answer_voice(BufferedInputFile(...))` wired to `src/voice.py`.
       *AC*: non-owner update produces zero outbound API calls (mocked); owner gets
       streamed brain reply.

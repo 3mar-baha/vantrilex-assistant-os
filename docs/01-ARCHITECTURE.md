@@ -15,7 +15,10 @@
   deltas or `GatewayError`. The **Fast Front-Door Dispatcher** (ADR-18) answers with
   Tier 1 (<250 ms TTFT) and routes single/dual-tool work to Tier 2, multi-step DAGs to
   Tier 3.
-- **Telegram voice/chat architecture**: Aiogram 3.x long-polling Markdown chat; Edge-TTS
+- **Telegram voice/chat architecture**: Aiogram 3.x long-polling plain-text chat;
+  **progressive delivery** (task 2.2): placeholder message instantly, first edit on the
+  ack (<250 ms Audio-TTFT), deltas coalesced at `STREAM_EDIT_INTERVAL_MS` (750 ms default),
+  final text verbatim; a newer owner message cancels the in-flight stream. Edge-TTS
   (`ar-JO-SanaNeural`) streamed in-memory via `io.BytesIO`, transcoded by ffmpeg to native
   Ogg Opus voice bubbles (<600 ms first-chunk target); live bidirectional calls via PyTgCalls
   arrive in v1.1.

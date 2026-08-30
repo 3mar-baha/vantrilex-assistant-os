@@ -15,6 +15,8 @@
 | `test_scaffold.py` / `test_config.py` / `test_logsetup.py` / `test_health.py` | Skeleton: canonical files, Settings validation, logging, health probe (Sprint 1.1) |
 | `test_omniroute_gateway.py` | SSE streaming; tier-chain fallback ordering; quota/transient/fatal classification; mid-stream error events never swallowed |
 | `test_dispatcher.py` | Sprint 1.5 (ADR-16/18): Tier-1 ack + routing single/dual-tool -> Tier 2, DAG -> Tier 3; TTFT budget smoke |
+| `test_chat_streamer.py` | Sprint 2.2: placeholder -> first edit <250 ms; coalesced edits; final verbatim; interjection cancel keeps partial; rate-limit doubles interval; placeholder failure -> aggregate fallback |
+| `test_bot_shell.py` | Sprint 2.2 (old-1.4 shell): /start text+voice greeting; /help; owner text streams brain progressively; GatewayError -> apology; voice ack zero gateway calls |
 | `test_dialect.py` | M1: note mapping applied; ingestion appends without blocking; snapshot injected into prompt |
 | `test_edge_tts_pipeline.py` | Jordanian Arabic synthesis into BytesIO; params flow from Settings; no disk writes; failure reaps ffmpeg |
 | `test_audio_stream_opus.py` | Real ffmpeg transcode: valid Ogg Opus headers; first-chunk emission <600 ms |

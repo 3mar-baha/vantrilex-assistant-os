@@ -57,6 +57,17 @@ Simpler: run the transcode proof — `pytest tests/test_audio_stream_opus.py -q`
 real ffmpeg emits Ogg Opus from an in-memory stream with the first encoded chunk
 surfacing before producer completion (<600 ms first-chunk budget, binding Q1).
 
+### Streaming first-edit smoke (task 2.2, Audio-TTFT < 250 ms)
+
+```powershell
+pytest tests/test_chat_streamer.py::test_first_edit_within_250ms_ttfb -q
+```
+
+Asserts the placeholder edit path: first bubble edit fires <250 ms after stream start,
+subsequent edits coalesce at `STREAM_EDIT_INTERVAL_MS`, and the final bubble text is
+exact. Live: send the owner a text message — the «…» bubble appears immediately and the
+first words replace it within a quarter second.
+
 ## 4. HF Space Deployment (production, free tier — ADR-15)
 
 Supersedes VPS deployment (ADR-05). One Docker Space co-locates OmniRoute +
