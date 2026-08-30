@@ -164,9 +164,24 @@ async def test_brief_send_failure_skips_persistence(make_settings, fake_bot):
     from tests.conftest import OWNER_ID
 
     now = datetime(2026, 8, 31, 7, 0, tzinfo=UTC)
-    bot = fake_bot(fail_send_indices={0})
+    bot = fake_bot(fail_send_indices={1})  # 1-based send index (conftest contract)
     composer = BriefComposer(FakeSuite(), FakeInbox(), None, bot, OWNER_ID, make_settings())
     assert await composer.fire_once(now) is False
     assert len(bot.session.sent("SendMessage")) == 1  # attempted
     assert composer._inbox.state.last_brief_date is None  # not persisted
     assert await composer.fire_once(now) is True  # retries same day once bot heals
+
+
+async def test_brief_disabled_sends_nothing(make_settings, fake_bot):
+    """AC4: brief_enabled=false -> fire_if_due False, zero client + bot calls."""
+    from tests.conftest import OWNER_ID
+
+    suite, inbox, bot = FakeSuite(), FakeInbox(), fake_bot()
+    composer = BriefComposer(
+        suite, inbox, None, bot, OWNER_ID, make_settings(BRIEF_ENABLED="false")
+    )
+    now = datetime(2026, 8, 31, 7, 0, tzinfo=UTC)
+    assert await composer.fire_once(now) is False
+    assert composer.fire_if_due(now) is False
+    assert bot.session.calls == []
+    assert suite.calls == 0 and inbox.peeked == 0
