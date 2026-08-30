@@ -5,7 +5,7 @@ from datetime import UTC, datetime, timedelta
 
 from src.daily_brief import BriefComposer, BriefData
 from src.email_triage import TriageClassifier
-from src.gmail import EmailMessage
+from src.gmail import EmailMessage, GmailState
 from src.google_suite import CalendarEvent, TaskItem
 from tests.test_email_triage import FakeBrain
 
@@ -32,6 +32,11 @@ class FakeInbox:
         self.total = total
         self.messages = messages or []
         self.peeked = 0
+        self.state = GmailState()
+        self.saved = 0
+
+    def save_state(self):
+        self.saved += 1
 
     async def unread_digest(self):
         return self.total, 0
@@ -130,3 +135,38 @@ async def test_collect_from_mocked_clients(make_settings):
     assert [task.id for task in data.tasks] == ["t1"]
     assert data.unread_total == 5
     assert [m.id for m in data.important_items] == ["imp0", "imp1", "imp2"]
+
+
+async def test_fire_if_due_once_per_day(make_settings, fake_bot):
+    """AC3: fires once per local day past brief time; same-day no-op; next day
+    fires again; send failure does not persist the date."""
+    from tests.conftest import OWNER_ID
+
+    now = datetime(2026, 8, 31, 7, 0, tzinfo=UTC)  # Amman 10:00 — past 07:30
+    early = datetime(2026, 8, 31, 4, 0, tzinfo=UTC)  # Amman 07:00 — before brief
+    inbox = FakeInbox()
+    composer = BriefComposer(FakeSuite(), inbox, None, fake_bot(), OWNER_ID, make_settings())
+
+    assert await composer.fire_once(early) is False
+    assert inbox.state.last_brief_date is None  # zero persistence before brief time
+
+    assert await composer.fire_once(now) is True
+    assert inbox.state.last_brief_date == "2026-08-31"
+    assert await composer.fire_once(now) is False  # same-day no-op
+
+    next_day = datetime(2026, 9, 1, 7, 0, tzinfo=UTC)
+    assert await composer.fire_once(next_day) is True
+    assert inbox.state.last_brief_date == "2026-09-01"
+
+
+async def test_brief_send_failure_skips_persistence(make_settings, fake_bot):
+    """AC3 error mode: send failure -> False, date NOT persisted (same-day retry)."""
+    from tests.conftest import OWNER_ID
+
+    now = datetime(2026, 8, 31, 7, 0, tzinfo=UTC)
+    bot = fake_bot(fail_send_indices={0})
+    composer = BriefComposer(FakeSuite(), FakeInbox(), None, bot, OWNER_ID, make_settings())
+    assert await composer.fire_once(now) is False
+    assert len(bot.session.sent("SendMessage")) == 1  # attempted
+    assert composer._inbox.state.last_brief_date is None  # not persisted
+    assert await composer.fire_once(now) is True  # retries same day once bot heals

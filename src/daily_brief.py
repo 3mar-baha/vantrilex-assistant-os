@@ -6,7 +6,7 @@ fire-once-per-local-day: the date persists to GmailState only after a
 successful send, so a failed send retries the same day.
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
 from aiogram import Bot
@@ -134,3 +134,29 @@ class BriefComposer:
         return BriefData(
             events=events, tasks=tasks, unread_total=unread_total, important_items=important
         )
+
+    def fire_if_due(self, now: datetime) -> bool:
+        """Due when past BRIEF_LOCAL_TIME AND last_brief_date != today (local)."""
+        if not self._settings.brief_enabled:
+            return False
+        local_now = now.astimezone(self._tz)
+        brief_at = time.fromisoformat(self._settings.brief_local_time)
+        if (local_now.hour, local_now.minute) < (brief_at.hour, brief_at.minute):
+            return False
+        return self._inbox.state.last_brief_date != local_now.date().isoformat()
+
+    async def fire_once(self, now: datetime) -> bool:
+        """Collect -> render -> send; persist the date only on send success."""
+        if not self.fire_if_due(now):
+            return False
+        data = await self.collect(now)
+        try:
+            await self._bot.send_message(
+                self._chat_id, self.render(data, now), parse_mode="MarkdownV2"
+            )
+        except Exception:  # noqa: BLE001 — send failure retries same day (no persist)
+            logger.error("daily brief send failed -> date not persisted, will retry")
+            return False
+        self._inbox.state.last_brief_date = now.astimezone(self._tz).date().isoformat()
+        self._inbox.save_state()
+        return True
