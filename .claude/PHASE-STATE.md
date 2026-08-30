@@ -352,8 +352,30 @@ social agent -> v2.0.
       Tests `tests/test_voice_to_vault_transcriber.py` (AC9 + zero-cloud AST scan + 5
       error modes) + bot-shell wiring test. Commits `5df9f80` (red) + `ed03b03`
       (module) + `8d1e385` (red wiring) + `afc8975` (wiring) + docs. Gate green (142
-      passed, Security Gate OK, Docs Guard OK). NEXT: 2.6 evening journaler -> sprint
-      exit (teardown + Guide review + merge core-foundation -> main + push, then HALT).
+      passed, Security Gate OK, Docs Guard OK).
+      **TASK 2.6 DONE (2026-08-31, sprint-2 §2.6 evening proactive journaler)**:
+      `src/skills/evening_journaler.py` — `LedgerData` + `EveningJournaler`:
+      `pick_slot` (uniform `random.uniform` inside [JOURNALER_WINDOW_START,
+      JOURNALER_WINDOW_END) Amman), `collect` (per-section isolation: events /
+      completed tasks / CRITICAL mail via heuristic classifier / today's Voice_Memos
+      glob), PURE Arabic `render_ledger` (YAML `date`+`checkin_sent` frontmatter,
+      Calendar/Mail/Voice memos/Notes sections degrading to «غير متوفر حالياً»),
+      calendar-guarded `fire_once` (busy -> no message, ledger still lands; send
+      failure never persists `last_checkin_sent` -> 30 s retry tick; ledger once per
+      local day, state-loss re-run appends ONE corrigenda line), `run_forever`
+      exception-proof tick loop. Settings `JOURNALER_ENABLED/JOURNALER_WINDOW_START/
+      JOURNALER_WINDOW_END/DAILY_LOGS_DIR` (config + .env.example + conftest) with
+      loud HH:MM validators; state `{vault}/State/journaler.json`.
+      Tests `tests/test_evening_journaler.py` (AC10 both contracts + 6 error modes).
+      Commits `c619e12` (red) + `0959333` (green) + `30381d9` (docs). Gate green (150
+      passed, Security Gate OK, Docs Guard OK).
+      **SPRINT 2 CLOSED (2026-08-31)**: §2.1-§2.6 all delivered; teardown executed
+      (`.claude/skills/*` wiped — untracked session aids; post-teardown suite 150
+      passed; sacred floor `test_owner_middleware.py` + `test_guest_lockdown.py` 7
+      passed); sprint-exit Guide verification in `docs/10-CHECKPOINT.md` (full gate +
+      AC coverage + docs sync); core-foundation re-merged to `main` + pushed per owner
+      directive. NEXT: sprint-level HALT — owner decides Sprint 3 start (vault + PC
+      bridge + whitelist).
 - [ ] Phase 4 — Harden & Release: guards, full gate, tag v1.0.0, release report
 
 ## Open items / blockers
