@@ -50,6 +50,10 @@ class Settings(BaseSettings):
     tokenjuice_max_chars: int = 4000  # TOKENJUICE_MAX_CHARS (ADR-19 classification budget)
     brief_enabled: bool = True  # BRIEF_ENABLED (daily brief, §2.4)
     brief_local_time: str = "07:30"  # BRIEF_LOCAL_TIME (HH:MM, Amman local)
+    journaler_enabled: bool = True  # JOURNALER_ENABLED (evening check-in, §2.6)
+    journaler_window_start: str = "18:00"  # JOURNALER_WINDOW_START (HH:MM, Amman)
+    journaler_window_end: str = "19:30"  # JOURNALER_WINDOW_END (HH:MM, Amman local)
+    daily_logs_dir: str = "Daily_Logs"  # DAILY_LOGS_DIR (ADR-21 mandatory directory)
     voiceprint_threshold: float = 0.75  # VOICEPRINT_THRESHOLD (ADR-17 owner-voice match)
     voiceprint_model: str = "speechbrain/spkrec-ecapa-voxceleb"  # VOICEPRINT_MODEL (ECAPA-TDNN)
     whisper_model_size: str = "small"  # WHISPER_MODEL_SIZE (local faster-whisper, §2.5)
@@ -98,6 +102,15 @@ class Settings(BaseSettings):
             time.fromisoformat(value)
         except ValueError as error:  # loud settings failure (spec §2.4 error modes)
             raise ValueError("BRIEF_LOCAL_TIME must be HH:MM (24h)") from error
+        return value
+
+    @field_validator("journaler_window_start", "journaler_window_end")
+    @classmethod
+    def _journaler_window_is_hhmm(cls, value: str) -> str:
+        try:
+            time.fromisoformat(value)
+        except ValueError as error:  # loud settings failure (spec §2.6 error modes)
+            raise ValueError("journaler window bounds must be HH:MM (24h)") from error
         return value
 
     @staticmethod
