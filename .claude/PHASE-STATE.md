@@ -225,6 +225,33 @@ social agent -> v2.0.
       Security Gate OK, Docs Guard OK). Commit `11c733f` on core-foundation. RUNBOOK §6
       gained the Google OAuth bootstrap walkthrough. 2.2 gmail red tests parked at
       tests/test_gmail_watch.py.red. HALTED — next per owner: 2.2 Gmail watch+fetch.
+
+      **TASK 2.2 DONE (2026-08-30, sprint-2 §2.2)**: `src/gmail.py` — EmailMessage
+      (list_unsubscribe real field, body capped at triage_body_max_chars with
+      «…[مقتطع]» marker), GmailState (seen_ids capped 2000 newest on save),
+      StateStore (plaintext {vault}/State/gmail_state.json — no secrets per ADR-15;
+      corrupt -> *.corrupt os.replace + fresh), GmailInbox.watch (topic gated:
+      unset -> False + no wire call; set -> users.watch POST, response historyId
+      seeds cursor; API failure -> warning + False, polling unaffected),
+      fetch_new (Lock-serialized; no cursor -> sweep is:unread newer_than:{N}d
+      seeding cursor from list historyId; cursor -> history.list messagesAdded
+      minus SENT; 404/expiry -> sweep fallback; dedupe on message id),
+      mark_seen = the ONLY persistence point (dispatch-then-mark — crash
+      re-delivers), unread_digest, parse_message PURE (From split via parseaddr,
+      Date header -> internalDate -> epoch defaults, «بدون عنوان», recursive
+      parts walk preferring text/plain, HTML strip via HTMLParser with
+      script/style skip, base64 failure skips part, has_attachments),
+      run_gmail_poll (fetch -> dispatch per message -> mark full batch; API
+      errors logged, loop continues). RED-TEST CORRECTIONS (spec is contract):
+      first-boot route was history-only — spec mandates no-cursor -> sweep
+      (real history.list requires startHistoryId) -> Routes gained LIST_URL in
+      tests 1-3, message_payload gained labels param; added missing spec-mapped
+      AC1/AC5/AC6/AC7 tests (plain fixture, watch gating, corrupt state,
+      lock serialization with yielding session wrapper). Gate green (87 passed,
+      Security Gate OK, Docs Guard OK). Commit `ae48aea` on core-foundation.
+      Docs: TEST-PLAN rows (google_suite + gmail_watch), ARCHITECTURE §4
+      delivery footnote. HALTED — next per owner: 2.3 triage classifier +
+      dispatcher.
 - [ ] Phase 4 — Harden & Release: guards, full gate, tag v1.0.0, release report
 
 ## Open items / blockers

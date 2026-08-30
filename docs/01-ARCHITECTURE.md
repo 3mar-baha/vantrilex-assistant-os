@@ -62,6 +62,11 @@ graph TD
 
 Classifier input is untrusted data: parsed email bodies can never trigger PC actions.
 
+Delivery note (v1.0): Gmail `users.watch` is registered once at startup when
+`GMAIL_PUBSUB_TOPIC` is set (push option kept open), but inbox delivery is POLLING —
+historyId incremental with query-sweep fallback — preserving the zero-inbound-ports
+posture. True Pub/Sub webhook (public HTTPS) is deferred to v1.1.
+
 ## 5. Whitelist Guardrail (PC control)
 
 ```json

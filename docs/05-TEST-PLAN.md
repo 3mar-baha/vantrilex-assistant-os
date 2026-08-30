@@ -17,6 +17,8 @@
 | `test_owner_middleware.py` | Non-owner updates dropped silently; owner passes through |
 | `test_email_triage.py` | Correct dispatch per tier (drop/text/voice-note/priority-ping); untrusted-body containment |
 | `test_google_clients.py` | Calendar/Tasks CRUD shapes; refresh-token reuse; fixture-driven parsing |
+| `test_google_suite.py` | Calendar/Tasks/Drive/Contacts fixtures parse to typed UTC-normalized models |
+| `test_gmail_watch.py` | Sweep/incremental fetch, dedupe, dispatch-then-mark redelivery, watch gating, corrupt-state recovery, lock serialization, parse catalog |
 | `test_obsidian_para.py` | Note create/update; YAML frontmatter; Zettelkasten links; PARA path routing |
 | `test_voice_memo_ingest.py` | Voice note -> transcription -> filed YAML-tagged memo |
 | `test_post_call_summary.py` | Action-summary prompt fires only when actionable tasks exist |
