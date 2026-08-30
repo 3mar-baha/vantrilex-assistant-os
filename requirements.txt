@@ -8,3 +8,4 @@ pydantic-settings>=2.3
 loguru>=0.7
 cryptography>=42  # Fernet only (vault state encryption, sprint-2 task 2.1)
 tzdata>=2024.1  # zoneinfo on Windows (daily brief Amman times, sprint-2 task 2.4)
+speechbrain>=1.0  # ECAPA-TDNN voiceprint (ADR-17, sprint-2 2.3; py3.12 wheel-verified 1.1.1, pulls torch/torchaudio)
