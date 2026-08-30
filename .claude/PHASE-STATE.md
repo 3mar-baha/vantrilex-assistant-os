@@ -382,6 +382,14 @@ social agent -> v2.0.
       AC coverage + docs sync); core-foundation re-merged to `main` + pushed per owner
       directive. NEXT: sprint-level HALT — owner decides Sprint 3 start (vault + PC
       bridge + whitelist).
+      **SESSION PAUSED (2026-08-31 evening, owner: resumes tomorrow)**: everything
+      committed & pushed; `main` = implementation branch @ `90c4132` (reference
+      worktree ff-synced). Next session: run the ⚡ SESSION RESUME PROTOCOL, then open
+      Sprint 3 on the owner's «التالي» — ingest sprint-3 skills (mattpocock TDD +
+      git-guardrails · guard-skills test-guard · everything-claude-code
+      systems-architect) into `.claude/skills/`, pass the preflight gate, then task 3.1
+      (`skill-obsidian-vault-architect`) red tests. Full sprint-2 record:
+      `docs/PROJECT-JOURNEY.md` §11.
 - [ ] Phase 4 — Harden & Release: guards, full gate, tag v1.0.0, release report
 
 ## Open items / blockers
