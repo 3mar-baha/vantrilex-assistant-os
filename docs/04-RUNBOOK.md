@@ -81,6 +81,25 @@ See `.env.example` comments — each variable names its source: @BotFather (bot 
 plugin (optional REST key), `python -c "import secrets; print(secrets.token_urlsafe(32))"`
 (bridge token).
 
+### Google OAuth bootstrap (one-time, browser machine)
+
+1. console.cloud.google.com → project `vantrilex-assistant-2008` → enable Calendar,
+   Tasks, Drive, People (Contacts), Gmail APIs.
+2. OAuth consent screen: External + test user `omarbaha224@gmail.com`.
+3. Credentials → OAuth client ID → **Desktop app** → download JSON → save as
+   `core-foundation/config/google_oauth_client.json` (gitignored; NEVER commit).
+4. Set `VAULT_ENC_KEY` (`python -c "import secrets; print(secrets.token_urlsafe(32))"`)
+   and `VAULT_LOCAL_PATH` in `.env`.
+5. On the browser machine, inside the venv: `py -3.12 -m src.google_auth` → open the
+   printed consent URL, approve. Tokens are Fernet-sealed to
+   `{VAULT_LOCAL_PATH}/State/google_token.json.enc` (ADR-15).
+6. VPS headless: run step 5 on the owner PC, then copy the sealed token file to the
+   VPS vault path (it is useless without VAULT_ENC_KEY, which never leaves `.env`).
+
+Re-bootstrap when: the token cache is missing/corrupt (Sara logs `google token cache
+corrupt -> treating absent` and continues degraded) or Google rejects the refreshed
+grant (`GoogleAuthError ... re-run the OAuth bootstrap`).
+
 ## 7. Troubleshooting
 
 | Symptom | Cause | Fix |

@@ -202,6 +202,29 @@ social agent -> v2.0.
       Task 2.1 red artifacts UNTRACKED in worktree (test_google_clients.py,
       test_gmail_watch.py, src/google_auth.py torn — needs clean rewrite); 2.1 resumes
       from red, gate open per owner.
+
+      **TASK 2.1 DONE (2026-08-30, sprint-2 §2.1)**: `src/google_auth.py` rewritten clean
+      from the corrupted draft — OAUTH_AUTH_URL/TOKEN_URL, AUTH_SCOPES (5, readonly where
+      the OS never writes + gmail.modify), GoogleAuthError/GoogleAPIError(status,
+      body_excerpt), GoogleTokens, token_cache_path ({vault}/State/google_token.json.enc,
+      ADR-15), load_client_secret (unwraps installed; missing -> actionable error naming
+      path+runbook), build_consent_url (one raw scope param per scope, encoded loopback
+      redirect, offline+consent+state), verify_state (compare_digest), save/load_tokens
+      (atomic Fernet tmp+replace, chmod600 best-effort; corrupt -> warn+None),
+      exchange_code/refresh_tokens, authorize_interactive (ephemeral loopback listener,
+      state CSRF check, sealed save) + `python -m src.google_auth`; GoogleSession:
+      proactive single-flight refresh (lock + stale re-check; expires_at==0 = unknown
+      expiry, 401 handles it), 401 -> single-flight refresh -> replay once -> still 401
+      -> GoogleAuthError re-bootstrap; other non-2xx -> GoogleAPIError(excerpt<=300).
+      `src/google_suite.py`: CalendarEvent/TaskItem/DriveFile/Contact (UTC-normalized,
+      wire aliases mimeType/modifiedTime/status) + GoogleSuite list_events/create_event/
+      list_tasks/add_task/list_drive_files/search_contacts. Red-test bug fixes (spec is
+      contract): 3 sync session.request -> async/await; _settings gains
+      GOOGLE_OAUTH_CLIENT_JSON override; added spec-mapped test_proactive_refresh_single_
+      flight + tests/test_google_suite.py (AC4 x4 fixtures). Gate green (79 passed,
+      Security Gate OK, Docs Guard OK). Commit `11c733f` on core-foundation. RUNBOOK §6
+      gained the Google OAuth bootstrap walkthrough. 2.2 gmail red tests parked at
+      tests/test_gmail_watch.py.red. HALTED — next per owner: 2.2 Gmail watch+fetch.
 - [ ] Phase 4 — Harden & Release: guards, full gate, tag v1.0.0, release report
 
 ## Open items / blockers
