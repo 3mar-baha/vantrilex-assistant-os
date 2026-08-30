@@ -61,7 +61,13 @@ def _cosine(a: list[float], b: list[float]) -> float:
 
 
 def stage_guest_note(
-    vault_root: Path, vector: list[float], *, enc_key: str, now: datetime | None = None
+    vault_root: Path,
+    vector: list[float],
+    *,
+    enc_key: str,
+    now: datetime | None = None,
+    transcript: str | None = None,
+    claimed_name: str | None = None,
 ) -> Path:
     """One Pending_Speakers staging note per guest voice event (ADR-15: durable
     across Space restarts so the owner can brief it later). Same-minute guests
@@ -77,11 +83,13 @@ def stage_guest_note(
         suffix += 1
     payload = {
         "received_at": moment.isoformat(timespec="seconds"),
-        "transcript": GUEST_TRANSCRIPT_PLACEHOLDER,
+        "transcript": transcript or GUEST_TRANSCRIPT_PLACEHOLDER,
         "voiceprint_enc": (
             _fernet(enc_key).encrypt(json.dumps(vector).encode()).decode() if vector else None
         ),
     }
+    if claimed_name is not None:
+        payload["claimed_name"] = claimed_name
     path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
     return path
 
@@ -137,6 +145,15 @@ class VoiceBiometrics:
             self._load_attempted = True
             self._owner_vector = self._load_vector()
         return self._owner_vector is not None
+
+    @property
+    def owner_vector(self) -> list[float] | None:
+        return self._owner_vector
+
+    async def embed(self, ogg_opus: bytes) -> list[float]:
+        """Public embedding hook for the multi-speaker registry (§2.3b)."""
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(self._executor, self._embed_sync, ogg_opus)
 
     async def enroll(self, ogg_opus: bytes) -> None:
         """Embed one owner voice note and Fernet-seal it to the vault State."""
@@ -226,6 +243,7 @@ class VoiceBiometrics:
         if proc.returncode != 0 or not proc.stdout:
             detail = proc.stderr.decode(errors="replace").strip()[:200]
             raise VoiceprintError(f"ffmpeg could not decode the voice note: {detail}")
+        return proc.stdout
 
     def _load_model(self):
         try:

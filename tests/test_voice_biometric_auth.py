@@ -61,3 +61,33 @@ async def test_corrupt_embedding_treated_unenrolled(tmp_path):
     bio = make_bio(tmp_path)
     assert bio.enrolled is False
     assert await bio.verify(b"ogg") is True
+
+
+def test_decode_pcm_real_ffmpeg_contract(tmp_path):
+    """Integration guard: a real Ogg Opus file decodes to non-empty 16 kHz mono
+    s16le PCM (the in-memory ffmpeg contract _embed_sync depends on)."""
+    import subprocess
+
+    bio = make_bio(tmp_path)
+    ogg = tmp_path / "sample.ogg"
+    subprocess.run(
+        [
+            "ffmpeg",
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-f",
+            "lavfi",
+            "-i",
+            "sine=frequency=440:duration=0.3",
+            "-c:a",
+            "libopus",
+            "-b:a",
+            "16k",
+            str(ogg),
+        ],
+        check=True,
+        capture_output=True,
+    )
+    pcm = bio._decode_pcm(ogg.read_bytes())
+    assert len(pcm) > 0 and len(pcm) % 2 == 0
