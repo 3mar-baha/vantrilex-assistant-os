@@ -75,3 +75,23 @@ async def test_guest_voice_note_lockdown_zero_privileged_effects(tmp_path, monke
     assert json.loads(sealed) == GUEST_VEC
     after = {p for p in vault.rglob("*") if p.is_file()}
     assert after - before == {notes[0]}  # zero other vault writes
+
+
+async def test_guest_staging_failure_still_locks_down(tmp_path, monkeypatch, fake_bot):
+    bio = VoiceBiometrics(embedding_path=tmp_path / "State" / "owner_voiceprint.enc", enc_key=KEY)
+    monkeypatch.setattr(bio, "_embed_sync", lambda ogg: list(OWNER_VEC))
+    await bio.enroll(b"owner-ogg")
+    monkeypatch.setattr(bio, "_embed_sync", lambda ogg: list(GUEST_VEC))
+    monkeypatch.setattr(
+        "src.skills.voice_biometric_auth.stage_guest_note",
+        lambda *a, **k: (_ for _ in ()).throw(OSError("vault disk full")),
+    )
+    bot = fake_bot()
+
+    verdict = await verify_or_lockdown(
+        bio=bio, bot=bot, chat_id=1, ogg_opus=b"guest-ogg", vault_root=tmp_path, enc_key=KEY
+    )
+
+    assert verdict is False
+    assert len(bot.session.calls) == 1
+    assert bot.session.sent("SendMessage")[0].method.text == GUEST_LOCKDOWN_AR
