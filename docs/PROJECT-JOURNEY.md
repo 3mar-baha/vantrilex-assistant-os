@@ -140,3 +140,124 @@ into `.claude/skills/` with a binding sprint-exit **teardown protocol**, ledgere
 `config/whitelist.json` seeded; `.env.example` carries the FAST/MEDIUM/HEAVY tier pins.
 Numbering note: the directive's draft ADR-04..07 collide with settled ledger entries and are
 recorded as ADR-19/20/21 (see ledger note).
+
+## 11. Addendum — 2026-08-30/31: Sprint 2 complete (Telegram suite → evening journaler)
+
+### 11.1 Outcome snapshot
+
+| Measure | Value |
+|---|---|
+| Tasks delivered | 2.1 · 2.2 · 2.3 · 2.3b · 2.4 · 2.5 · 2.6 — all green, TDD (red→green→refactor) |
+| Test suite | **150 passed** (was 45 at sprint-1 close) · Security Gate OK · Docs Guard 16/16 |
+| Sacred floor | `test_owner_middleware.py` + `test_guest_lockdown.py` green post-teardown (`test_whitelist_guardrail.py` is born with sprint-3 task 3.4) |
+| Branch | worked on `core-foundation` (worktree), merged to `main` mid-sprint (`e7e0f2f`) and re-merged at close (`13a2d01`, sync `9840bda`) — **from 2026-08-31 all commits go directly to `main` (owner directive, §11.4)** |
+| Teardown | executed 2026-08-31 per master-directive protocol — ledgered in `docs/10-CHECKPOINT.md` |
+
+### 11.2 Task-by-task record
+
+**2.1 — Google OAuth + Suite clients + Gmail watch** (`11c733f`, `ae48aea`)
+`src/google_auth.py` consent flow + Fernet-sealed token cache (`{vault}/State/google_token.json.enc`,
+ADR-15) with single-flight proactive/401 refresh; `src/google_suite.py` typed Calendar/Tasks/
+Drive/Contacts clients (UTC-normalized models); `src/gmail.py` watch registration (optional
+Pub/Sub topic) + polled incremental fetch (historyId with query-sweep fallback), message-ID
+dedupe, **dispatch-then-mark** redelivery (no crash-window email loss), read-only `peek_unread`.
+
+**2.2 — Progressive chat streamer + bot shell** (`0a5ae11`)
+`src/skills/telegram_chat_streamer.py`: placeholder bubble → first edit <250 ms (Audio-TTFT
+KPI) → edits coalesced at `STREAM_EDIT_INTERVAL_MS=750` → final text verbatim; cancel event
+(owner interjection keeps the partial). Error modes: edit rate-limit doubles the interval,
+placeholder failure → aggregate send fallback, mid-stream failure → apology preserving
+delivered text. `src/bot.py` + `src/middleware.py`: owner-ID silent-drop middleware,
+`/start` welcome + Ogg voice greeting, `/help`, voice static ack (zero gateway calls),
+typing indicator, global error handler.
+
+**2.3 — Voice biometrics + Guest Mode (ADR-17)** (`e0fd30e`, `01678b4`, `08470db`, `112eba5`)
+`src/skills/voice_biometric_auth.py`: ECAPA-TDNN owner voiceprint (speechbrain pinned,
+wheel-verified on py3.12/Windows), Fernet-sealed to `{vault}/State/owner_voiceprint.enc`,
+`/enroll-voice` command, <50 ms CPU cosine verify, **fail-closed**: below-threshold or ANY
+verification error → Guest Mode (warm ar-JO lockdown reply + exactly ONE
+`Voice_Memos/Pending_Speakers/` staging note with encrypted embedding + placeholder
+transcript; ZERO privileged effects — spy-proven no gateway/whitelist/subprocess calls).
+`tests/test_guest_lockdown.py` joins the sacred floor. PCM decode return bug fixed with a
+real-ffmpeg contract test.
+
+**2.3b — Social enrollment / multi-speaker registry (§2.3b)** (`583e3c9`, `ff5d92e`)
+`src/skills/social_enrollment.py`: `VoiceprintRegistry` extends ADR-17 beyond the owner —
+per-contact sealed vectors + dossier frontmatter, owner-first match, running-centroid
+stability, transcript appends; unknown owner-absent events staged and briefed later;
+three-way verdicts `confirm:{Category}` → dossier+voiceprint, `ignore` → `Contacts/Ignored/`
+(never re-matches), `unknown` → `Contacts/Unknown/` + security flag (re-matchable).
+
+**2.4 — Tiered email triage + daily brief + TokenJuice (M7/ADR-19)** (`438bfb3`, brief series
+`98a9617`..`62c1174`, TokenJuice `67c9d7a`/`b8f2c5c`)
+`src/email_triage.py`: heuristic tiers (VIP/keywords/bulk) + ONE `FAST_MODEL` refinement on
+the ambiguous remainder (untrusted-data containment markers, temperature 0, never-downgrade
+merge — model can rescue upward only), dispatch matrix drop/text/voice/critical-ping with
+repeat pings and owner-activity stop; `tokenjuice_compact` strips quoted chains/signature
+blocks/legal footers and caps the body (feeds BOTH heuristic scoring and the LLM payload —
+less free-pool burn, identical tiers). `src/daily_brief.py`: fire-once-per-local-day
+Jordanian digest (events, due tasks, mail picture), per-section «غير متوفر حالياً»
+degradation, persist-on-send-success. Settings: `GOOGLE_VIP_SENDERS`, `TRIAGE_KEYWORDS_AR/EN`,
+`CRITICAL_PING_INTERVAL_MIN/MAX`, `TOKENJUICE_MAX_CHARS=4000`, `BRIEF_ENABLED`,
+`BRIEF_LOCAL_TIME`.
+
+**2.5 — Voice-to-vault transcriber (ADR-22)** (`5df9f80`, `ed03b03`, `8d1e385`, `afc8975`)
+`src/skills/voice_to_vault_transcriber.py`: enrolled owner voice notes decode in-memory
+(ffmpeg → 16 kHz mono s16le) and transcribe via **LOCAL faster-whisper** (MIT, CPU int8;
+cloud STT settled to NEVER — ADR-22; network-free import surface AST-tested) on a dedicated
+executor; atomic `Voice_Memos/YYYY-MM-DD-HHMM.md` YAML notes (same-minute numeric suffixes,
+`(empty)` fallback, write retried once, never blocks the reply). Bot wiring: biometric gate →
+transcribe → file → transcript enters the standard streamed text pipeline; guest voice never
+reaches the transcriber. Deps wheel-verified before implementation: faster-whisper 1.2.1 +
+ctranslate2 4.8.
+
+**2.6 — Evening proactive journaler (§2.6)** (`c619e12`, `0959333`)
+`src/skills/evening_journaler.py`: once per local day writes the ledger
+`Daily_Logs/YYYY-MM-DD.md` (YAML frontmatter `date`+`checkin_sent`; Calendar / Mail /
+Voice memos / Notes sections, each degrading independently) and sends ONE Jordanian
+check-in at a `random.uniform` slot inside `[JOURNALER_WINDOW_START, JOURNALER_WINDOW_END)`
+(Amman): calendar-guarded (busy → no message, ledger still lands), send failure never
+persists the check-in date (30 s retry tick), state-loss same-day re-run appends one
+corrigenda line instead of duplicating, `run_forever` loop survives any exception.
+Zero LLM in the hot path. Settings: `JOURNALER_ENABLED`, `JOURNALER_WINDOW_START/END`
+(loud HH:MM validators), `DAILY_LOGS_DIR`; state `{vault}/State/journaler.json`.
+
+### 11.3 Docs, ADRs & config synchronized this sprint
+
+ADR-22 appended (local Whisper — never cloud) · ADR-17 amended (multi-speaker registry) ·
+ARCHITECTURE §6 voice-to-vault + evening-journaler legs, §6b social graph · RUNBOOK: Google
+OAuth walkthrough, email-triage tuning, Whisper warmup one-liner, daily-brief + evening-
+journaler schedules, voice enrollment + social registry · TEST-PLAN rows for every new suite ·
+BACKLOG status matrix + task records · CHANGELOG entries per task · `.env.example` extended
+(triage, brief, biometrics, whisper, journaler blocks) · `config/whitelist.json` seeded
+(sprint-1 directive carry-over).
+
+### 11.4 Sprint exit + branch directive
+
+- **Teardown (2026-08-31)**: `.claude/skills/*` wiped (untracked session aids — re-ingested
+  per sprint from the upstream toolkits); post-teardown full suite 150 passed; sacred floor
+  green; `docs/10-CHECKPOINT.md` records the sprint-2 COMPLETE entry with the Guide
+  verification pass (gate + AC→pytest coverage + docs sync).
+- **Owner directive (2026-08-31, binding): ALL commits land directly on `main` and push
+  immediately** — the per-stream worktree/branch merge pattern is retired. `main` is the
+  implementation branch; the `core-foundation` worktree becomes a reference checkout only
+  (kept ff-synced to `main`). Recorded in `.claude/PHASE-STATE.md` so every future session
+  complies.
+
+### 11.5 Owner-side pending (live enablement — none block Sprint 3 start)
+
+1. Google OAuth bootstrap (RUNBOOK §6 walkthrough) — unlocks live Calendar/Gmail.
+2. Google 403 "project denied access" fix — unlocks the Gemini pools (blocks AC10 live
+   smoke from sprint 1).
+3. Whisper warmup one-liner (RUNBOOK §6) — one-time model download before first live memo.
+4. VAULT_ENC_KEY set in `.env`; 6 OpenRouter keys connected to OmniRoute pools (3-tier).
+5. Live smokes: streamed text reply, voice round-trip, daily brief, triage dispatch.
+
+### 11.6 Next
+
+**Sprint 3 — vault + PC bridge + whitelist (tasks 3.1-3.5)**: git-backed vault client
+(PARA/frontmatter/first-boot guard), dynamic vault expander, verbal action-summary protocol,
+whitelist safety guardrail daemon (sacred floor `test_whitelist_guardrail.py`), desktop
+telemetry protocol. Skills to ingest at entry: mattpocock TDD + git-guardrails,
+guard-skills test-guard, everything-claude-code systems-architect. Opens on the owner's
+«التالي».

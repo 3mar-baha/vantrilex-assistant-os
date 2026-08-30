@@ -54,6 +54,12 @@
    directive): `PRIMARY_MODEL=gemini/gemini-3.7-flash` (extended thinking; deep agentic/
    tutoring), `FAST_MODEL=gemini/gemini-3.5-flash-lite` (<600ms TTS text, classification);
    pool-level failover covers the gemini-3.1-pro class.
+   **Branch directive (owner, 2026-08-31, binding — supersedes loop item 1's merge rule)**:
+   ALL commits land directly on `main` and push immediately (owner: «اريد ان يتم توجيه
+   جميع الكوميتات الى main»). The per-stream worktree/branch pattern is retired — `main`
+   is the implementation branch; work in the docs checkout. The `core-foundation` worktree
+   is a reference checkout only: keep its branch ff-synced to `main`, never commit new
+   work on it.
 
 Updated at every phase exit and every significant turn end.
 
