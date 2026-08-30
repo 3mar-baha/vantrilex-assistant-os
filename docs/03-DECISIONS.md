@@ -99,7 +99,26 @@ Supersedes draft preference for Google Cloud Run deployment.
 - **Consequences**: No dependency on OS-repo internals for daily flow; upstream pulls
   still deliver diagnostics/tooling improvements via `uos doctor` + toolkit sync.
 
-## ADR-16: Three-Tier Brain via OmniRoute (Gemini retired) — **Accepted** (amended 2026-08-30)
+## ADR-15: HF Spaces as the v1.0 Runtime Host — **Accepted** (2026-08-29, MASTER DIRECTIVE)
+- **Context**: Master directive ordered cloud deployment over free tiers. Candidate hosts
+  evaluated: Hugging Face Spaces (2 vCPU / 16 GB RAM / 50 GB, Docker, no card),
+  Koyeb Nano (0.1 vCPU / 512 MB), Render free (512 MB + 15-min sleep). ADR-05's
+  VPS-primary ruling is superseded by this owner directive.
+- **Decision**: **Hugging Face Spaces** hosts the v1.0 runtime as ONE Docker Space running
+  OmniRoute (`localhost:20128`) + the core co-located — preserving the gateway co-location
+  architecture verbatim; the Space's single public port serves the WSS bridge endpoint and
+  `/health`. Secrets load from HF Secrets (never git). Keep-alive: cron ping on `/health`
+  every 10 min. Rejected: Koyeb/Render — 512 MB cannot host whisper.cpp + speaker
+  verification (<50 ms CPU KPI) + OmniRoute + core; Render adds a cron life-support
+  dependency on top of resource starvation.
+- **Consequences (new hard invariants)**: (1) **Disposable-filesystem rule** — the Space's
+  disk is ephemeral: ALL durable state MUST live in the git-backed vault or be re-derivable;
+  the Google OAuth token cache is vault-persisted (encrypted) or re-consented after restarts.
+  (2) Free Spaces may idle-sleep after prolonged inbound silence — the keep-alive ping is
+  mandatory config, documented in RUNBOOK. (3) Sprint-4 packaging = Space Dockerfile with
+  `app_port`, single-image OmniRoute+core supervision.
+
+## ADR-16: Three-Tier Brain via OmniRoute (Gemini retired) — **Accepted** (2026-08-29, MASTER DIRECTIVE; amended 2026-08-30)
 - **Context**: Gemini is dead for this project: Google denies the key at API level
   (403 "project denied access" even with Generative Language API enabled) and the free
   GenAI tier is gated behind a billing card the owner's bank rejects. OmniRoute probes
@@ -120,4 +139,59 @@ Supersedes draft preference for Google Cloud Run deployment.
   glm-5.2/gemma-26b/inkling (reasoning burned the whole budget → empty replies).
 - **Consequences**: gpt-oss-120b is the designated task worker, never writes user-facing
   prose (pins at task 2.3). OpenRouter free = 50 req/day/account; owner adds 6 keys across
-  6 accounts — OmniRoute multi-key rotation is native. Gemini never re-pins.
+  6 accounts — OmniRoute multi-key rotation is native. Gemini never re-pins. Landed task 1.5:
+  `src/gateway.py` walks the 3-tier chains + `src/dispatcher.py` routes behind the ADR-18
+  front door; the runtime `.env` carries the tier pins. Harness (Claude Code) remains
+  GLM-only per the 2026-08-28 owner rule — two distinct layers, never conflated.
+
+## ADR-17: Voice Biometrics & Guest Mode — **Accepted** (2026-08-29, MASTER DIRECTIVE)
+- **Context**: The Telegram-ID allowlist cannot tell WHO is speaking inside the owner's
+  account (shared device, stolen session).
+- **Decision**: Local speaker verification (SpeechBrain ECAPA-TDNN; Resemblyzer fallback)
+  scores inbound voice on CPU (<50 ms KPI) against the owner's encrypted voiceprint
+  (one-time 5-10 s enrollment, vault-persisted). Composes with the Telegram-ID allowlist:
+  matching voice = full access; non-matching voice inside the owner's account = **Guest
+  Mode** — warm greeting («يا هلا، الصوت مش صوت عمر... مين بيحكي معي؟»), zero-trust
+  lockdown of PC control, Gmail, Calendar and private vault, message-taking filed to
+  `Voice_Memos/` or `Contacts/`. The guest-lockdown test joins the sacred floor.
+- **Consequences**: $0 preserved (local inference, no cloud biometrics); false-reject risk
+  accepted (re-prompt, never fail-open).
+
+## ADR-18: Fast Front-Door Dispatcher — **Accepted** (2026-08-29, MASTER DIRECTIVE)
+- **Context**: One model for everything either lags simple replies or under-thinks hard
+  planning; free pools make large-model latency worse.
+- **Decision**: Tier 1 always answers first (<250 ms TTFT) with an instant acknowledgment
+  («من عيوني هسا ببدأ...») while classifying intent: single/dual-tool requests route to
+  Tier 2; multi-step chained DAGs (tutoring, syllabus builds, deep coding) route to
+  Tier 3. Fire-and-forget from the owner's perspective — Sara always speaks immediately.
+- **Consequences**: Landed as `src/dispatcher.py` + the 3-tier config pins (Sprint-1 task
+  1.5, 2026-08-29); perceived latency collapses to Tier-1 TTFT even for heavy jobs.
+
+## ADR-19: TokenJuice-Style Compaction Before LLM Triage — **Accepted** (2026-08-29, MASTER DIRECTIVE)
+- **Decision**: Email bodies are compacted BEFORE any LLM classification: signatures,
+  disclaimers, tracking boilerplate and quoted reply chains are stripped deterministically
+  and the remainder capped to the classification budget.
+- **Consequences**: Free-pool token burn drops sharply without changing tier decisions;
+  classification runs on clean signal.
+
+## ADR-20: Fully In-Memory Ogg Opus Voice Pipeline — **Accepted** (2026-08-29; verified Sprint 1.3)
+- **Decision**: Edge-TTS MP3 streams straight into an ffmpeg child (`io.BytesIO`, asyncio
+  subprocess, `-probesize 32`); the first encoded Ogg Opus chunk surfaces in ~30 ms and is
+  handed to the Telegram sender immediately — zero disk writes anywhere in the path.
+- **Consequences**: Binding Q1 (<600 ms first audio chunk) is met by construction; the HF
+  Spaces disposable filesystem never sees audio temp files.
+
+## ADR-21: Obsidian 5-Directory Vault Contract — **Accepted** (2026-08-29, MASTER DIRECTIVE)
+- **Decision**: The vault carries five mandatory top-level directories — `Contacts/`,
+  `Call_Transcripts/` (written from v1.1), `Studies/`, `Voice_Memos/`, `Daily_Logs/` —
+  plus `02_Areas/Profile/User_Info.md` and `02_Areas/Profile/Dialect_Notes.md`; a
+  first-boot guard test asserts every one exists. Taxonomy expansion is dynamic (Sara
+  grows dirs/tags as domains emerge, each change an auditable git commit); the PARA
+  backbone is expansion-only. `02_Areas/Studies/` migrates to top-level `Studies/`.
+- **Consequences**: ADR-15's disposable-filesystem rule has a single durable home for all
+  state; the guard test blocks regressions.
+
+> Numbering note: the directive's draft ADR-04..07 (TokenJuice, In-Memory Opus, 5-Dir
+> Vault, Owner-only Drop) collide with settled ledger entries (ADR-04 Persona, ADR-05
+> VPS — superseded by ADR-15, ADR-06 Owner-only, ADR-07 v1.0 scope). They are recorded
+> here as ADR-19/20/21; owner-only drop remains ADR-06.

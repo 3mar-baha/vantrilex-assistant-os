@@ -436,3 +436,95 @@ Reviewer: independent Guide agent, adversarial pass, 2026-08-26. Dispositions:
 - **MINOR — silent truncation / empty-reply edges**: RESOLVED — missing-[DONE] warning behavior added to 1.2 (AC8) and empty-buffer fallback added to 1.4 (AC9).
 - **MINOR — test-target hygiene**: RESOLVED — `test_scaffold.py` declared in module tree; AC5 stubs machine-dependent probes; HealthReport alias dropped (plain dict).
 - **Open questions — rulings**: Q1 APPROVED (<600ms = time-to-first-encoded-chunk; ARCH §3 rewording mandatory in 1.3 commit) · Q3 APPROVED (سارة wins; retired-name ingest drafts superseded; no legacy-persona social-hook examples this sprint) · Q4 APPROVED (ffmpeg hard dependency owned by RUNBOOK; NO raw-MP3 fallback) · Q5 APPROVED (CI proves fallback ordering via MockTransport; live smoke manual + recorded).
+
+**Amendment (2026-08-29, task 1.3 implementation)**: `-analyzeduration 0 -probesize 32`
+prepended to the specced ffmpeg input options. Measured: default probesize gates ALL output
+until EOF on piped MP3 (first chunk at ~1.0s = producer close), violating binding Q1
+(<600 ms time-to-first-encoded-chunk); with the tiny probe the first encoded chunk surfaces
+in ~30ms while stdin is still open. All other args verbatim.
+
+---
+
+## Amendment (2026-08-29, SECOND MASTER DIRECTIVE — re-map + task 1.5 + skill rotation)
+
+**Task re-map**: the historical 1.4 body above (Aiogram bot shell) moves to Sprint 2 as
+task 2.2 `skill-telegram-chat-streamer` (its spec content remains valid there). New Sprint-1
+tails per the directive: **1.4 = adaptive Jordanian dialect engine** (M1, contract in
+`docs/specs/master-directive-2026-08-29.md`) and **1.5 = 3-tier brain + Fast Front-Door
+Dispatcher** below. Tasks 1.1-1.3 history unchanged (all merged on branch `core-foundation`).
+
+### 1.5 3-tier brain + Fast Front-Door Dispatcher (ADR-16/ADR-18)
+
+Stream/worktree: core-foundation | Depends on: 1.1, 1.2
+
+**Intent** — Extend `src/gateway.py` from the 2-slot PRIMARY/FAST chain to the 3-tier chain
+and add the dispatcher: Tier 1 always answers first (<250 ms TTFT) with an instant Jordanian
+acknowledgment while routing single/dual-tool intents to Tier 2 and multi-step DAGs to Tier 3.
+
+**Interface**
+
+```python
+# src/config.py — Settings gains:
+medium_model: str                # MEDIUM_MODEL  (required)
+heavy_model: str                 # HEAVY_MODEL   (required)
+fast_model_fallbacks / medium_model_fallbacks / heavy_model_fallbacks: str = ""
+    # comma-separated; parsed into lists (pinned per ADR-16)
+
+# src/gateway.py — extended:
+class Tier(str, Enum): FAST; MEDIUM; HEAVY
+async def stream_chat(self, messages, *, tier: Tier = Tier.FAST, temperature, max_tokens)
+    # walks THAT tier's fallback chain; SSE + quota/transient/fatal semantics unchanged
+
+# src/dispatcher.py
+class FrontDoorDispatcher:
+    def __init__(self, gateway: OmniRouteClient, settings: Settings) -> None
+    async def handle(self, user_text: str) -> AsyncIterator[str]
+        # 1) Tier-1 streams an instant ack/reflex reply (or answers simple chat fully)
+        # 2) routes: "direct" -> done ; "tier2" / "tier3" -> background execution, deltas follow
+```
+
+Tier pins (ADR-16): FAST `google/gemini-3.5-flash-lite` (fallbacks `meta-llama/llama-3.3-70b-instruct`,
+`nemotron-3.5-lightning`) · MEDIUM `google/gemini-3.7-flash` (fallback `z-ai/glm-5.3-flash`) ·
+HEAVY `nvidia/nemotron-3-ultra-550b` (fallbacks `google/gemini-3.7-flash`, `google/gemini-3.1-pro`).
+The runtime `.env` migrates from the retired `gemini/`-prefix PRIMARY/FAST pins to these IDs in
+this task (owner action on the runtime file; template already migrated). Harness stays GLM-only
+— separate layer, never conflated.
+
+**Behavior**
+
+1. Routing prompt runs on Tier 1 (tiny JSON reply: direct / tier2 / tier3 + optional ack);
+   router failure or unparsable output -> safe default tier2 + loud log.
+2. Routed work streams through `stream_chat(tier=...)`; mid-stream failures never restart a
+   partially-yielded reply (1.2 semantics hold per tier).
+3. TTFT budget (Tier-1 ack) measured from first streamed delta.
+4. `PRIMARY_MODEL` consumers migrate to the tier API; the 2-slot chain is retired.
+
+**Acceptance criteria**
+
+1. AC1 — Settings carries + validates the 3-tier pins and parsed fallback lists. → `tests/test_dispatcher.py::test_settings_carries_tier_pins`
+2. AC2 — `.env` pins match ADR-16 IDs exactly (template + migrated runtime contract). → `test_env_pins_match_adr16`
+3. AC3 — each tier's fallback chain walks in ADR-16 order on quota/transient. → `test_tier_fallback_chain_ordering`
+4. AC4 — simple chat answered entirely at Tier 1; Tier 2/3 never called. → `test_simple_chat_stays_tier1`
+5. AC5 — single/dual-tool intent routed to Tier 2. → `test_tool_intent_routes_tier2`
+6. AC6 — multi-step DAG intent routed to Tier 3. → `test_dag_intent_routes_tier3`
+7. AC7 — router failure -> safe default Tier 2 + loud log, never silent. → `test_router_failure_defaults_tier2`
+8. AC8 — Tier-1 ack arrives as first delta (TTFT budget asserted with scripted latency). → `test_ack_first_delta_budget`
+9. AC9 — regression: existing `test_omniroute_gateway.py` suite green unchanged (SSE + classification contract preserved). → `test_gateway_regression_green`
+10. AC10 — live smoke (manual, blocked on Google 403 owner-side fix): real Tier-1 ack TTFT <250 ms measured against the gateway; recorded in PR.
+
+**Error modes** — missing tier pin -> boot fails fast (Settings); whole chain exhausted -> GatewayError per tier semantics; router down -> Tier-2 default (service degradation, never a hang).
+
+**Zero-cost check** — all three tiers free pools via OmniRoute (NVIDIA NIM free tier included). $0.00.
+
+**Docs impact** — ARCHITECTURE §1 table already synced; BACKLOG 1.5; CHANGELOG; TEST-PLAN
+`test_dispatcher.py` row; ADR-16 consequences closed.
+
+### Sprint-1 skill rotation & teardown (MASTER DIRECTIVE §3)
+
+**Skills ingested for Sprint 1**: `mattpocock-skills/skills/tdd` ·
+`mattpocock-skills/skills/diagnosing-bugs` · `ponytail/skills/*` ·
+`guard-skills/clean-code-guard` · `everything-claude-code/agents/python-specialist`.
+
+**Teardown protocol (sprint exit)**: wipe `.claude/skills/*`, keep all code/tests in `src/` +
+`tests/`, verify the sacred floor (`test_owner_middleware.py`, `test_whitelist_guardrail.py`)
+green, and record the sprint entry + teardown result in `docs/10-CHECKPOINT.md`.

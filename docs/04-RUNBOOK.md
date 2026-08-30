@@ -10,7 +10,7 @@ Reproducibility rule: anything a build needs is checked, scripted, and documente
 | Git | 2.54+ | `git --version` |
 | FFmpeg | any recent | `winget install Gyan.FFmpeg` then reopen shell; `ffmpeg -version` |
 | GNU make | 4.4+ | `choco install make` (already present on dev machine) |
-| OmniRoute | latest | clone https://github.com/diegosouzapw/OmniRoute onto VPS; start service bound to localhost:20128 |
+| OmniRoute | latest | clone https://github.com/diegosouzapw/OmniRoute beside the core (co-located in the HF Space, ADR-15; locally for dev); start bound to localhost:20128 |
 | jq (optional) | — | `winget install jqlang.jq` (some uos scripts want it) |
 | uos CLI (optional) | 1.1.x | Local Universal Agentic OS developer CLI (bash) — `uos doctor`, worktree dispatch; not required to build or run Sara |
 
@@ -47,21 +47,63 @@ Prints a JSON report (`gateway` / `telegram_token` / `ffmpeg` / `overall`) and e
 crashes the process — read the report and decide. Use it after bootstrap and whenever
 Sara seems unreachable.
 
-## 4. VPS Deployment (production, free tier)
+### Voice latency smoke
 
-1. Provision a free-tier VPS (e.g., Oracle Cloud Always Free ARM, or GCP e2-micro).
-2. Install Docker + compose; copy repo; create `.env` from `.env.example`.
-3. Run OmniRoute on the VPS bound to `localhost:20128`; configure free provider pools.
-4. `docker compose up -d` (core container only; the bridge never runs on the VPS).
-5. Verify: bot responds to the owner; `curl -m 5 http://localhost:20128/v1/models` on the box.
+```powershell
+.venv\Scripts\python -c "import asyncio; from src.voice import VoicePipeline; p=VoicePipeline(voice='ar-JO-SanaNeural', rate='+0%', pitch='+0Hz'); asyncio.run(lambda: None)()"
+```
+
+Simpler: run the transcode proof — `pytest tests/test_audio_stream_opus.py -q` asserts
+real ffmpeg emits Ogg Opus from an in-memory stream with the first encoded chunk
+surfacing before producer completion (<600 ms first-chunk budget, binding Q1).
+
+### Streaming first-edit smoke (task 2.2, Audio-TTFT < 250 ms)
+
+```powershell
+pytest tests/test_chat_streamer.py::test_first_edit_within_250ms_ttfb -q
+```
+
+Asserts the placeholder edit path: first bubble edit fires <250 ms after stream start,
+subsequent edits coalesce at `STREAM_EDIT_INTERVAL_MS`, and the final bubble text is
+exact. Live: send the owner a text message — the «…» bubble appears immediately and the
+first words replace it within a quarter second.
+
+## 4. HF Space Deployment (production, free tier — ADR-15)
+
+Supersedes VPS deployment (ADR-05). One Docker Space co-locates OmniRoute +
+core; the Space's single public port serves the WSS bridge endpoint + `/health`.
+
+1. Create a private HF Space (Docker, 2 vCPU / 16 GB tier) in the owner account.
+2. Space Dockerfile (Sprint-4 task 4.4b): single image supervising OmniRoute
+   (`localhost:20128`) + the core; `app_port` = the public WSS/health port.
+3. All secrets go to **HF Secrets** (bot token, owner ID, OAuth client, bridge
+   token) — never the repo; `.env` is local-only for development.
+4. Configure free provider pools (3-tier brain per ADR-16) in OmniRoute.
+5. **Keep-alive is mandatory**: cron ping `GET /health` every 10 min
+   (e.g., cron-job.org) — free Spaces idle-sleep after prolonged silence.
+6. **Disposable filesystem**: anything that must survive a restart lives in the
+   git-backed vault (ADR-15 invariant); the OAuth token cache is vault-persisted
+   (encrypted) or the owner re-consents after restarts.
+7. Verify: bot responds to the owner; `curl -m 5 <SPACE_URL>/health` returns ok.
+
+### 4b. Cloud Run fallback (secondary host — documented alternative)
+
+If the Space is unavailable: build the SAME image (4.4b) and deploy to Google Cloud Run
+free tier — container reads `PORT`, min-instances=0 (cold starts noted; the keep-alive
+pinger keeps it warm), all secrets via Cloud Run environment variables. No committed
+terraform/CI for this path in v1.0.0 — activating it is an owner action documented here.
+The bridge daemon's `BRIDGE_SERVER_URL` simply points at the Cloud Run WSS URL instead.
 
 ## 5. PC Bridge Daemon (Windows)
 
 1. `make setup` on the PC; fill `[CORE <-> BRIDGE]` block of `.env`
-   (`BRIDGE_SERVER_URL` points at the VPS WSS endpoint; shared `BRIDGE_TOKEN`).
+   (`BRIDGE_SERVER_URL` points at the Space WSS endpoint; shared `BRIDGE_TOKEN`).
 2. Register as an auto-start task:
    `schtasks /Create /SC ONLOGON /TN VantrilexBridge /TR "pwsh -NoProfile -Command 'cd <repo>; make run-bridge'"`
-3. Confirm zero listening ports: `netstat -ab | findstr LISTENING` — no entry for the daemon.
+3. Listener check (directive: LAN port 8000): the daemon's ONLY listener is the
+   LAN-authenticated port 8000 (telemetry `GET /telemetry/live-state` + executor surface);
+   zero public-facing ports. Verify: `netstat -ab | findstr :8000` shows it bound to the
+   LAN address, and no other LISTENING entry for the daemon.
 4. Enable Wake-on-LAN in the NIC's advanced properties + BIOS ("Wake on Magic Packet"),
    on Ethernet.
 
@@ -134,6 +176,9 @@ updates it every morning).
 | Bot silent for everyone except owner | By design (ADR-06) | None — owner-only allowlist |
 | Non-whitelisted app request stalls | Confirmation pending | Approve/deny on Telegram; or add app to `config/whitelist.json` |
 | Voice note fails to send | ffmpeg missing/mispath | Re-run preflight; check `ffmpeg -version` inside the venv shell |
+| `GatewayError: all models exhausted (<tier chain>)` | A whole tier's chain down/quota — pools drained or OmniRoute offline | Check OmniRoute dashboard pools + `curl -m 5 http://localhost:20128/v1/models`; the log line names the last cause per model in the chain |
+| `GatewayError: fatal HTTP 401/403 on <model>` | Bad/missing gateway key | Verify `OMNIROUTE_API_KEY` in `.env`; never appears in logs (only status + body snippet) |
+| `dispatcher ... -> default tier2` (warning) | Tier-1 router failed or replied non-JSON (ADR-18 degradation) | Service continues at Tier 2; inspect the logged router reply; persistent repeats -> probe the `google/gemini-3.5-flash-lite` pool |
 
 ## 8. Operational Safety
 

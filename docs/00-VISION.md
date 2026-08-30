@@ -10,13 +10,18 @@ via Telegram in warm, authentic Jordanian Arabic.
 
 ## 2. Confirmed Mission (v1.0)
 
-An owner-only, strictly $0.00/month executive assistant living on a free-tier
-VPS 24/7 — conversing in Jordanian Arabic over Telegram text and Ogg Opus voice
-notes, reasoning through OmniRoute's free provider pools, triaging Gmail into
-text/voice-note escalations, driving Calendar/Drive/Contacts/Tasks, and filing
-everything into a git-backed PARA+Zettelkasten Obsidian vault — while a thin
-outbound-only daemon on the owner's Windows PC executes whitelisted automation
-via Windows-MCP and Wake-on-LAN.
+An owner-only, strictly $0.00/month executive assistant living 24/7 in a free
+Hugging Face Space (ADR-15 — one Docker container co-locating the OmniRoute
+gateway; all durable state in the git-backed vault) — conversing in Jordanian
+Arabic over Telegram text and Ogg Opus voice notes, reasoning through the
+3-tier multi-model brain via OmniRoute's free pools (ADR-16: fast reflex / tool
+execution / heavy planning behind the Fast Front-Door Dispatcher, ADR-18), triaging Gmail into
+text/voice-note escalations, driving Calendar/Drive/Contacts/Tasks, verifying
+the owner's voiceprint with a warm Guest-Mode fallback (M2), keeping a daily
+ledger with a randomized evening check-in (M3), and filing everything into a
+git-backed PARA+Zettelkasten Obsidian vault — while a thin outbound-only daemon
+on the owner's Windows PC executes whitelisted automation via Windows-MCP and
+Wake-on-LAN.
 
 ## 3. Core Pillars & Value Proposition
 
@@ -36,12 +41,17 @@ via Windows-MCP and Wake-on-LAN.
 | KPI | Target |
 |---|---|
 | Voice-note response latency | < 600 ms to first audible chunk |
+| Tier-1 reflex reply latency (TTFT) | < 250 ms (Fast Front-Door Dispatcher, ADR-18) |
+| Voice biometric verification | < 50 ms per chunk, CPU-only (ADR-17) |
 | Monthly infrastructure cost | Exactly $0.00 |
 | Unauthorized execution of non-whitelisted desktop actions | 0% |
 | Non-owner Telegram accounts processed | 0 (silent drop) |
+| Guest-Mode private-tool leakage | 0 (voiceprint lockdown) |
+| Test coverage | >= 85% (gate-enforced from Sprint 4) |
 
 ## 5. Persona Vibe
 
 Witty teasing and gentle scolding for procrastination; empathetic support during
-busy or stressed days; direct firmness on urgent priorities. Strictly platonic,
-professional, warm — "أهلاً يا هلا", "ولا يهمك", "من عيوني".
+busy or stressed days; direct firmness on urgent priorities. Affectionate, warm
+banter that pushes friendship boundaries is welcome — strictly no romantic
+roleplay — professional, warm — "أهلاً يا هلا", "ولا يهمك", "من عيوني".

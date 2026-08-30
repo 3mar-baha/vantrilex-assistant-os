@@ -23,6 +23,7 @@ build/
 
 # Working artifacts
 .ingest/
+.claude/skills/
 .claude/plans/
 _reference_repo/
 
@@ -31,5 +32,5 @@ Thumbs.db
 .DS_Store
 desktop.ini
 
-# session-scoped skill aids (rotation is per-sprint in core-foundation)
-.claude/skills/
+# Runtime data dumps (state lives in the vault, per ADR-15)
+data/

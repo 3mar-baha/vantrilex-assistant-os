@@ -1,0 +1,11 @@
+{
+  "allowed_apps": [
+    {"name": "calculator", "executable": "calc.exe", "auto_approve": true},
+    {"name": "obsidian", "executable": "Obsidian.exe", "auto_approve": true}
+  ],
+  "restricted_actions": [
+    {"action": "shutdown", "requires_confirmation": true},
+    {"action": "restart", "requires_confirmation": true},
+    {"action": "sleep", "requires_confirmation": true}
+  ]
+}

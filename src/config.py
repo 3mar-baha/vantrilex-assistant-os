@@ -1,6 +1,8 @@
 """Application settings: pydantic v2 validation over .env + process environment."""
 
+from datetime import time
 from functools import lru_cache
+from pathlib import Path
 
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -9,10 +11,12 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 _REQUIRED_FIELDS = (
     "omniroute_base_url",
     "omniroute_api_key",
-    "primary_model",
     "fast_model",
+    "medium_model",
+    "heavy_model",
     "telegram_bot_token",
     "authorized_user_id",
+    "vault_enc_key",  # consumed by task 2.1 vault-state encryption (ADR-15)
 )
 
 
@@ -21,10 +25,32 @@ class Settings(BaseSettings):
 
     omniroute_base_url: str  # OMNIROUTE_BASE_URL
     omniroute_api_key: str  # OMNIROUTE_API_KEY
-    primary_model: str  # PRIMARY_MODEL
-    fast_model: str  # FAST_MODEL
+    fast_model: str  # FAST_MODEL (tier 1, ADR-16)
+    medium_model: str  # MEDIUM_MODEL (tier 2)
+    heavy_model: str  # HEAVY_MODEL (tier 3)
+    fast_model_fallbacks: str | None = None  # FAST_MODEL_FALLBACKS (comma-separated)
+    medium_model_fallbacks: str | None = None  # MEDIUM_MODEL_FALLBACKS
+    heavy_model_fallbacks: str | None = None  # HEAVY_MODEL_FALLBACKS
     telegram_bot_token: str  # TELEGRAM_BOT_TOKEN
     authorized_user_id: int  # AUTHORIZED_USER_ID (coerced from string)
+    stream_edit_interval_ms: int = 750  # STREAM_EDIT_INTERVAL_MS (§2.2 coalesced edits)
+    vault_local_path: Path = Path("./vault")  # VAULT_LOCAL_PATH (ADR-15 durable state root)
+    vault_enc_key: str  # VAULT_ENC_KEY (Fernet key, secrets.token_urlsafe)
+    gmail_pubsub_topic: str | None = (
+        None  # GMAIL_PUBSUB_TOPIC (watch registration; empty -> poll only)
+    )
+    gmail_poll_seconds: int = 120  # GMAIL_POLL_SECONDS
+    gmail_sweep_days: int = 2  # GMAIL_SWEEP_DAYS
+    triage_body_max_chars: int = 8000  # TRIAGE_BODY_MAX_CHARS
+    google_vip_senders: str | None = None  # GOOGLE_VIP_SENDERS (comma-separated; empty -> none)
+    triage_keywords_ar: str | None = None  # TRIAGE_KEYWORDS_AR (empty -> module default)
+    triage_keywords_en: str | None = None  # TRIAGE_KEYWORDS_EN (empty -> module default)
+    critical_ping_interval_min: int = 5  # CRITICAL_PING_INTERVAL_MIN
+    critical_ping_max: int = 6  # CRITICAL_PING_MAX (0 = unlimited)
+    brief_enabled: bool = True  # BRIEF_ENABLED (daily brief, §2.4)
+    brief_local_time: str = "07:30"  # BRIEF_LOCAL_TIME (HH:MM, Amman local)
+    voiceprint_threshold: float = 0.75  # VOICEPRINT_THRESHOLD (ADR-17 owner-voice match)
+    voiceprint_model: str = "speechbrain/spkrec-ecapa-voxceleb"  # VOICEPRINT_MODEL (ECAPA-TDNN)
 
     # Declared now (validates every var in .env.example); consumed by later sprints.
     # Optional fields become required in the commit whose task first consumes them.
@@ -54,12 +80,37 @@ class Settings(BaseSettings):
     @classmethod
     def _normalize_empty_strings(cls, value, info):
         """Blank env assignments read as unset for optional fields and as missing
-        for the six critical ones (.env.example ships empty placeholders)."""
+        for the critical ones (.env.example ships empty placeholders)."""
         if not (isinstance(value, str) and not value.strip()):
             return value
         if info.field_name in _REQUIRED_FIELDS:
             raise ValueError("must not be empty")
         return None
+
+    @field_validator("brief_local_time")
+    @classmethod
+    def _brief_time_is_hhmm(cls, value: str) -> str:
+        try:
+            time.fromisoformat(value)
+        except ValueError as error:  # loud settings failure (spec §2.4 error modes)
+            raise ValueError("BRIEF_LOCAL_TIME must be HH:MM (24h)") from error
+        return value
+
+    @staticmethod
+    def _split_fallbacks(raw: str | None) -> list[str]:
+        return [model.strip() for model in (raw or "").split(",") if model.strip()]
+
+    @property
+    def fast_chain(self) -> list[str]:
+        return [self.fast_model, *self._split_fallbacks(self.fast_model_fallbacks)]
+
+    @property
+    def medium_chain(self) -> list[str]:
+        return [self.medium_model, *self._split_fallbacks(self.medium_model_fallbacks)]
+
+    @property
+    def heavy_chain(self) -> list[str]:
+        return [self.heavy_model, *self._split_fallbacks(self.heavy_model_fallbacks)]
 
 
 @lru_cache(maxsize=1)

@@ -1,0 +1,52 @@
+{
+  "agent": {
+    "name": "Sara (سارة)",
+    "dialect": "ar-JO",
+    "voice": "ar-JO-SanaNeural",
+    "personality": "Warm, executive, polymath tutor (10 languages & sciences), supportive friend; affectionate banter, strictly no romantic roleplay",
+    "brain": {
+      "gateway": "omniroute",
+      "routing": "3-tier behind fast-frontdoor-dispatcher (ADR-16/ADR-18)",
+      "tier1_fast": {
+        "model": "google/gemini-3.5-flash-lite",
+        "fallbacks": ["meta-llama/llama-3.3-70b-instruct", "nemotron-3.5-lightning"],
+        "ttft_target_ms": 250
+      },
+      "tier2_medium": {
+        "model": "google/gemini-3.7-flash",
+        "fallbacks": ["z-ai/glm-5.3-flash"]
+      },
+      "tier3_heavy": {
+        "model": "nvidia/nemotron-3-ultra-550b",
+        "fallbacks": ["google/gemini-3.7-flash", "google/gemini-3.1-pro"]
+      }
+    },
+    "auth": {
+      "owner_allowlist": "AUTHORIZED_USER_ID",
+      "voice_biometrics": {
+        "engine": "speechbrain-ecapa-tdnn",
+        "fallback": "resemblyzer",
+        "similarity_threshold_env": "VOICE_SIMILARITY_THRESHOLD",
+        "guest_mode": "greeting + zero-trust lockdown + message-taking"
+      }
+    },
+    "vault": {
+      "mandatory_dirs": [
+        "Contacts",
+        "Call_Transcripts",
+        "Studies",
+        "Voice_Memos",
+        "Daily_Logs"
+      ],
+      "profile_files": [
+        "02_Areas/Profile/User_Info.md",
+        "02_Areas/Profile/Dialect_Notes.md"
+      ]
+    },
+    "mcp_servers": [
+      "google_workspace_mcp",
+      "obsidian_mcp",
+      "windows_mcp"
+    ]
+  }
+}
