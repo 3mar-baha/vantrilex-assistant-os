@@ -62,6 +62,16 @@ graph TD
 
 Classifier input is untrusted data: parsed email bodies can never trigger PC actions.
 
+Refinement lane (v1.0): deterministic heuristics first; the ambiguous remainder gets
+ONE `FAST_MODEL` call (temperature 0, JSON verdict `{tier, reason}`, 15 s timeout) with
+the body wrapped between `<<<EMAIL_DATA>>>` / `<<<END_EMAIL_DATA>>>` markers and a
+containment clause in the system prompt. The final tier is the higher-visibility of
+heuristic vs model — the model can rescue upward but never downgrade or silence
+(model failure/timeout/invalid JSON ⇒ heuristic verdict alone). Critical mail repeats
+its ping every `CRITICAL_PING_INTERVAL_MIN` minutes until the ack button, any owner
+activity, or `CRITICAL_PING_MAX` pings (`0` = unlimited) — VIP senders skip the model
+entirely.
+
 Delivery note (v1.0): Gmail `users.watch` is registered once at startup when
 `GMAIL_PUBSUB_TOPIC` is set (push option kept open), but inbox delivery is POLLING —
 historyId incremental with query-sweep fallback — preserving the zero-inbound-ports

@@ -252,6 +252,32 @@ social agent -> v2.0.
       Docs: TEST-PLAN rows (google_suite + gmail_watch), ARCHITECTURE §4
       delivery footnote. HALTED — next per owner: 2.3 triage classifier +
       dispatcher.
+
+      **TASK 2.3 DONE (2026-08-30, sprint-2 §2.3)**: `src/email_triage.py` —
+      Tier (drop/semi/important/critical) + _VISIBILITY, TriageDecision,
+      escape_mdv2, render_semi (fixed template, escaped slots, excerpt ≤400),
+      render_voice_script (ar-JO), TriageClassifier.heuristic PURE (VIP
+      sender ∈ google_vip_senders -> +0.6 AND floor CRITICAL, subject
+      keyword +0.25 each distinct + floor SEMI, body +0.15 each distinct
+      capped +0.30, list_unsubscribe −0.40; bands ≥0.9/[0.6,0.9)/[0.3,0.6)/
+      <0.3), classify (VIP-floor and obvious-newsletter skip the brain;
+      else ONE FAST_MODEL call temperature 0 max_tokens 120, 15 s timeout,
+      body wrapped <<<EMAIL_DATA>>>/<<<END_EMAIL_DATA>>> + containment
+      clause; merge = higher visibility — rescue upward never downgrade;
+      invalid JSON/bad tier/timeout/exception -> heuristic alone), Dispatcher
+      (register callback «تم الاطلاع» triage:ack:{id}; dispatch matrix DROP
+      log-only / SEMI MarkdownV2 text with plain-text retry / IMPORTANT voice
+      note with text fallback / CRITICAL priority voice + ping task every
+      critical_ping_interval_min (clamped ≥1 min) until ack / note_owner_
+      activity / critical_ping_max (0 = unlimited)); settings keys
+      google_vip_senders, triage_keywords_ar/en (empty -> module defaults),
+      critical_ping_interval_min=5, critical_ping_max=6. Tests AC1-AC10 per
+      spec mapping incl. injection-twin trace equality + AST import-surface
+      scan (no bridge/whitelist/subprocess/socket/system identifiers).
+      Gate green (102 passed, Security Gate OK, Docs Guard OK). Commit
+      `438bfb3` on core-foundation. Docs: ARCHITECTURE §4 refinement lane +
+      ping cap, RUNBOOK §6 triage tuning, TEST-PLAN row. HALTED — next per
+      owner: 2.4 daily brief composer.
 - [ ] Phase 4 — Harden & Release: guards, full gate, tag v1.0.0, release report
 
 ## Open items / blockers

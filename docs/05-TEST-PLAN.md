@@ -15,7 +15,7 @@
 | `test_edge_tts_pipeline.py` | Jordanian Arabic synthesis into BytesIO; Ogg Opus output; no disk writes |
 | `test_audio_stream_opus.py` | ffmpeg transcode produces valid Ogg Opus headers; first-chunk emission |
 | `test_owner_middleware.py` | Non-owner updates dropped silently; owner passes through |
-| `test_email_triage.py` | Correct dispatch per tier (drop/text/voice-note/priority-ping); untrusted-body containment |
+| `test_email_triage.py` | Heuristic weights/bands/floors (VIP, keywords, bulk); LLM refinement containment + never-downgrade merge + fallback; per-tier dispatch (drop/text/voice/priority-ping); ping stop conditions; MarkdownV2 escaping; AST import-surface scan |
 | `test_google_clients.py` | Calendar/Tasks CRUD shapes; refresh-token reuse; fixture-driven parsing |
 | `test_google_suite.py` | Calendar/Tasks/Drive/Contacts fixtures parse to typed UTC-normalized models |
 | `test_gmail_watch.py` | Sweep/incremental fetch, dedupe, dispatch-then-mark redelivery, watch gating, corrupt-state recovery, lock serialization, parse catalog |

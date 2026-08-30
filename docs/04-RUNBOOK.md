@@ -100,6 +100,20 @@ Re-bootstrap when: the token cache is missing/corrupt (Sara logs `google token c
 corrupt -> treating absent` and continues degraded) or Google rejects the refreshed
 grant (`GoogleAuthError ... re-run the OAuth bootstrap`).
 
+### Email triage tuning (owner, `.env`)
+
+Triage (§2.3) reads five optional variables; edit, then restart the core to apply
+(settings are cached at boot):
+
+- `GOOGLE_VIP_SENDERS` — comma-separated sender addresses that always reach Sara as
+  **Critical** (voice note + repeat ping) without any model call. Empty = none.
+- `TRIAGE_KEYWORDS_AR` / `TRIAGE_KEYWORDS_EN` — urgency keywords (subject hits weigh
+  double body hits). Empty = built-in defaults (عاجل، مستعجل، ضروري، فوراً، حالا /
+  urgent, asap, critical, immediately, deadline).
+- `CRITICAL_PING_INTERVAL_MIN` — repeat-ping spacing for Critical mail (default 5).
+- `CRITICAL_PING_MAX` — pings per Critical message before Sara stops (default 6;
+  `0` = unlimited until you press «تم الاطلاع» or send any activity).
+
 ## 7. Troubleshooting
 
 | Symptom | Cause | Fix |
