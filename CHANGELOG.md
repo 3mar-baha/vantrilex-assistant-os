@@ -48,6 +48,16 @@ product release tags start independently at v1.0.0.)
   marker) now feeds BOTH the heuristic body-keyword scan and the FAST refinement
   payload — less free-pool token burn, identical tier decisions. Settings:
   TOKENJUICE_MAX_CHARS=4000.
+- **Sprint 2 / task 2.5 — skill-voice-to-vault-transcriber (ADR-22)**:
+  `src/skills/voice_to_vault_transcriber.py` — owner voice notes (post-biometric-gate
+  only) decode in-memory via ffmpeg to 16 kHz mono s16le and transcribe with LOCAL
+  faster-whisper (MIT, CPU int8; cloud STT settled to never — ADR-22); notes file
+  atomically to `Voice_Memos/YYYY-MM-DD-HHMM.md` (YAML frontmatter date/source/
+  duration_s, same-minute numeric suffixes, empty transcripts filed as `(empty)`,
+  write retried once and never blocking the reply). Bot wiring: enrolled owner voice →
+  transcribe → file → transcript enters the standard streamed text pipeline; guest
+  voice never reaches the transcriber. Settings: WHISPER_MODEL_SIZE=small,
+  WHISPER_COMPUTE_TYPE=int8, VOICE_MEMOS_DIR=Voice_Memos.
 
 ### Changed
 - **Second master-directive alignment (2026-08-29)**: ADR-16 amended in place to the

@@ -9,8 +9,8 @@ specs carry the binding AC→pytest contracts; new capabilities specced in
 `docs/specs/master-directive-2026-08-29.md` (M1-M9) + ADR-16..21.
 
 **Status matrix (2026-08-30)**: Sprint 1 complete ✅ (teardown in `docs/10-CHECKPOINT.md`).
-Sprint 2 in progress: 2.1 · 2.2 · 2.3 · 2.3b · 2.4 (triage + daily brief + TokenJuice)
-done ✅ — next: 2.5 → 2.6, sprint-level HALT at exit.
+Sprint 2 in progress: 2.1 · 2.2 · 2.3 · 2.3b · 2.4 · 2.5 done ✅ — next: 2.6,
+sprint-level HALT at exit.
 
 **Skill rotation**: each sprint ingests upstream skills into `.claude/skills/` for its
 duration and applies the **teardown protocol at sprint exit** — wipe `.claude/skills/*`,
@@ -83,10 +83,13 @@ Skills ingested (Sprint 2): `mattpocock/skills` TDD · `guard-skills` clean-code
       *AC*: `test_email_triage.py` + `tests/test_triage_compaction.py` per spec M7.
       Done 2026-08-30: triage + daily brief + `tokenjuice_compact` (feeds heuristic
       scoring AND the FAST refinement payload) green; settings `TOKENJUICE_MAX_CHARS=4000`.
-- [ ] **2.5 `skill-voice-to-vault-transcriber`**: inbound voice notes transcribed via LOCAL
+- [x] **2.5 `skill-voice-to-vault-transcriber`**: inbound voice notes transcribed via LOCAL
       Whisper (STT decision settled — no cloud probe) → YAML-frontmattered Markdown in
       `Voice_Memos/`.
       *AC*: fixture Ogg file produces correctly filed note.
+      Done 2026-08-30: `src/skills/voice_to_vault_transcriber.py` (faster-whisper 1.2.1,
+      int8 CPU, in-memory ffmpeg decode; atomic same-minute-safe notes) + bot wiring —
+      enrolled owner voice → transcribe → file → streamed reply (AC9 + zero-cloud AST scan).
 - [ ] **2.6 `skill-evening-proactive-journaler`** — M3 + daily brief: `Daily_Logs/`
       ledger, randomized 18:00-19:30 proactive check-in (fires when the day's ledger is
       sparse, calendar-conflict-guarded), morning/daily brief folded in.

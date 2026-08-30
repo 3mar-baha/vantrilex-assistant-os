@@ -27,7 +27,7 @@
 | `test_email_triage.py` | Heuristic weights/bands/floors (VIP, keywords, bulk); LLM refinement containment + never-downgrade merge + fallback; per-tier dispatch (drop/text/voice/priority-ping); ping stop conditions; MarkdownV2 escaping; AST import-surface scan |
 | `test_triage_compaction.py` | M7/ADR-19: signatures/boilerplate/quotes stripped; body capped; tier decisions unchanged on compacted input |
 | `test_journal.py` | M3: chronological ledger; randomized once-daily evening trigger; calendar conflict suppresses; thin ledger prompts |
-| `test_voice_transcribe.py` | Inbound voice note -> local Whisper transcription -> YAML-tagged note filed to `Voice_Memos/` |
+| `test_voice_to_vault_transcriber.py` | §2.5/AC9: real ffmpeg decode + stubbed-whisper deterministic text -> YAML note filed to `Voice_Memos/` (atomic, same-minute suffix); ZERO outbound STT (AST scan); decode failure chained; empty `(empty)` note; write retry once, never blocks; model-missing names RUNBOOK warmup |
 | `test_google_clients.py` | Calendar/Tasks CRUD shapes; refresh-token reuse; fixture-driven parsing |
 | `test_google_suite.py` | Calendar/Tasks/Drive/Contacts fixtures parse to typed UTC-normalized models |
 | `test_gmail_watch.py` | Sweep/incremental fetch, dedupe, dispatch-then-mark redelivery, watch gating, corrupt-state recovery, lock serialization, parse catalog |

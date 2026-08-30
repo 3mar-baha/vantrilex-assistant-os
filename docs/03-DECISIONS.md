@@ -185,8 +185,7 @@ Supersedes draft preference for Google Cloud Run deployment.
 - **Consequences**: Binding Q1 (<600 ms first audio chunk) is met by construction; the HF
   Spaces disposable filesystem never sees audio temp files.
 
-## ADR-21: Obsidian 5-Directory Vault Contract — **Accepted** (2026-08-29, MASTER DIRECTIVE)
-- **Decision**: The vault carries five mandatory top-level directories — `Contacts/`,
+## ADR-21: Obsidian 5-Directory Vault Contract — **Accepted** (2026-08-29, MASTER DIRECTIVE)- **Decision**: The vault carries five mandatory top-level directories — `Contacts/`,
   `Call_Transcripts/` (written from v1.1), `Studies/`, `Voice_Memos/`, `Daily_Logs/` —
   plus `02_Areas/Profile/User_Info.md` and `02_Areas/Profile/Dialect_Notes.md`; a
   first-boot guard test asserts every one exists. Taxonomy expansion is dynamic (Sara
@@ -199,3 +198,17 @@ Supersedes draft preference for Google Cloud Run deployment.
 > Vault, Owner-only Drop) collide with settled ledger entries (ADR-04 Persona, ADR-05
 > VPS — superseded by ADR-15, ADR-06 Owner-only, ADR-07 v1.0 scope). They are recorded
 > here as ADR-19/20/21; owner-only drop remains ADR-06.
+
+## ADR-22: Local Whisper STT — Never Cloud — **Accepted** (2026-08-30, settled owner ruling)
+- **Context**: Inbound voice notes need transcription. Cloud STT (Google/Whisper API)
+  would break the $0.00 invariant and leak the owner's speech to third parties; the
+  "no cloud STT probe" ruling is settled — no evaluation pass needed.
+- **Decision**: LOCAL `faster-whisper` (MIT) on the CPU executor (`int8` compute),
+  model pinned by `WHISPER_MODEL_SIZE` (default `small`), decoded in-memory by ffmpeg
+  to 16 kHz mono s16le; first-run model download is a documented RUNBOOK warmup step.
+  Runs only after the ADR-17 biometric gate passes — guest voice never reaches the
+  transcriber. Landed sprint-2 2.5 (`src/skills/voice_to_vault_transcriber.py`,
+  faster-whisper 1.2.1 / ctranslate2 4.8 wheel-verified on py3.12 Windows).
+- **Consequences**: $0.00 preserved end-to-end (no STT API ever); the module's import
+  surface carries no network libraries (AST-scan tested); first-run model download is
+  the documented RUNBOOK warmup, offline afterwards.

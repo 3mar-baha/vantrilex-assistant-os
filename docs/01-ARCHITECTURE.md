@@ -153,6 +153,14 @@ automatically. Conversations that produce actionable tasks close with Sara askin
 "هل بتحب ألخص لك شو رح أعمل هسا؟" — then recites the summary and files it
 (suppressed for casual check-ins). Full transcript persistence applies to calls from v1.1.
 
+Voice-to-vault leg (sprint-2 2.5, `src/skills/voice_to_vault_transcriber.py`): after the
+2.3 biometric gate passes, the owner's voice note decodes in-memory (ffmpeg, 16 kHz mono
+s16le) and transcribes via LOCAL faster-whisper (MIT, CPU `int8` — cloud STT settled to
+never, ADR-22) on a dedicated executor, then files `Voice_Memos/YYYY-MM-DD-HHMM.md`
+atomically (YAML frontmatter: `date` (+03:00), `source`, `duration_s`; same-minute
+memos get numeric suffixes). The transcript then enters the standard owner-text
+pipeline — tier selection is the ADR-18 dispatcher's decision, never this module's.
+
 ### 6b. Social Graph & Multi-Speaker Enrollment (`skill-social-graph-and-voice-enrollment`)
 
 The vault's `Contacts/` tree is a structured social graph, each person a dossier with

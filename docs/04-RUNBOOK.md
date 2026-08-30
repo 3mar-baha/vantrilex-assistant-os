@@ -160,6 +160,23 @@ Triage (§2.3) reads five optional variables; edit, then restart the core to app
   footers and tracking boilerplate are stripped and the remainder capped. Raise it
   only if long legit bodies lose needed context.
 
+### Whisper warmup (one-time, owner shell)
+
+Voice memos transcribe with LOCAL faster-whisper (ADR-22 — never cloud STT). The first
+run downloads the model into the local HF cache; warm it up once before going live so
+the first real memo never pays that cost:
+
+```
+.venv/Scripts/python -c "from faster_whisper import WhisperModel; WhisperModel('small', device='cpu', compute_type='int8')"
+```
+
+Tuning (`.env`): `WHISPER_MODEL_SIZE` (tiny/base/small/medium — `small` balances Arabic
+accuracy vs CPU time), `WHISPER_COMPUTE_TYPE` (default `int8`), `VOICE_MEMOS_DIR`
+(default `Voice_Memos`). Transcription runs only for biometric-verified owner voice
+notes; each memo files to `{VAULT_LOCAL_PATH}/Voice_Memos/YYYY-MM-DD-HHMM.md` and the
+transcript flows through the normal reply pipeline. If transcription fails, Sara still
+acknowledges the voice note (text ack) and the failure is logged loud.
+
 ### Daily brief schedule (owner, `.env`)
 
 `BRIEF_ENABLED=true` + `BRIEF_LOCAL_TIME=07:30` (24h, local `TZ`): once per day Sara

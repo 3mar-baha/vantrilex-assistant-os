@@ -340,8 +340,20 @@ social agent -> v2.0.
       classification_unchanged_on_compacted_input + footer/whitespace/keyword-survival) +
       `test_email_triage.py::test_tokenjuice_strips_before_llm` + `test_vip_skips_llm_refinement`
       (AC8). Commits `67c9d7a` (red) + `b8f2c5c` (green) + docs. Gate green (134 passed,
-      Security Gate OK, Docs Guard OK). NEXT: 2.5 voice-to-vault transcriber -> 2.6 journaler;
-      HALT only at sprint exit (then merge core-foundation -> main + push per owner directive).
+      Security Gate OK, Docs Guard OK).
+      **TASK 2.5 DONE (2026-08-30, sprint-2 §2.5 voice-to-vault transcriber, ADR-22)**:
+      `src/skills/voice_to_vault_transcriber.py` — `VoiceToVault` (in-memory ffmpeg
+      16 kHz mono s16le decode -> LOCAL faster-whisper 1.2.1 CPU int8, lazy model load
+      naming the RUNBOOK warmup on failure; atomic `Voice_Memos/YYYY-MM-DD-HHMM.md`
+      YAML notes, same-minute suffixes, `(empty)` fallback, write retried once never
+      blocking) + bot wiring: enrolled owner voice -> transcribe -> file -> transcript
+      enters the standard streamed text pipeline; guest voice never reaches it.
+      faster-whisper installed (1.2.1 / ctranslate2 4.8, wheel-verified py3.12 win).
+      Tests `tests/test_voice_to_vault_transcriber.py` (AC9 + zero-cloud AST scan + 5
+      error modes) + bot-shell wiring test. Commits `5df9f80` (red) + `ed03b03`
+      (module) + `8d1e385` (red wiring) + `afc8975` (wiring) + docs. Gate green (142
+      passed, Security Gate OK, Docs Guard OK). NEXT: 2.6 evening journaler -> sprint
+      exit (teardown + Guide review + merge core-foundation -> main + push, then HALT).
 - [ ] Phase 4 — Harden & Release: guards, full gate, tag v1.0.0, release report
 
 ## Open items / blockers
