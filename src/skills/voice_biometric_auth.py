@@ -102,12 +102,26 @@ async def verify_or_lockdown(
     ogg_opus: bytes,
     vault_root: Path,
     enc_key: str,
+    registry=None,
 ) -> bool:
-    """True -> continue normal owner handling. False -> Guest Mode lockdown done:
-    one staging note + the lockdown reply, and NOTHING else (no gateway calls
-    carrying personal context, no whitelist, no PC actions, no other writes)."""
+    """True -> continue normal owner handling. False -> non-owner handled: a known
+    contact gets the warm CONTACT_MODE_AR reply (message-taking only), anyone else
+    gets the Guest Mode lockdown (one staging note + reply) — in both cases NOTHING
+    privileged runs (no gateway calls carrying personal context, no whitelist, no
+    PC actions, no writes beyond the guest staging note)."""
     if await bio.verify(ogg_opus):
         return True
+    if registry is not None and bio.last_vector is not None:
+        from src.skills.social_enrollment import CONTACT_MODE_AR  # local: avoids import cycle
+
+        try:
+            verdict = await registry.match_vector(bio.last_vector)
+        except Exception:  # noqa: BLE001 — registry failure fails closed to Guest Mode
+            logger.exception("voiceprint registry match failed — treating as unknown")
+            verdict = None
+        if verdict is not None and verdict.role == "contact":
+            await bot.send_message(chat_id, CONTACT_MODE_AR)
+            return False
     try:
         stage_guest_note(vault_root, bio.last_vector or [], enc_key=enc_key)
     except Exception:  # noqa: BLE001 — staging failure never blocks the lockdown reply

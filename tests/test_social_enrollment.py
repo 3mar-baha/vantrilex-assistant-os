@@ -152,3 +152,44 @@ def test_pending_briefs_survive_restart(tmp_path):
     assert len(briefs) == 1
     assert briefs[0].claimed_name == "أحمد"
     assert "أحمد" in briefs[0].transcript_hint
+
+
+async def test_contact_mode_zero_privileged_calls(fake_bot, make_shell, monkeypatch, tmp_path):
+    """Containment proof: a recognized contact gets ONLY the warm message-taking
+    reply — zero gateway calls, zero subprocess, zero guest staging notes."""
+    from src.bot import _ENROLL_PENDING
+    from tests.conftest import OWNER_ID, make_update
+
+    monkeypatch.chdir(tmp_path)
+    vault = tmp_path / "vault"
+    seed_bio = VoiceBiometrics(embedding_path=vault / "State" / "owner_voiceprint.enc", enc_key=KEY)
+    VoiceprintRegistry(bio=seed_bio, vault_root=vault, enc_key=KEY).enroll(
+        "أحمد", "Family", AHMAD_VEC
+    )
+
+    shell = make_shell(VAULT_ENC_KEY=KEY)
+    bot = fake_bot()
+
+    async def fake_download(file, destination=None, **kwargs):
+        destination.write(b"FAKE-OGG")
+
+    def _no_subprocess(*args, **kwargs):
+        raise AssertionError("privileged subprocess ran during contact mode")
+
+    monkeypatch.setattr(bot, "download", fake_download)
+    monkeypatch.setattr("src.skills.voice_biometric_auth.subprocess.run", _no_subprocess)
+    monkeypatch.setattr(VoiceBiometrics, "_embed_sync", lambda self, ogg: list(OWNER_VEC))
+    try:
+        await shell.dp.feed_update(bot, make_update(1, OWNER_ID, "/enroll-voice", command=True))
+        await shell.dp.feed_update(
+            bot, make_update(2, OWNER_ID, voice=True)
+        )  # seal owner voiceprint
+
+        monkeypatch.setattr(VoiceBiometrics, "_embed_sync", lambda self, ogg: list(AHMAD_VEC))
+        await shell.dp.feed_update(bot, make_update(3, OWNER_ID, voice=True))
+        assert bot.session.sent("SendMessage")[-1].method.text == CONTACT_MODE_AR
+        assert shell.gateway.router_calls == []
+        assert shell.gateway.stream_calls == []
+        assert list((vault / "Voice_Memos" / "Pending_Speakers").glob("*.json")) == []
+    finally:
+        _ENROLL_PENDING.clear()

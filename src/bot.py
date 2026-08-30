@@ -20,6 +20,7 @@ from src.config import Settings
 from src.dispatcher import FrontDoorDispatcher
 from src.gateway import GatewayError, OmniRouteClient, Tier
 from src.middleware import OwnerOnlyMiddleware
+from src.skills.social_enrollment import VoiceprintRegistry
 from src.skills.telegram_chat_streamer import ChatStreamer
 from src.skills.voice_biometric_auth import VoiceBiometrics, verify_or_lockdown
 from src.voice import VoicePipeline
@@ -56,6 +57,12 @@ def build_dispatcher(gateway, voice, settings: Settings) -> Dispatcher:
         threshold=settings.voiceprint_threshold,
         model_id=settings.voiceprint_model,
         enc_key=settings.vault_enc_key,
+    )
+    registry = VoiceprintRegistry(
+        bio=bio,
+        vault_root=Path(settings.vault_local_path),
+        enc_key=settings.vault_enc_key,
+        threshold=settings.voiceprint_threshold,
     )
 
     @dp.message(CommandStart())
@@ -95,6 +102,7 @@ def build_dispatcher(gateway, voice, settings: Settings) -> Dispatcher:
             ogg_opus=ogg,
             vault_root=Path(settings.vault_local_path),
             enc_key=settings.vault_enc_key,
+            registry=registry,
         )
         if allowed:
             await message.answer(VOICE_ACK_AR)
