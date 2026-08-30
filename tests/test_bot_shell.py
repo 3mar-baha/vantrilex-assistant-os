@@ -10,17 +10,22 @@ import asyncio
 import json
 
 import pytest
+from cryptography.fernet import Fernet
 from loguru import logger
 
 from src.bot import (
+    _ENROLL_PENDING,
     _STREAMS,
     APOLOGY_AR,
+    ENROLL_DONE_AR,
+    ENROLL_PROMPT_AR,
     HELP_AR,
     SYSTEM_PROMPT_AR,
     VOICE_ACK_AR,
     WELCOME_AR,
 )
 from src.gateway import GatewayError
+from src.skills.voice_biometric_auth import GUEST_LOCKDOWN_AR, VoiceBiometrics
 from tests.conftest import OWNER_ID, StreamProgram, drain, make_update, wait_until
 
 
@@ -115,6 +120,37 @@ async def test_voice_note_acknowledged_without_brain_call(fake_bot, make_shell):
     assert bot.session.sent("SendMessage")[0].method.text == VOICE_ACK_AR
     assert shell.gateway.router_calls == []
     assert shell.gateway.stream_calls == []
+
+
+async def test_enroll_voice_flow_and_biometric_gate(fake_bot, make_shell, monkeypatch, tmp_path):
+    """2.3 wiring: /enroll-voice -> next voice seals the voiceprint; owner voice
+    keeps the static ack; a below-threshold voice triggers Guest Mode lockdown."""
+    monkeypatch.chdir(tmp_path)  # ./vault under VAULT_LOCAL_PATH lands inside tmp_path
+    shell = make_shell(VAULT_ENC_KEY=Fernet.generate_key().decode())
+    bot = fake_bot()
+
+    async def fake_download(file, destination=None, **kwargs):
+        destination.write(b"FAKE-OGG")
+
+    monkeypatch.setattr(bot, "download", fake_download)
+    monkeypatch.setattr(VoiceBiometrics, "_embed_sync", lambda self, ogg: [0.6, 0.8, 0.0])
+    try:
+        await _run(shell, bot, make_update(1, OWNER_ID, "/enroll-voice", command=True))
+        assert bot.session.sent("SendMessage")[-1].method.text == ENROLL_PROMPT_AR
+
+        await _run(shell, bot, make_update(2, OWNER_ID, voice=True))
+        assert bot.session.sent("SendMessage")[-1].method.text == ENROLL_DONE_AR
+        assert (tmp_path / "vault" / "State" / "owner_voiceprint.enc").exists()
+
+        await _run(shell, bot, make_update(3, OWNER_ID, voice=True))
+        assert bot.session.sent("SendMessage")[-1].method.text == VOICE_ACK_AR
+
+        monkeypatch.setattr(VoiceBiometrics, "_embed_sync", lambda self, ogg: [0.8, -0.6, 0.0])
+        await _run(shell, bot, make_update(4, OWNER_ID, voice=True))
+        assert bot.session.sent("SendMessage")[-1].method.text == GUEST_LOCKDOWN_AR
+        assert shell.gateway.stream_calls == []
+    finally:
+        _ENROLL_PENDING.clear()
 
 
 async def test_new_owner_message_cancels_inflight_stream(fake_bot, make_shell):

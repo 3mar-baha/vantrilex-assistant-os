@@ -265,10 +265,10 @@ def make_shell(make_settings):
 
     from src.bot import build_dispatcher
 
-    def _make(*, router_replies=(), stream_programs=(), voice_error=None):
+    def _make(*, router_replies=(), stream_programs=(), voice_error=None, **settings_overrides):
         gateway = FakeGateway(router_replies=router_replies, stream_programs=stream_programs)
         voice = FakeVoice(error=voice_error)
-        settings = make_settings(STREAM_EDIT_INTERVAL_MS="40")
+        settings = make_settings(STREAM_EDIT_INTERVAL_MS="40", **settings_overrides)
         dp = build_dispatcher(gateway, voice, settings)
         return SimpleNamespace(dp=dp, gateway=gateway, voice=voice, settings=settings)
 

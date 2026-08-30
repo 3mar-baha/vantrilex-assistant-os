@@ -7,6 +7,8 @@ mapped to a Jordanian apology — the owner is never left hanging.
 """
 
 import asyncio
+import io
+from pathlib import Path
 from typing import Final
 
 from aiogram import Bot, Dispatcher, F
@@ -19,6 +21,7 @@ from src.dispatcher import FrontDoorDispatcher
 from src.gateway import GatewayError, OmniRouteClient, Tier
 from src.middleware import OwnerOnlyMiddleware
 from src.skills.telegram_chat_streamer import ChatStreamer
+from src.skills.voice_biometric_auth import VoiceBiometrics, verify_or_lockdown
 from src.voice import VoicePipeline
 
 SYSTEM_PROMPT_AR: Final[str] = (
@@ -36,8 +39,11 @@ HELP_AR: Final[str] = (
 VOICE_ACK_AR: Final[str] = "سمعت الملاحظة الصوتية، لسأ أعالجها وأرجعلك."
 APOLOGY_AR: Final[str] = "سامحني، صار خلل تقني بسيط. جرب مرة ثانية."
 EMPTY_REPLY_AR: Final[str] = "وصلتني رسالتك بس ما قدرت أجيب رد مناسب. جرب صياغة ثانية."
+ENROLL_PROMPT_AR: Final[str] = "تمام، ابعتلي هسا ملاحظة صوتية قصيرة وأسجل بصمتك."
+ENROLL_DONE_AR: Final[str] = "انسمعت بصمتك وسجلتها. من هسا بصوتك بتعرفني — أهلا فيك!"
 
 _STREAMS: Final[dict[int, tuple[asyncio.Task, asyncio.Event]]] = {}
+_ENROLL_PENDING: Final[set[int]] = set()
 
 
 def build_dispatcher(gateway, voice, settings: Settings) -> Dispatcher:
@@ -45,6 +51,12 @@ def build_dispatcher(gateway, voice, settings: Settings) -> Dispatcher:
     dp = Dispatcher()
     dp.update.outer_middleware(OwnerOnlyMiddleware(settings.authorized_user_id))
     front = FrontDoorDispatcher(gateway, settings)
+    bio = VoiceBiometrics(
+        embedding_path=Path(settings.vault_local_path) / "State" / "owner_voiceprint.enc",
+        threshold=settings.voiceprint_threshold,
+        model_id=settings.voiceprint_model,
+        enc_key=settings.vault_enc_key,
+    )
 
     @dp.message(CommandStart())
     async def on_start(message: Message) -> None:
@@ -59,9 +71,33 @@ def build_dispatcher(gateway, voice, settings: Settings) -> Dispatcher:
     async def on_help(message: Message) -> None:
         await message.answer(HELP_AR)
 
+    @dp.message(Command("enroll-voice"))
+    async def on_enroll_voice(message: Message) -> None:
+        _ENROLL_PENDING.add(message.chat.id)
+        await message.answer(ENROLL_PROMPT_AR)
+
     @dp.message(F.voice)
-    async def on_voice(message: Message) -> None:
-        await message.answer(VOICE_ACK_AR)  # transcription lands with task 2.5
+    async def on_voice(message: Message, bot: Bot) -> None:
+        enrolling = message.chat.id in _ENROLL_PENDING
+        if not (enrolling or bio.enrolled):
+            await message.answer(VOICE_ACK_AR)  # transcription lands with task 2.5
+            return
+        ogg = await _download_voice(bot, message)
+        if enrolling:
+            _ENROLL_PENDING.discard(message.chat.id)
+            await bio.enroll(ogg)
+            await message.answer(ENROLL_DONE_AR)
+            return
+        allowed = await verify_or_lockdown(
+            bio=bio,
+            bot=bot,
+            chat_id=message.chat.id,
+            ogg_opus=ogg,
+            vault_root=Path(settings.vault_local_path),
+            enc_key=settings.vault_enc_key,
+        )
+        if allowed:
+            await message.answer(VOICE_ACK_AR)
 
     @dp.message(F.text)
     async def on_text(message: Message, bot: Bot) -> None:
@@ -83,6 +119,12 @@ def build_dispatcher(gateway, voice, settings: Settings) -> Dispatcher:
         return True
 
     return dp
+
+
+async def _download_voice(bot: Bot, message: Message) -> bytes:
+    buffer = io.BytesIO()
+    await bot.download(message.voice, destination=buffer)
+    return buffer.getvalue()
 
 
 async def _stream_answer(
