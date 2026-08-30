@@ -9,6 +9,19 @@ product release tags start independently at v1.0.0.)
 ## [Unreleased]
 
 ### Added
+- **Sprint 2 / task 2.3 — skill-voice-biometric-auth + Guest Mode (ADR-17)**:
+  `src/skills/voice_biometric_auth.py` — sealed single-owner ECAPA-TDNN voiceprint
+  (speechbrain pinned, py3.12 wheel-verified; lazy model load, CPU executor, ffmpeg
+  in-memory decode): `/enroll-voice` + one owner voice note Fernet-seals
+  `{vault}/State/owner_voiceprint.enc`; every voice note then verifies — unenrolled
+  -> middleware-only trust (info log), match >= VOICEPRINT_THRESHOLD -> owner path,
+  below-threshold or ANY verification error -> Guest Mode (fail-closed): warm
+  Jordanian lockdown reply + exactly ONE `Voice_Memos/Pending_Speakers/` staging
+  note (transcript placeholder + encrypted embedding, ADR-15-durable, same-minute
+  collisions never overwritten) and ZERO privileged effects — spy-proven no
+  gateway/whitelist/subprocess/extra-vault calls. `tests/test_guest_lockdown.py`
+  JOINS the sacred floor. Settings: VOICEPRINT_THRESHOLD=0.75,
+  VOICEPRINT_MODEL=speechbrain/spkrec-ecapa-voxceleb.
 - **Sprint 2 — Google integration + tiered email triage (tasks 2.1-2.4)**:
   `src/google_auth.py` (OAuth consent + Fernet-sealed token cache, proactive/401
   single-flight refresh), `src/google_suite.py` (Calendar/Tasks/Drive/Contacts typed
