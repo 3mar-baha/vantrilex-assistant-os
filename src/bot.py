@@ -8,8 +8,11 @@ mapped to a Jordanian apology — the owner is never left hanging.
 
 import asyncio
 import io
+from concurrent.futures import ThreadPoolExecutor
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Final
+from zoneinfo import ZoneInfo
 
 from aiogram import Bot, Dispatcher, F
 from aiogram.filters import Command, CommandStart
@@ -23,6 +26,7 @@ from src.middleware import OwnerOnlyMiddleware
 from src.skills.social_enrollment import VoiceprintRegistry
 from src.skills.telegram_chat_streamer import ChatStreamer
 from src.skills.voice_biometric_auth import VoiceBiometrics, verify_or_lockdown
+from src.skills.voice_to_vault_transcriber import VoiceToVault
 from src.voice import VoicePipeline
 
 SYSTEM_PROMPT_AR: Final[str] = (
@@ -47,11 +51,20 @@ _STREAMS: Final[dict[int, tuple[asyncio.Task, asyncio.Event]]] = {}
 _ENROLL_PENDING: Final[set[int]] = set()
 
 
-def build_dispatcher(gateway, voice, settings: Settings) -> Dispatcher:
-    """gateway: the OmniRouteClient; wrapped here in the ADR-18 front door."""
+def build_dispatcher(gateway, voice, settings: Settings, transcriber=None) -> Dispatcher:
+    """gateway: the OmniRouteClient; wrapped here in the ADR-18 front door.
+    transcriber: injectable for tests; production builds the local Whisper one."""
     dp = Dispatcher()
     dp.update.outer_middleware(OwnerOnlyMiddleware(settings.authorized_user_id))
     front = FrontDoorDispatcher(gateway, settings)
+    if transcriber is None:
+        transcriber = VoiceToVault(
+            model_size=settings.whisper_model_size,
+            compute_type=settings.whisper_compute_type,
+            executor=ThreadPoolExecutor(max_workers=1, thread_name_prefix="whisper"),
+            vault_dir=Path(settings.vault_local_path) / settings.voice_memos_dir,
+            tz=ZoneInfo(settings.tz),
+        )
     bio = VoiceBiometrics(
         embedding_path=Path(settings.vault_local_path) / "State" / "owner_voiceprint.enc",
         threshold=settings.voiceprint_threshold,
@@ -87,8 +100,7 @@ def build_dispatcher(gateway, voice, settings: Settings) -> Dispatcher:
     async def on_voice(message: Message, bot: Bot) -> None:
         enrolling = message.chat.id in _ENROLL_PENDING
         if not (enrolling or bio.enrolled):
-            await message.answer(VOICE_ACK_AR)  # transcription lands with task 2.5
-            return
+            await message.answer(VOICE_ACK_AR)  # unenrolled trust level: static ack only
         ogg = await _download_voice(bot, message)
         if enrolling:
             _ENROLL_PENDING.discard(message.chat.id)
@@ -104,16 +116,34 @@ def build_dispatcher(gateway, voice, settings: Settings) -> Dispatcher:
             enc_key=settings.vault_enc_key,
             registry=registry,
         )
-        if allowed:
+        if not allowed:
+            return
+        try:
+            text = await transcriber.transcribe(ogg)  # LOCAL Whisper only (§2.5)
+        except Exception:  # noqa: BLE001 — transcription failure degrades to the static ack
+            logger.exception("voice transcription failed")
             await message.answer(VOICE_ACK_AR)
+            return
+        await transcriber.file_note(
+            text,
+            received_at=message.date or datetime.now(UTC),
+            duration_s=float(message.voice.duration or 0),
+        )  # contract: retried once, never raises into the reply pipeline
+        if not text.strip():
+            await message.answer(VOICE_ACK_AR)  # empty memo filed with (empty) body
+            return
+        _spawn_stream(message, bot, text)
 
     @dp.message(F.text)
     async def on_text(message: Message, bot: Bot) -> None:
+        _spawn_stream(message, bot, message.text)
+
+    def _spawn_stream(message: Message, bot: Bot, text: str) -> None:
         previous = _STREAMS.get(message.chat.id)
         if previous is not None:
             previous[1].set()  # owner interjection: cancel the in-flight stream
         cancel = asyncio.Event()
-        task = asyncio.create_task(_stream_answer(bot, front, message, settings, cancel))
+        task = asyncio.create_task(_stream_answer(bot, front, message, settings, cancel, text))
         _STREAMS[message.chat.id] = (task, cancel)
 
     @dp.errors()
@@ -141,13 +171,12 @@ async def _stream_answer(
     message: Message,
     settings: Settings,
     cancel: asyncio.Event,
+    text: str,
 ) -> None:
     streamer = ChatStreamer(bot, message.chat.id, edit_interval_ms=settings.stream_edit_interval_ms)
     try:
         await bot.send_chat_action(message.chat.id, "typing")
-        text = await streamer.stream_reply(
-            front.handle(message.text, system=SYSTEM_PROMPT_AR), cancel
-        )
+        text = await streamer.stream_reply(front.handle(text, system=SYSTEM_PROMPT_AR), cancel)
     except GatewayError as error:
         logger.error("brain stream failed: {}", error)
         await message.answer(APOLOGY_AR)

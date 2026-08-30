@@ -270,7 +270,12 @@ def make_shell(make_settings):
     from src.bot import build_dispatcher
 
     def _make(
-        *, router_replies=(), stream_programs=(), voice_error=None, transcriber=None, **settings_overrides
+        *,
+        router_replies=(),
+        stream_programs=(),
+        voice_error=None,
+        transcriber=None,
+        **settings_overrides,
     ):
         gateway = FakeGateway(router_replies=router_replies, stream_programs=stream_programs)
         voice = FakeVoice(error=voice_error)

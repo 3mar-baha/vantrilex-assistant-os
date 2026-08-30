@@ -172,14 +172,16 @@ class FakeTranscriber:
         return Path("note.md")
 
 
-async def test_owner_voice_transcribed_filed_and_streamed(fake_bot, make_shell, monkeypatch, tmp_path):
+async def test_owner_voice_transcribed_filed_and_streamed(
+    fake_bot, make_shell, monkeypatch, tmp_path
+):
     """2.5 wiring: enrolled owner voice -> LOCAL transcriber -> memo filed ->
     transcript enters the standard text pipeline (streamed brain reply)."""
     monkeypatch.chdir(tmp_path)
     transcriber = FakeTranscriber()
     shell = make_shell(
         VAULT_ENC_KEY=Fernet.generate_key().decode(),
-        router_replies=[_router("direct", "تم")],
+        router_replies=[_router("tier2", "تم")],
         stream_programs=[StreamProgram(deltas=("رتبت",))],
         transcriber=transcriber,
     )
