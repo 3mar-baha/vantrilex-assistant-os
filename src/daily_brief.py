@@ -6,7 +6,8 @@ fire-once-per-local-day: the date persists to GmailState only after a
 successful send, so a failed send retries the same day.
 """
 
-from datetime import datetime, time, timedelta
+import asyncio
+from datetime import UTC, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
 from aiogram import Bot
@@ -175,3 +176,12 @@ class BriefComposer:
         self._inbox.state.last_brief_date = now.astimezone(self._tz).date().isoformat()
         self._inbox.save_state()
         return True
+
+    async def run_forever(self) -> None:
+        """Tick loop — fire_if_due gates all work, so idle ticks cost nothing."""
+        while True:
+            try:
+                await self.fire_once(datetime.now(UTC))
+            except Exception:  # noqa: BLE001 — loop must survive anything (spec error mode)
+                logger.exception("daily brief cycle failed, continuing")
+            await asyncio.sleep(POLL_TICK_SECONDS)
