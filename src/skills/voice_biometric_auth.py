@@ -1,0 +1,192 @@
+"""Voice biometric auth (ADR-17, sprint-2 §2.3): ECAPA-TDNN owner-voice match.
+
+Voice notes carry a second trust factor beyond the Telegram owner-ID gate: the
+speaker embedding is matched against the sealed owner voiceprint on CPU
+(<50 ms match budget, model loaded once, inference off-loop via executor).
+Owner voice -> normal service. Non-owner voice -> Guest Mode: a warm Jordanian
+lockdown with zero privileged side effects — no gateway calls carrying personal
+context, no whitelist, no PC actions, and no vault writes beyond one staging
+note. A guest voice note is DATA: staged for later briefing, never instructions.
+"""
+
+import asyncio
+import json
+import os
+import subprocess
+import tempfile
+from pathlib import Path
+from typing import Final
+
+from cryptography.fernet import Fernet, InvalidToken
+from loguru import logger
+
+DEFAULT_MODEL_ID: Final[str] = "speechbrain/spkrec-ecapa-voxceleb"
+GUEST_LOCKDOWN_AR: Final[str] = "يا هلا، الصوت مش صوت عمر... مين بيحكي معي؟"
+_PCM_SAMPLE_RATE: Final[int] = 16000
+
+
+class VoiceprintError(RuntimeError):
+    """Loud config/model failure naming the library + RUNBOOK pointer."""
+
+
+def _fernet(enc_key: str) -> Fernet:
+    if not enc_key:
+        raise VoiceprintError(
+            "VAULT_ENC_KEY is not set — voiceprints cannot be sealed (docs/04-RUNBOOK.md)"
+        )
+    try:
+        return Fernet(enc_key.encode())
+    except ValueError as error:
+        raise VoiceprintError(
+            "VAULT_ENC_KEY is not a valid Fernet key — regenerate per docs/04-RUNBOOK.md"
+        ) from error
+
+
+def _cosine(a: list[float], b: list[float]) -> float:
+    if not a or len(a) != len(b):
+        return 0.0
+    dot = sum(x * y for x, y in zip(a, b))
+    norm_a = sum(x * x for x in a) ** 0.5
+    norm_b = sum(y * y for y in b) ** 0.5
+    if norm_a == 0.0 or norm_b == 0.0:
+        return 0.0
+    return dot / (norm_a * norm_b)
+
+
+class VoiceBiometrics:
+    """Sealed single-owner voiceprint: enroll once, verify every voice note."""
+
+    def __init__(
+        self,
+        *,
+        embedding_path: Path,
+        threshold: float = 0.75,
+        executor=None,
+        enc_key: str | None = None,
+        model_id: str = DEFAULT_MODEL_ID,
+    ) -> None:
+        self._embedding_path = Path(embedding_path)
+        self._threshold = threshold
+        self._executor = executor
+        self._enc_key = enc_key if enc_key is not None else os.environ.get("VAULT_ENC_KEY", "")
+        self._model_id = model_id
+        self._model = None
+        self._owner_vector: list[float] | None = None
+        self._load_attempted = False
+        self.last_vector: list[float] | None = None
+        self.last_similarity: float = 0.0
+
+    @property
+    def enrolled(self) -> bool:
+        if not self._load_attempted:
+            self._load_attempted = True
+            self._owner_vector = self._load_vector()
+        return self._owner_vector is not None
+
+    async def enroll(self, ogg_opus: bytes) -> None:
+        """Embed one owner voice note and Fernet-seal it to the vault State."""
+        loop = asyncio.get_running_loop()
+        vector = await loop.run_in_executor(self._executor, self._embed_sync, ogg_opus)
+        sealed = _fernet(self._enc_key).encrypt(
+            json.dumps({"model": self._model_id, "vector": vector}).encode()
+        )
+        path = self._embedding_path
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = path.with_name(path.name + ".tmp")
+        tmp.write_bytes(sealed)
+        try:
+            tmp.chmod(0o600)
+        except OSError:  # non-POSIX filesystems: contents stay Fernet-sealed regardless
+            pass
+        tmp.replace(path)
+        self._owner_vector = vector
+        self._load_attempted = True
+        logger.info("owner voiceprint sealed to {}", path)
+
+    async def verify(self, ogg_opus: bytes) -> bool:
+        """True = owner voice (or unenrolled -> middleware-only trust). Fail-closed:
+        enrolled + below threshold or any verification error routes Guest Mode."""
+        if not self.enrolled:
+            logger.info("voiceprint unenrolled — middleware-only trust for voice notes")
+            return True
+        try:
+            loop = asyncio.get_running_loop()
+            vector = await loop.run_in_executor(self._executor, self._embed_sync, ogg_opus)
+        except Exception:  # noqa: BLE001 — any verification error fails closed to Guest Mode
+            logger.exception("voice verification failed while enrolled — failing closed")
+            return False
+        self.last_vector = vector
+        assert self._owner_vector is not None  # enrolled guarantees the stored vector
+        self.last_similarity = _cosine(vector, self._owner_vector)
+        return self.last_similarity >= self._threshold
+
+    def _load_vector(self) -> list[float] | None:
+        try:
+            sealed = self._embedding_path.read_bytes()
+        except FileNotFoundError:
+            return None
+        try:
+            payload = json.loads(_fernet(self._enc_key).decrypt(sealed))
+            vector = [float(x) for x in payload["vector"]]
+        except (InvalidToken, KeyError, TypeError, ValueError):
+            logger.warning(
+                "corrupt owner voiceprint at {} — treated unenrolled", self._embedding_path
+            )
+            return None
+        return vector or None
+
+    def _embed_sync(self, ogg_opus: bytes) -> list[float]:
+        """CPU-bound: ffmpeg decode + ECAPA embedding. Always runs in an executor."""
+        import torch
+
+        pcm = self._decode_pcm(ogg_opus)
+        if self._model is None:
+            self._model = self._load_model()
+        wav = torch.frombuffer(bytearray(pcm), dtype=torch.int16).float() / 32768.0
+        with torch.inference_mode():
+            embedding = self._model.encode_batch(wav.unsqueeze(0)).squeeze().tolist()
+        return [float(x) for x in embedding]
+
+    def _decode_pcm(self, ogg_opus: bytes) -> bytes:
+        proc = subprocess.run(
+            [
+                "ffmpeg",
+                "-hide_banner",
+                "-loglevel",
+                "error",
+                "-i",
+                "pipe:0",
+                "-f",
+                "s16le",
+                "-ac",
+                "1",
+                "-ar",
+                str(_PCM_SAMPLE_RATE),
+                "pipe:1",
+            ],
+            input=ogg_opus,
+            capture_output=True,
+            check=False,
+        )
+        if proc.returncode != 0 or not proc.stdout:
+            detail = proc.stderr.decode(errors="replace").strip()[:200]
+            raise VoiceprintError(f"ffmpeg could not decode the voice note: {detail}")
+
+    def _load_model(self):
+        try:
+            from speechbrain.inference.speaker import EncoderClassifier
+        except ImportError as error:
+            raise VoiceprintError(
+                f"speechbrain is not installed (voiceprint_model={self._model_id}) — "
+                "pip install speechbrain; see docs/04-RUNBOOK.md voice enrollment"
+            ) from error
+        try:
+            savedir = Path(tempfile.gettempdir()) / "sara-ecapa-voiceprint"
+            return EncoderClassifier.from_hparams(
+                source=self._model_id, savedir=str(savedir), run_opts={"device": "cpu"}
+            )
+        except Exception as error:
+            raise VoiceprintError(
+                f"ECAPA model load failed (speechbrain, {self._model_id}) — "
+                "see docs/04-RUNBOOK.md voice enrollment"
+            ) from error
