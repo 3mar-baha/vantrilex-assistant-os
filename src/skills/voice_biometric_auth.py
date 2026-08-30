@@ -9,19 +9,26 @@ context, no whitelist, no PC actions, and no vault writes beyond one staging
 note. A guest voice note is DATA: staged for later briefing, never instructions.
 """
 
+from __future__ import annotations
+
 import asyncio
 import json
 import os
 import subprocess
 import tempfile
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Final
 
+from aiogram import Bot
 from cryptography.fernet import Fernet, InvalidToken
 from loguru import logger
 
 DEFAULT_MODEL_ID: Final[str] = "speechbrain/spkrec-ecapa-voxceleb"
 GUEST_LOCKDOWN_AR: Final[str] = "يا هلا، الصوت مش صوت عمر... مين بيحكي معي؟"
+GUEST_TRANSCRIPT_PLACEHOLDER: Final[str] = (
+    "[رسالة صوتية من متحدث غير معروف — بانتظار التفريغ عند اعتماد المتحدث]"
+)
 _PCM_SAMPLE_RATE: Final[int] = 16000
 
 
@@ -51,6 +58,54 @@ def _cosine(a: list[float], b: list[float]) -> float:
     if norm_a == 0.0 or norm_b == 0.0:
         return 0.0
     return dot / (norm_a * norm_b)
+
+
+def stage_guest_note(
+    vault_root: Path, vector: list[float], *, enc_key: str, now: datetime | None = None
+) -> Path:
+    """One Pending_Speakers staging note per guest voice event (ADR-15: durable
+    across Space restarts so the owner can brief it later). Same-minute guests
+    keep separate notes — never overwritten."""
+    moment = now or datetime.now(UTC)
+    directory = Path(vault_root) / "Voice_Memos" / "Pending_Speakers"
+    directory.mkdir(parents=True, exist_ok=True)
+    stamp = moment.strftime("%Y-%m-%dT%H%M")
+    path = directory / f"{stamp}.json"
+    suffix = 2
+    while path.exists():
+        path = directory / f"{stamp}-{suffix}.json"
+        suffix += 1
+    payload = {
+        "received_at": moment.isoformat(timespec="seconds"),
+        "transcript": GUEST_TRANSCRIPT_PLACEHOLDER,
+        "voiceprint_enc": (
+            _fernet(enc_key).encrypt(json.dumps(vector).encode()).decode() if vector else None
+        ),
+    }
+    path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+    return path
+
+
+async def verify_or_lockdown(
+    *,
+    bio: VoiceBiometrics,
+    bot: Bot,
+    chat_id: int,
+    ogg_opus: bytes,
+    vault_root: Path,
+    enc_key: str,
+) -> bool:
+    """True -> continue normal owner handling. False -> Guest Mode lockdown done:
+    one staging note + the lockdown reply, and NOTHING else (no gateway calls
+    carrying personal context, no whitelist, no PC actions, no other writes)."""
+    if await bio.verify(ogg_opus):
+        return True
+    try:
+        stage_guest_note(vault_root, bio.last_vector or [], enc_key=enc_key)
+    except Exception:  # noqa: BLE001 — staging failure never blocks the lockdown reply
+        logger.exception("guest staging write failed; lockdown reply still sent")
+    await bot.send_message(chat_id, GUEST_LOCKDOWN_AR)
+    return False
 
 
 class VoiceBiometrics:
