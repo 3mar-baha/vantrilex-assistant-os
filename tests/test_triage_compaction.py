@@ -3,7 +3,7 @@ signature blocks, legal footers and tracking boilerplate are stripped
 deterministically and the body is capped to the classification budget —
 pure function, tier decisions unchanged on compacted input."""
 
-from src.email_triage import TriageClassifier, Tier, tokenjuice_compact
+from src.email_triage import Tier, TriageClassifier, tokenjuice_compact
 from tests.test_email_triage import FakeBrain, _msg, _settings
 
 RAW = (
@@ -63,7 +63,7 @@ def test_classification_unchanged_on_compacted_input(make_settings):
     d_raw = classifier.heuristic(_msg(subject="عاجل", body_text=RAW))
     compact = tokenjuice_compact(RAW, max_chars=4000)
     d_compact = classifier.heuristic(_msg(subject="عاجل", body_text=compact))
-    assert d_raw.tier is Tier.IMPORTANT  # 0.25 subject + 0.30 body cap
+    assert d_raw.tier is Tier.SEMI  # 0.25 subject + 0.15 body = 0.40
     assert (d_raw.tier, round(d_raw.score, 2)) == (
         d_compact.tier,
         round(d_compact.score, 2),

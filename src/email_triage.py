@@ -9,6 +9,7 @@ only ever rescues upward, never silences downward.
 
 import asyncio
 import json
+import re
 from enum import Enum
 
 from aiogram import Bot, F
@@ -44,6 +45,16 @@ _REFINE_SYSTEM = (
 
 _MDV2_SPECIALS = "_*[]()~`>#+-=|{}.!"
 
+_TRUNCATION_MARKER = "\n\n[…]"
+
+# Legal footers / tracking boilerplate: matched per-line, case-insensitive.
+# ponytail: fixed phrase list — extend the pattern if a new boilerplate family leaks through.
+_FOOTER_RE = re.compile(
+    r"confidential|disclaimer|privileged|intended recipient|unsubscribe"
+    r"|click here|هذا البريد الإلكتروني|إذا وصلتك هذه الرسالة|هذه الرسالة وملحقاتها",
+    re.IGNORECASE,
+)
+
 
 class Tier(str, Enum):
     DROP = "drop"
@@ -64,6 +75,26 @@ class TriageDecision(BaseModel):
 def escape_mdv2(text: str) -> str:
     for char in _MDV2_SPECIALS:
         text = text.replace(char, "\\" + char)
+    return text
+
+
+def tokenjuice_compact(body_text: str, *, max_chars: int) -> str:
+    """Strip quoted reply chains, signature blocks, legal footers and tracking
+    boilerplate; collapse whitespace; cap to the classification budget (ADR-19).
+    Pure: same input, same output, no I/O."""
+    kept: list[str] = []
+    for line in body_text.splitlines():
+        if line.rstrip() == "--":  # standard signature delimiter — nothing after it
+            break
+        if line.lstrip().startswith(">"):  # quoted reply chain
+            continue
+        if _FOOTER_RE.search(line):
+            continue
+        kept.append(line.rstrip())
+    text = re.sub(r"\n{3,}", "\n\n", "\n".join(kept)).strip()
+    if len(text) > max_chars:
+        cut = max(0, max_chars - len(_TRUNCATION_MARKER))
+        text = text[:cut].rstrip() + _TRUNCATION_MARKER
     return text
 
 
@@ -111,6 +142,10 @@ class TriageClassifier:
         keywords_ar = settings.triage_keywords_ar or DEFAULT_KEYWORDS_AR
         keywords_en = settings.triage_keywords_en or DEFAULT_KEYWORDS_EN
         self._keywords = set(_split(f"{keywords_ar},{keywords_en}"))
+        self._max_chars = settings.tokenjuice_max_chars
+
+    def _compact(self, body_text: str) -> str:
+        return tokenjuice_compact(body_text, max_chars=self._max_chars)
 
     def heuristic(self, msg: EmailMessage) -> TriageDecision:
         score = 0.0
@@ -125,7 +160,7 @@ class TriageClassifier:
             score += 0.25 * len(subject_hits)
             floor = _higher(Tier.SEMI, floor)  # subject hit floors at SEMI minimum
             reasons.append("subject urgency: " + ",".join(sorted(subject_hits)))
-        body_hits = {kw for kw in self._keywords if kw in msg.body_text.lower()}
+        body_hits = {kw for kw in self._keywords if kw in self._compact(msg.body_text).lower()}
         if body_hits:
             score += min(0.30, 0.15 * len(body_hits))
             reasons.append("body urgency: " + ",".join(sorted(body_hits)))
@@ -137,7 +172,7 @@ class TriageClassifier:
     def _refine_messages(self, msg: EmailMessage) -> list[dict[str, str]]:
         user = (
             f"{_DATA_OPEN}من: {msg.from_name} <{msg.from_email}>\n"
-            f"الموضوع: {msg.subject}\n\n{msg.body_text}{_DATA_CLOSE}"
+            f"الموضوع: {msg.subject}\n\n{self._compact(msg.body_text)}{_DATA_CLOSE}"
         )
         return [
             {"role": "system", "content": _REFINE_SYSTEM},

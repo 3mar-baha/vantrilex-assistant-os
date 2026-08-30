@@ -47,6 +47,7 @@ class Settings(BaseSettings):
     triage_keywords_en: str | None = None  # TRIAGE_KEYWORDS_EN (empty -> module default)
     critical_ping_interval_min: int = 5  # CRITICAL_PING_INTERVAL_MIN
     critical_ping_max: int = 6  # CRITICAL_PING_MAX (0 = unlimited)
+    tokenjuice_max_chars: int = 4000  # TOKENJUICE_MAX_CHARS (ADR-19 classification budget)
     brief_enabled: bool = True  # BRIEF_ENABLED (daily brief, §2.4)
     brief_local_time: str = "07:30"  # BRIEF_LOCAL_TIME (HH:MM, Amman local)
     voiceprint_threshold: float = 0.75  # VOICEPRINT_THRESHOLD (ADR-17 owner-voice match)

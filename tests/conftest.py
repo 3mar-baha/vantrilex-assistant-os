@@ -48,6 +48,7 @@ ENV_EXAMPLE: dict[str, str] = {
     "TRIAGE_KEYWORDS_EN": "urgent,asap,critical,immediately,deadline",
     "CRITICAL_PING_INTERVAL_MIN": "5",
     "CRITICAL_PING_MAX": "6",
+    "TOKENJUICE_MAX_CHARS": "4000",
     "BRIEF_ENABLED": "true",
     "BRIEF_LOCAL_TIME": "07:30",
     "VOICEPRINT_THRESHOLD": "0.75",
