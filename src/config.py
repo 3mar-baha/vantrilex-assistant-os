@@ -52,6 +52,9 @@ class Settings(BaseSettings):
     brief_local_time: str = "07:30"  # BRIEF_LOCAL_TIME (HH:MM, Amman local)
     voiceprint_threshold: float = 0.75  # VOICEPRINT_THRESHOLD (ADR-17 owner-voice match)
     voiceprint_model: str = "speechbrain/spkrec-ecapa-voxceleb"  # VOICEPRINT_MODEL (ECAPA-TDNN)
+    whisper_model_size: str = "small"  # WHISPER_MODEL_SIZE (local faster-whisper, §2.5)
+    whisper_compute_type: str = "int8"  # WHISPER_COMPUTE_TYPE (CPU int8 quantization)
+    voice_memos_dir: str = "Voice_Memos"  # VOICE_MEMOS_DIR (ADR-21 mandatory directory)
 
     # Declared now (validates every var in .env.example); consumed by later sprints.
     # Optional fields become required in the commit whose task first consumes them.

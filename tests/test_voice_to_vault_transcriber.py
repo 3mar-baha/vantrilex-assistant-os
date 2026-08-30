@@ -3,7 +3,6 @@ frontmatter note filed in Voice_Memos/; zero outbound STT network calls; error
 modes (decode chain, empty body, write retry, model warmup)."""
 
 import ast
-import asyncio
 import os
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
@@ -11,7 +10,6 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 import pytest
-from loguru import logger
 
 from src.skills.voice_to_vault_transcriber import TranscriberError, VoiceToVault
 
@@ -24,11 +22,14 @@ class _Seg:
         self.text = text
 
 
+_DEFAULT_SEGMENTS = (_Seg(" خلاصة"), _Seg(" الاجتماع بيمشي بعد ساعة"))
+
+
 class FakeWhisper:
     """Deterministic faster-whisper double: fixed segments, records the PCM call."""
 
-    def __init__(self, segments=(_Seg(" خلاصة "), _Seg(" الاجتماع بيمشي بعد ساعة"))):
-        self.segments = list(segments)
+    def __init__(self, segments=None):
+        self.segments = list(_DEFAULT_SEGMENTS if segments is None else segments)
         self.audios: list = []
 
     def transcribe(self, audio, **kwargs):
@@ -55,11 +56,22 @@ def _real_ogg(tmp_path: Path) -> bytes:
 
     subprocess.run(
         [
-            "ffmpeg", "-hide_banner", "-loglevel", "error",
-            "-f", "lavfi", "-i", "sine=frequency=440:duration=0.3",
-            "-c:a", "libopus", "-b:a", "16k", str(ogg),
+            "ffmpeg",
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-f",
+            "lavfi",
+            "-i",
+            "sine=frequency=440:duration=0.3",
+            "-c:a",
+            "libopus",
+            "-b:a",
+            "16k",
+            str(ogg),
         ],
-        check=True, capture_output=True,
+        check=True,
+        capture_output=True,
     )
     return ogg.read_bytes()
 
@@ -119,6 +131,7 @@ async def test_decode_failure_raises_transcriber_error_chained(tmp_path):
 
 async def test_model_load_failure_names_runbook_warmup(tmp_path):
     """Error mode: model missing -> loud error naming the RUNBOOK warmup step."""
+
     def boom(size: str, compute: str) -> object:
         raise RuntimeError("model files missing")
 
@@ -146,7 +159,8 @@ async def test_vault_write_failure_retried_once_never_blocks(tmp_path, monkeypat
 
     monkeypatch.setattr(os, "replace", lambda src, dst: (_ for _ in ()).throw(OSError("down")))
     path2 = await vv.file_note("ثانية", received_at=RECEIVED_AT, duration_s=2.0)
-    assert path2 == path  # best-effort path returned; no exception escapes
+    assert path2.name == "2026-08-30-1805-2.md"  # best-effort path returned; no exception
+    assert "مذكرة" in path.read_text(encoding="utf-8")  # first memo untouched
 
 
 async def test_same_minute_memo_never_overwritten(tmp_path):
