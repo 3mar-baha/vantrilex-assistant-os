@@ -1,6 +1,7 @@
 """Application settings: pydantic v2 validation over .env + process environment."""
 
 from functools import lru_cache
+from pathlib import Path
 
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -14,6 +15,7 @@ _REQUIRED_FIELDS = (
     "heavy_model",
     "telegram_bot_token",
     "authorized_user_id",
+    "vault_enc_key",  # consumed by task 2.1 vault-state encryption (ADR-15)
 )
 
 
@@ -31,6 +33,14 @@ class Settings(BaseSettings):
     telegram_bot_token: str  # TELEGRAM_BOT_TOKEN
     authorized_user_id: int  # AUTHORIZED_USER_ID (coerced from string)
     stream_edit_interval_ms: int = 750  # STREAM_EDIT_INTERVAL_MS (§2.2 coalesced edits)
+    vault_local_path: Path = Path("./vault")  # VAULT_LOCAL_PATH (ADR-15 durable state root)
+    vault_enc_key: str  # VAULT_ENC_KEY (Fernet key, secrets.token_urlsafe)
+    gmail_pubsub_topic: str | None = (
+        None  # GMAIL_PUBSUB_TOPIC (watch registration; empty -> poll only)
+    )
+    gmail_poll_seconds: int = 120  # GMAIL_POLL_SECONDS
+    gmail_sweep_days: int = 2  # GMAIL_SWEEP_DAYS
+    triage_body_max_chars: int = 8000  # TRIAGE_BODY_MAX_CHARS
 
     # Declared now (validates every var in .env.example); consumed by later sprints.
     # Optional fields become required in the commit whose task first consumes them.

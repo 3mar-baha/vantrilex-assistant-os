@@ -14,19 +14,18 @@ from src.dispatcher import DEFAULT_ACK_AR, FrontDoorDispatcher
 from src.gateway import OmniRouteClient, Tier
 from tests.test_omniroute_gateway import _chunk, _collect, _Scripted, _sse
 
-FAST_PIN = "google/gemini-3.5-flash-lite"
-FAST_FB1 = "meta-llama/llama-3.3-70b-instruct"
-FAST_FB2 = "nemotron-3.5-lightning"
-MEDIUM_PIN = "google/gemini-3.7-flash"
-MEDIUM_FB1 = "z-ai/glm-5.3-flash"
-HEAVY_PIN = "nvidia/nemotron-3-ultra-550b"
-HEAVY_FB1 = "google/gemini-3.7-flash"
-HEAVY_FB2 = "google/gemini-3.1-pro"
+FAST_PIN = "groq/openai/gpt-oss-20b"
+FAST_FB1 = "openrouter/minimax/minimax-m2.7:free"
+MEDIUM_PIN = "groq/openai/gpt-oss-20b"
+MEDIUM_FB1 = "openrouter/minimax/minimax-m2.7:free"
+MEDIUM_FB2 = "groq/openai/gpt-oss-120b"
+HEAVY_PIN = "openrouter/nvidia/nemotron-3-ultra-550b-a55b:free"
+HEAVY_FB1 = "groq/openai/gpt-oss-120b"
 
 CHAINS = {
-    Tier.FAST: [FAST_PIN, FAST_FB1, FAST_FB2],
-    Tier.MEDIUM: [MEDIUM_PIN, MEDIUM_FB1],
-    Tier.HEAVY: [HEAVY_PIN, HEAVY_FB1, HEAVY_FB2],
+    Tier.FAST: [FAST_PIN, FAST_FB1],
+    Tier.MEDIUM: [MEDIUM_PIN, MEDIUM_FB1, MEDIUM_FB2],
+    Tier.HEAVY: [HEAVY_PIN, HEAVY_FB1],
 }
 
 
@@ -56,9 +55,9 @@ def test_settings_carries_tier_pins(make_settings):
     """AC1: Settings carries the 3-tier pins, parses fallback lists, fails fast on gaps."""
     s = make_settings()
     assert (s.fast_model, s.medium_model, s.heavy_model) == (FAST_PIN, MEDIUM_PIN, HEAVY_PIN)
-    assert s.fast_chain == [FAST_PIN, FAST_FB1, FAST_FB2]
-    assert s.medium_chain == [MEDIUM_PIN, MEDIUM_FB1]
-    assert s.heavy_chain == [HEAVY_PIN, HEAVY_FB1, HEAVY_FB2]
+    assert s.fast_chain == [FAST_PIN, FAST_FB1]
+    assert s.medium_chain == [MEDIUM_PIN, MEDIUM_FB1, MEDIUM_FB2]
+    assert s.heavy_chain == [HEAVY_PIN, HEAVY_FB1]
     # blank fallbacks -> pin-only chain
     assert make_settings(FAST_MODEL_FALLBACKS="").fast_chain == [FAST_PIN]
     # missing tier pin -> boot fails fast
@@ -71,11 +70,11 @@ def test_env_pins_match_adr16():
     template = (Path(__file__).parents[1] / ".env.example").read_text(encoding="utf-8")
     for line in (
         f"FAST_MODEL={FAST_PIN}",
-        f"FAST_MODEL_FALLBACKS={FAST_FB1},{FAST_FB2}",
+        f"FAST_MODEL_FALLBACKS={FAST_FB1}",
         f"MEDIUM_MODEL={MEDIUM_PIN}",
-        f"MEDIUM_MODEL_FALLBACKS={MEDIUM_FB1}",
+        f"MEDIUM_MODEL_FALLBACKS={MEDIUM_FB1},{MEDIUM_FB2}",
         f"HEAVY_MODEL={HEAVY_PIN}",
-        f"HEAVY_MODEL_FALLBACKS={HEAVY_FB1},{HEAVY_FB2}",
+        f"HEAVY_MODEL_FALLBACKS={HEAVY_FB1}",
     ):
         assert line in template
     assert "PRIMARY_MODEL" not in template

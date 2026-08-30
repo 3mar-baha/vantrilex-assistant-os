@@ -28,6 +28,7 @@ def _settings() -> Settings:
         heavy_model="h",
         telegram_bot_token="t",
         authorized_user_id=1,
+        vault_enc_key="your-fernet-key",
     )
 
 
