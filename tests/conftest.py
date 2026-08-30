@@ -50,6 +50,8 @@ ENV_EXAMPLE: dict[str, str] = {
     "CRITICAL_PING_MAX": "6",
     "BRIEF_ENABLED": "true",
     "BRIEF_LOCAL_TIME": "07:30",
+    "VOICEPRINT_THRESHOLD": "0.75",
+    "VOICEPRINT_MODEL": "speechbrain/spkrec-ecapa-voxceleb",
     "TELEGRAM_API_ID": "",
     "TELEGRAM_API_HASH": "",
     "TELEGRAM_USER_SESSION_STRING": "",

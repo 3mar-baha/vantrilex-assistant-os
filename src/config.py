@@ -49,6 +49,8 @@ class Settings(BaseSettings):
     critical_ping_max: int = 6  # CRITICAL_PING_MAX (0 = unlimited)
     brief_enabled: bool = True  # BRIEF_ENABLED (daily brief, §2.4)
     brief_local_time: str = "07:30"  # BRIEF_LOCAL_TIME (HH:MM, Amman local)
+    voiceprint_threshold: float = 0.75  # VOICEPRINT_THRESHOLD (ADR-17 owner-voice match)
+    voiceprint_model: str = "speechbrain/spkrec-ecapa-voxceleb"  # VOICEPRINT_MODEL (ECAPA-TDNN)
 
     # Declared now (validates every var in .env.example); consumed by later sprints.
     # Optional fields become required in the commit whose task first consumes them.
