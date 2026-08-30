@@ -163,6 +163,23 @@ social agent -> v2.0.
       `5373255`). NOTE for next session: live `--health` probe at close showed OmniRoute
       NOT RUNNING (`http://localhost:20128/v1` unreachable) — owner starts OmniRoute before
       Sprint-2 preflight (protocol step 3) and for the Google-403 live-smoke retest.
+      **TASK 2.2 DONE (2026-08-30, sprint-2 open)**: skill-telegram-chat-streamer + bot
+      shell (old-1.4 body carried) — `src/skills/telegram_chat_streamer.py` (placeholder «…»
+      -> first edit <250 ms TTFT -> coalesced edits @STREAM_EDIT_INTERVAL_MS=750 -> final
+      verbatim; cancel keeps partial; rate-limit doubles interval; placeholder failure ->
+      aggregate fallback), `src/bot.py` + `src/middleware.py` (owner-ID silent drop on
+      update.outer_middleware — SACRED FLOOR test_owner_middleware.py born AC1-AC5;
+      /start welcome+Ogg greeting, /help, voice ack zero gateway, global dp.errors),
+      `FrontDoorDispatcher.handle` gains keyword `system=` carrying the persona prompt into
+      the tier stream (1.5 tests untouched). Skills ingested: tdd, diagnosing-bugs,
+      clean-code-guard, test-guard (git-ignored). TDD red->green: 21 new tests
+      (test_owner_middleware 5, test_bot_shell 8, test_chat_streamer 8), suite 66 green,
+      gate green. Commits `0a5ae11` (code) + `4ba0183` (docs) on branch core-foundation,
+      PUSHED. aiogram 3.31 surfaces probed empirically (FakeSession returning real Message
+      models; ErrorEvent injection by name; BufferedInputFile.data). NOTE: old-1.4 AC9
+      empty-buffer fallback absorbed by the dispatcher's safe-default ack (ADR-18 — bubble
+      is never empty); one-line guard kept in shell. HALTED — next per owner: 2.1 Google
+      foundation. OmniRoute still offline locally (owner starts before live smoke).
 - [ ] Phase 4 — Harden & Release: guards, full gate, tag v1.0.0, release report
 
 ## Open items / blockers
