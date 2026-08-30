@@ -98,3 +98,26 @@ Supersedes draft preference for Google Cloud Run deployment.
   the CLI only if multi-stream dispatch overhead ever justifies it.
 - **Consequences**: No dependency on OS-repo internals for daily flow; upstream pulls
   still deliver diagnostics/tooling improvements via `uos doctor` + toolkit sync.
+
+## ADR-16: Three-Tier Brain via OmniRoute (Gemini retired) — **Accepted** (amended 2026-08-30)
+- **Context**: Gemini is dead for this project: Google denies the key at API level
+  (403 "project denied access" even with Generative Language API enabled) and the free
+  GenAI tier is gated behind a billing card the owner's bank rejects. OmniRoute probes
+  (read-only SQLite, keys redacted) confirmed the key sits under provider `gemini` and
+  only `gemini/...` slugs route there. Meanwhile live catalogs: Groq serves ONLY
+  `gpt-oss-120b`/`gpt-oss-20b` (llama-3.3-70b-versatile, llama-4-scout, qwen3-32b are
+  404-retired — OmniRoute's BUILT-IN groq list is stale; use Import-from-/models);
+  OpenRouter `:free` pool imports 400+ models (~2.2s first-byte queue, 50 req/day/account).
+- **Decision**: 3-tier chains pinned in .env.example (2026-08-30 bake-off, 7 candidates,
+  same Sara persona prompt, TTFT + Jordanian-dialect quality measured):
+  - **FAST** (talker — the only model that speaks to the owner):
+    `groq/openai/gpt-oss-20b` (0.5s TTFT, clean Jordanian) → fb `openrouter/minimax/minimax-m2.7:free`
+  - **MEDIUM** (worker — Obsidian librarian + task executor; never user-facing prose):
+    `groq/openai/gpt-oss-20b` → fb minimax → `groq/openai/gpt-oss-120b`
+  - **HEAVY** (deep tasks): `openrouter/nvidia/nemotron-3-ultra-550b-a55b:free` → fb `groq/openai/gpt-oss-120b`
+- **Rejected on evidence**: gemma-4 (owner: «لغته ركيكة كعربية» — weak Arabic prose);
+  nemotron-3-super + ling-3.0-flash (role inversion — addressed the owner as Sara);
+  glm-5.2/gemma-26b/inkling (reasoning burned the whole budget → empty replies).
+- **Consequences**: gpt-oss-120b is the designated task worker, never writes user-facing
+  prose (pins at task 2.3). OpenRouter free = 50 req/day/account; owner adds 6 keys across
+  6 accounts — OmniRoute multi-key rotation is native. Gemini never re-pins.

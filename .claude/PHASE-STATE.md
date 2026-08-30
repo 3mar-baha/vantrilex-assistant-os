@@ -180,6 +180,28 @@ social agent -> v2.0.
       empty-buffer fallback absorbed by the dispatcher's safe-default ack (ADR-18 — bubble
       is never empty); one-line guard kept in shell. HALTED — next per owner: 2.1 Google
       foundation. OmniRoute still offline locally (owner starts before live smoke).
+
+      **BRAIN RE-PIN (2026-08-30, owner-directed, before 2.1)**: Gemini formally retired —
+      Google denies the project at API level (403 "project denied access" even with
+      Generative Language API enabled; free tier gated behind a billing card the owner's
+      bank rejects). Read-only OmniRoute SQLite probes (keys redacted): key lives under
+      provider `gemini` (only `gemini/...` slugs route); Groq live catalog = ONLY
+      gpt-oss-120b/20b (llama-3.3/scout/qwen3 404-retired; OmniRoute BUILT-IN groq list is
+      stale — Import-from-/models + Test-all used); OpenRouter `:free` pool imported
+      (400/400). 7-candidate talker bake-off (same Sara persona prompt): gpt-oss-20b 0.5s
+      TTFT clean Jordanian; minimax-m2.7 warmest dialect 2.2s + one typo; nemotron-super +
+      ling role-inverted (called owner «يا سارة»); glm-5.2/gemma-26b/inkling empty
+      (reasoning ate budget); gemma-4 owner-rejected («لغته ركيكة كعربية»).
+      OWNER-SET ROLES: FAST = Sara's voice/talker (only user-facing model); MEDIUM =
+      worker (Obsidian librarian + task executor; gpt-oss-120b pins at 2.3; never user
+      prose); HEAVY = deep tasks. New pins (ADR-16 amendment, recorded in 03-DECISIONS):
+      FAST/MEDIUM `groq/openai/gpt-oss-20b` (fb minimax-m2.7:free [+gpt-oss-120b]),
+      HEAVY `openrouter/nvidia/nemotron-3-ultra-550b-a55b:free` (fb gpt-oss-120b).
+      OpenRouter :free = 50 req/day/account; owner adding 6 rotating keys (native
+      OmniRoute rotation). Gate green (66), commit `22d3396` on core-foundation.
+      Task 2.1 red artifacts UNTRACKED in worktree (test_google_clients.py,
+      test_gmail_watch.py, src/google_auth.py torn — needs clean rewrite); 2.1 resumes
+      from red, gate open per owner.
 - [ ] Phase 4 — Harden & Release: guards, full gate, tag v1.0.0, release report
 
 ## Open items / blockers
