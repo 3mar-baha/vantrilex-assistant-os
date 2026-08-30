@@ -123,9 +123,7 @@ async def test_collect_from_mocked_clients(make_settings):
             _msg(id="drop", subject="نشرة"),  # DROP
         ],
     )
-    classifier = TriageClassifier(
-        make_settings(GOOGLE_VIP_SENDERS="vip@corp.com"), FakeBrain()
-    )
+    classifier = TriageClassifier(make_settings(GOOGLE_VIP_SENDERS="vip@corp.com"), FakeBrain())
     composer = BriefComposer(suite, inbox, classifier, None, 0, make_settings())
 
     data = await composer.collect(now)

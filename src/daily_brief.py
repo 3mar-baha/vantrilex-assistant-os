@@ -101,10 +101,7 @@ class BriefComposer:
         if data.unread_total is None:
             lines.append(f"📥 البريد: {DEGRADED_TEXT}")
         else:
-            mail = (
-                f"📥 البريد: {data.unread_total} غير مقروءة"
-                f" · مهمة: {len(data.important_items)}"
-            )
+            mail = f"📥 البريد: {data.unread_total} غير مقروءة · مهمة: {len(data.important_items)}"
             if data.important_items:
                 first = data.important_items[0]
                 sender = first.from_name or first.from_email
