@@ -18,6 +18,7 @@ from src.email_triage import (
     escape_mdv2,
     render_semi,
     render_voice_script,
+    tokenjuice_compact,
 )
 from src.gmail import EmailMessage
 from tests.conftest import OWNER_ID, FakeVoice, wait_until
@@ -103,6 +104,39 @@ def test_heuristic_keyword_weights_and_bands(make_settings):
 
     d = classifier.heuristic(_msg(subject="URGENT NOW", body_text=""))
     assert d.tier is Tier.SEMI  # case-insensitive
+
+
+async def test_vip_skips_llm_refinement(make_settings):
+    """AC8 half: VIP floor CRITICAL is deterministic — brain mock never called."""
+    brain = FakeBrain()
+    classifier = TriageClassifier(_settings(make_settings), brain)
+    decision = await classifier.classify(
+        _msg(from_email="vip@corp.com", subject="تقرير", body_text="لا جديد")
+    )
+    assert decision.tier is Tier.CRITICAL
+    assert brain.calls == []
+
+
+async def test_tokenjuice_strips_before_llm(make_settings):
+    """AC8: the LLM payload carries the compacted body — quoted chain, signature
+    and legal footer never reach the brain; the scoring signal does."""
+    noisy = (
+        "مرحبا عمر،\n\n"
+        "نحتاج تقرير المشروع urgent قبل الخميس مباشرة.\n\n"
+        "> في الرسالة السابقة كتبت: المشروع متأخر\n\n"
+        "-- \n"
+        "أحمد مدير المنتج\n"
+        "This email is confidential and intended for the named recipient only.\n"
+    )
+    brain = FakeBrain()
+    classifier = TriageClassifier(_settings(make_settings), brain)
+    await classifier.classify(_msg(subject="تحديث", body_text=noisy))
+    payload = brain.calls[0][1]["content"]
+    assert "نحتاج تقرير المشروع urgent" in payload
+    assert "أحمد مدير المنتج" not in payload
+    assert "confidential" not in payload
+    assert "المشروع متأخر" not in payload  # quoted chain stripped
+    assert tokenjuice_compact(noisy, max_chars=4000) in payload
 
 
 async def test_bulk_newsletter_drops_without_llm(make_settings):
