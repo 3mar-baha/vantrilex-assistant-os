@@ -185,3 +185,35 @@ async def test_brief_disabled_sends_nothing(make_settings, fake_bot):
     assert composer.fire_if_due(now) is False
     assert bot.session.calls == []
     assert suite.calls == 0 and inbox.peeked == 0
+
+
+async def test_source_failure_degrades_section_not_brief(make_settings, fake_bot):
+    """AC5: a failing source degrades its section («غير متوفر حالياً»); the brief
+    still sends, healthy sections stay intact, date persists on success."""
+    from src.daily_brief import DEGRADED_TEXT
+    from tests.conftest import OWNER_ID
+
+    class BrokenCalendar(FakeSuite):
+        async def list_events(self, start, end):
+            raise ValueError("calendar down")
+
+    class BrokenGmail(FakeInbox):
+        async def unread_digest(self):
+            raise ValueError("gmail down")
+
+    now = datetime(2026, 8, 31, 7, 0, tzinfo=UTC)
+
+    inbox = FakeInbox()
+    bot = fake_bot()
+    composer = BriefComposer(BrokenCalendar(), inbox, None, bot, OWNER_ID, make_settings())
+    assert await composer.fire_once(now) is True
+    text = bot.session.sent("SendMessage")[0].method.text
+    assert f"📅 المواعيد: {DEGRADED_TEXT}" in text
+    assert "✅ لا مهام مستحقة اليوم" in text  # healthy section intact
+    assert inbox.state.last_brief_date == "2026-08-31"  # send succeeded -> persisted
+
+    bot2 = fake_bot()
+    composer2 = BriefComposer(FakeSuite(), BrokenGmail(), None, bot2, OWNER_ID, make_settings())
+    assert await composer2.fire_once(now) is True
+    text2 = bot2.session.sent("SendMessage")[0].method.text
+    assert f"📥 البريد: {DEGRADED_TEXT}" in text2

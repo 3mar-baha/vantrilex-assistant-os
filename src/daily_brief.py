@@ -112,25 +112,40 @@ class BriefComposer:
         return "\n".join(lines)
 
     async def collect(self, now: datetime) -> BriefData:
-        """Assemble the mail picture deterministically — heuristic only, no LLM."""
-        events = await self._suite.list_events(now, now + timedelta(hours=24))
-        all_tasks = await self._suite.list_tasks()
-        local_today = now.astimezone(self._tz).date()
-        tasks = [
-            task
-            for task in all_tasks
-            if not task.completed
-            and task.due is not None
-            and task.due.astimezone(self._tz).date() == local_today
-        ]
-        unread_total, _unseen = await self._inbox.unread_digest()
+        """Assemble the mail picture deterministically — heuristic only, no LLM.
+        Per-source isolation: one failing section degrades alone (AC5)."""
+        events: list[CalendarEvent] | None = None
+        try:
+            events = await self._suite.list_events(now, now + timedelta(hours=24))
+        except Exception as error:  # noqa: BLE001 — section isolation (spec error mode)
+            logger.error("brief events section degraded: {}", error)
+
+        tasks: list[TaskItem] | None = None
+        try:
+            all_tasks = await self._suite.list_tasks()
+            local_today = now.astimezone(self._tz).date()
+            tasks = [
+                task
+                for task in all_tasks
+                if not task.completed
+                and task.due is not None
+                and task.due.astimezone(self._tz).date() == local_today
+            ]
+        except Exception as error:  # noqa: BLE001 — section isolation
+            logger.error("brief tasks section degraded: {}", error)
+
+        unread_total: int | None = None
         important: list[EmailMessage] = []
-        for message in await self._inbox.peek_unread():
-            decision = self._classifier.heuristic(message)
-            if decision.tier in (Tier.IMPORTANT, Tier.CRITICAL):
-                important.append(message)
-            if len(important) >= HIGHLIGHT_CAP:
-                break
+        try:
+            unread_total, _unseen = await self._inbox.unread_digest()
+            for message in await self._inbox.peek_unread():
+                decision = self._classifier.heuristic(message)
+                if decision.tier in (Tier.IMPORTANT, Tier.CRITICAL):
+                    important.append(message)
+                if len(important) >= HIGHLIGHT_CAP:
+                    break
+        except Exception as error:  # noqa: BLE001 — section isolation
+            logger.error("brief mail section degraded: {}", error)
         return BriefData(
             events=events, tasks=tasks, unread_total=unread_total, important_items=important
         )
