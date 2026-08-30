@@ -36,8 +36,7 @@ def test_embeddings_encrypted_at_rest(tmp_path):
     assert (vault / "Contacts" / "Family" / "أحمد.md").read_text(encoding="utf-8") == (
         dossier.read_text(encoding="utf-8")
     )
-    stored = vault / "State" / "voiceprints" / "أحمد.enc"
-    raw = stored.read_bytes()
+    raw = (vault / "State" / "voiceprints" / "أحمد.enc").read_bytes()
     assert b"0.8" not in raw and b"vector" not in raw
     roundtrip = json.loads(Fernet(KEY.encode()).decrypt(raw).decode("utf-8"))
     assert roundtrip["vector"] == AHMAD_VEC
@@ -94,3 +93,62 @@ def test_contact_mode_reply_is_message_taking_only():
     """CONTACT_MODE_AR promises message-taking only — no tool offers, no PC control."""
     assert "رسالة" in CONTACT_MODE_AR
     assert isinstance(Verdict(role="unknown").similarity, float)
+
+
+def test_owner_brief_three_way_verdict_routing(tmp_path):
+    """AC12 Cases B+C: staged pending notes route by verdict — confirm:Family ->
+    Contacts/Family/, ignore -> Contacts/Ignored/, unknown -> Contacts/Unknown/ with
+    a security flag; the pending note is consumed in every path."""
+    vault, _bio, registry = make_registry(tmp_path)
+    p1 = registry.stage_pending(AHMAD_VEC, "تركلي رسالة: أنا أخوك أحمد", claimed_name="أحمد")
+    p2 = registry.stage_pending([0.1, 0.9, 0.0], "سؤال عن فاتورة", claimed_name="شخص")
+    p3 = registry.stage_pending([0.1, 0.1, 0.9], "بلا تفاصيل", claimed_name="مجهول")
+
+    enrolled = registry.resolve_pending(p1.stem, "confirm:Family")
+    ignored = registry.resolve_pending(p2.stem, "ignore")
+    flagged = registry.resolve_pending(p3.stem, "unknown")
+
+    assert enrolled.outcome == "enrolled" and (vault / "Contacts" / "Family" / "أحمد.md").exists()
+    assert ignored.outcome == "ignored" and (vault / "Contacts" / "Ignored" / "شخص.md").exists()
+    assert flagged.outcome == "flagged"
+    unknown_note = vault / "Contacts" / "Unknown" / "مجهول.md"
+    assert unknown_note.exists()
+    assert "security_flag: true" in unknown_note.read_text(encoding="utf-8")
+    assert (vault / "State" / "voiceprints" / "مجهول.enc").exists()  # re-matchable
+    assert registry.pending_briefs() == []
+
+
+def test_ignored_voice_never_matches(tmp_path):
+    """Verdict 'ignore' blacklists the voice: its vector never matches again."""
+    _vault, _bio, registry = make_registry(tmp_path)
+    note = registry.stage_pending(AHMAD_VEC, "رسالة ضيف", claimed_name="أحمد")
+    registry.resolve_pending(note.stem, "ignore")
+
+    contacts = registry._load_contacts()
+    assert all(name != "أحمد" for name, _cat, _vec in contacts)
+
+
+def test_unknown_profile_carries_security_flag(tmp_path):
+    """Unknown verdict: security flag in the dossier frontmatter + the embedding
+    stays re-matchable for a future enrollment."""
+    vault, _bio, registry = make_registry(tmp_path)
+    note = registry.stage_pending(AHMAD_VEC, "مكالمة مجهولة", claimed_name="مجهول")
+    registry.resolve_pending(note.stem, "unknown")
+
+    text = (vault / "Contacts" / "Unknown" / "مجهول.md").read_text(encoding="utf-8")
+    assert "security_flag: true" in text
+    assert (vault / "State" / "voiceprints" / "مجهول.enc").exists()
+
+
+def test_pending_briefs_survive_restart(tmp_path):
+    """ADR-15 durability: a fresh registry over the same vault still sees the
+    staged brief (speaker, hint, timestamp)."""
+    vault, _bio, registry = make_registry(tmp_path)
+    registry.stage_pending(AHMAD_VEC, "أخوك أحمد حكى معك", claimed_name="أحمد")
+
+    bio = VoiceBiometrics(embedding_path=vault / "State" / "owner_voiceprint.enc", enc_key=KEY)
+    revived = VoiceprintRegistry(bio=bio, vault_root=vault, enc_key=KEY)
+    briefs = revived.pending_briefs()
+    assert len(briefs) == 1
+    assert briefs[0].claimed_name == "أحمد"
+    assert "أحمد" in briefs[0].transcript_hint

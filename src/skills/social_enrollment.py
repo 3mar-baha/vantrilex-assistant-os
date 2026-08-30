@@ -192,7 +192,8 @@ class VoiceprintRegistry:
         raw = payload.get("voiceprint_enc")
         if not raw:
             raise VoiceprintError("pending note carries no voiceprint")
-        return json.loads(self._fernet().decrypt(raw.encode()).decode())["vector"]
+        decoded = json.loads(self._fernet().decrypt(raw.encode()).decode())
+        return decoded["vector"] if isinstance(decoded, dict) else decoded
 
     def _store_vector(self, name: str, vector: list[float]) -> None:
         directory = self._vault / "State" / "voiceprints"
