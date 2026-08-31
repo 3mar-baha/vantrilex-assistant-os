@@ -167,6 +167,28 @@ exception, or URL (`redact_secret` screens every such path). First boot:
 `ensure_mandatory_dirs()` upserts an index note per missing mandatory dir and contacts
 subdir plus both profile files — idempotent, re-run writes nothing.
 
+Dynamic taxonomy expansion (sprint-3 3.2, `src/vault_expand.py`): `VaultExpander.expand(domain, dirs, tags)`
+grows new domain trees under `01_Projects/<domain>` as structure emerges in conversation — a
+sanitized sub-directory per relative `dirs` entry, an `_index.md` per directory (frontmatter
+`type: vault-index`, body wikilinking the domain root), and the tag ontology at
+`<domain>/_tags.yaml` (safe_dump: `domain:`, `created:` ISO-UTC, `tags:` list, Arabic intact).
+The whole expansion lands as ONE auditable commit (`sara: expand vault — <domain>`) via the Git
+Data API. The PARA backbone is expansion-only:
+
+```
+01_Projects/  02_Areas/  03_Resources/  04_Archives/
+Contacts/  Call_Transcripts/  Studies/  Voice_Memos/  Daily_Logs/
+```
+
+any request whose domain touches one of those names raises `BackboneImmutableError` pre-flight
+(zero API calls), and the module has no delete/move code path at all. Idempotent: existence is
+read from the vault on every call (vault state IS the memory — no local cache), existing
+dirs/notes are left untouched, and the result reports only the delta (re-run = empty delta, no
+commit). LLM-proposed structure is DATA — the orchestrator validates proposals through this
+typed interface only; invalid proposals (empty domain, nothing to create, residual separators)
+are refused pre-flight with owner-readable reasons. The owner reviews every structural change
+through the vault repo's git history.
+
 Voice memos from mobile are transcribed, tagged with YAML frontmatter, and filed
 automatically. Conversations that produce actionable tasks close with Sara asking:
 "هل بتحب ألخص لك شو رح أعمل هسا؟" — then recites the summary and files it
