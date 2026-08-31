@@ -9,6 +9,25 @@ product release tags start independently at v1.0.0.)
 ## [Unreleased]
 
 ### Added
+- **Sprint 3 / task 3.1 — skill-obsidian-vault-architect (M6 / ADR-21)**:
+  `src/vault.py` — THE read/write surface for Sara's git-backed Obsidian vault:
+  `VaultClient` over the GitHub Contents API (Bearer + versioned headers, `?ref=VAULT_BRANCH`;
+  upsert = sha lookup -> 404 create / 200 update, one 409 GET->PUT retry then
+  `VaultConflictError`, auth errors loud with zero retries, >1,000,000-byte payloads refused
+  pre-flight), Git Data API `commit_files` for ONE-commit structural changes (legacy
+  `02_Areas/Studies/` -> top-level `Studies/` migration), `append_section` for append-only
+  dossiers/logs, deterministic title sanitizer (Arabic preserved verbatim), YAML frontmatter
+  writer/splitter (`safe_dump`, leading fences only, malformed -> ValueError naming the path),
+  PARA path helpers + Zettelkasten wikilinks + canonical constants (PROFILE_USER_INFO,
+  PROFILE_DIALECT, CONVERSATIONS/CONFIRMATIONS/AUDIT dirs), `redact_secret` screening every
+  log/exception path, and the idempotent M6 first-boot `ensure_mandatory_dirs()` (index note
+  per mandatory dir + contacts taxonomy + both profile files; re-run = zero writes).
+  Settings: VAULT_GITHUB_REPO / VAULT_GITHUB_TOKEN (SecretStr) now required, VAULT_BRANCH
+  (default main); new dep PyYAML>=6,<7. Plus **3.1b** `src/skills/social_graph.py` —
+  `SocialGraph`: `dossier()`/`create_dossier()`, FAST-tier `extract_entities()` (strict JSON,
+  LLM output is DATA — garbage -> [] loudly), `file_action()` (dated sections into the
+  person's dossier AND `Daily_Logs/YYYY-MM-DD.md`; ambiguous category holds for owner
+  confirmation; `Ignored/` never appends). 31 new tests (181 total), gate green.
 - **Sprint 2 / task 2.6 — skill-evening-proactive-journaler (§2.6)**:
   `src/skills/evening_journaler.py` — closes the owner's day: one Jordanian check-in at a
   `random.uniform` slot inside [18:00, 19:30) Amman (tasks done, critical mail, memos

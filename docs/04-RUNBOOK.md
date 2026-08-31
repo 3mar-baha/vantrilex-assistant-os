@@ -218,6 +218,19 @@ and stops ledger writes.
 4. Re-enroll after voice changes: run `/enroll-voice` again — the new note
    atomically replaces the sealed owner voiceprint.
 
+### First-boot vault bootstrap (automatic, credentials-gated)
+
+On the core's first run with `VAULT_GITHUB_REPO` + `VAULT_GITHUB_TOKEN` set
+(fine-grained PAT, repo scope — required from sprint-3), `ensure_mandatory_dirs()`
+bootstraps the vault: an `_index.md` note per mandatory directory (`Contacts/`,
+`Call_Transcripts/`, `Studies/`, `Voice_Memos/`, `Daily_Logs/`) and contacts
+subdir (`Family/Friends/Colleagues/Ignored/Unknown`), plus
+`02_Areas/Profile/User_Info.md` and `Dialect_Notes.md` — each a real note
+(frontmatter + purpose line), one commit per note (`sara: bootstrap <path>`).
+Legacy `02_Areas/Studies/` notes migrate to top-level `Studies/` as ONE structural
+commit (`sara: migrate Studies to top-level`). Re-runs are no-ops (zero writes).
+Verify: `git log` on the vault repo shows the bootstrap + migration commits.
+
 ## 7. Troubleshooting
 
 | Symptom | Cause | Fix |

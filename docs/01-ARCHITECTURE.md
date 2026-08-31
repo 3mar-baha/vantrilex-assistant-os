@@ -148,6 +148,25 @@ itself is dynamic (M5): Sara creates new sub-directories/tag ontologies as domai
 every structural change landing as an auditable git commit; the PARA backbone is
 expansion-only.
 
+Vault transport (sprint-3 3.1, `src/vault.py`): `VaultClient` speaks the GitHub Contents API
+directly (`api.github.com`, `Bearer VAULT_GITHUB_TOKEN` + versioned headers, `?ref=VAULT_BRANCH`)
+— chosen over a local clone because the core lives on HF Spaces (ADR-15) with a disposable
+filesystem and owner-only write volume makes per-write commits cheap. `upsert` reads the sha
+first (404 -> create, 200 -> sha update), retries one 409 via GET->PUT then raises
+`VaultConflictError`; auth errors propagate loudly with zero retries. Structural changes (the
+Studies migration, 3.2 expansion) land as ONE commit through the Git Data API (`commit_files`:
+blobs -> tree -> commit -> ref). Payloads above 1,000,000 bytes are refused pre-flight
+(defensive content bound, not an API limit). Note titles pass ONE deterministic sanitizer
+(separators -> spaces, forbidden chars stripped, Arabic preserved:
+«ملاحظة: اجتماع/الأسبوع؟» -> «ملاحظة اجتماع الأسبوع»). Frontmatter is
+`yaml.safe_dump(allow_unicode=True, sort_keys=False)` inside leading `---` fences only;
+malformed YAML on read raises ValueError naming the path. Canonical constants consumed by
+3.3/3.4: `PROFILE_USER_INFO`, `PROFILE_DIALECT`, `CONVERSATIONS_DIR`,
+`CONFIRMATIONS_DIR`, `AUDIT_DIR` (all under `04_Archives/`). The token never reaches a log,
+exception, or URL (`redact_secret` screens every such path). First boot:
+`ensure_mandatory_dirs()` upserts an index note per missing mandatory dir and contacts
+subdir plus both profile files — idempotent, re-run writes nothing.
+
 Voice memos from mobile are transcribed, tagged with YAML frontmatter, and filed
 automatically. Conversations that produce actionable tasks close with Sara asking:
 "هل بتحب ألخص لك شو رح أعمل هسا؟" — then recites the summary and files it
@@ -209,6 +228,16 @@ LANDED (sprint-2 2.3b, `src/skills/social_enrollment.py`): `VoiceprintRegistry` 
 `stage_pending`/`pending_briefs`/`resolve_pending` (three-way verdict routing above),
 `record_transcript` (timestamped dossier section). Bot wiring: `verify_or_lockdown`
 routes matched contacts to `CONTACT_MODE_AR` (message-taking only) before Guest Mode.
+
+VAULT-SIDE (sprint-3 3.1b, `src/skills/social_graph.py`): `SocialGraph` rides
+`VaultClient` — `dossier()`/`create_dossier()` (frontmatter
+`name/category/relation_tags/voiceprint_ref/created/last_interaction`; `Ignored/`
+carries `tracking: false`, `Unknown/` carries `security_flag: true`), `extract_entities()`
+(ONE FAST-tier call per narration; strict-JSON reply validated into `EntityMention`
+models — LLM output is DATA, garbage -> [] loudly), and `file_action()` (dated
+`## YYYY-MM-DD` section appended to the person's dossier AND `Daily_Logs/YYYY-MM-DD.md`;
+ambiguous `category_inferred: null` holds for owner confirmation before filing;
+`Ignored/` mentions never write).
 
 ## 7. Component Registry (`config/agents_config.json`)
 

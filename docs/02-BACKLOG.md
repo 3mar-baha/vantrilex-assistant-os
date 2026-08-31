@@ -103,10 +103,13 @@ Skills ingested (Sprint 2): `mattpocock/skills` TDD · `guard-skills` clean-code
 Skills ingested (Sprint 3): `mattpocock/skills` TDD + git-guardrails · `guard-skills`
 test-guard · `everything-claude-code` systems-architect. Teardown → `docs/10-CHECKPOINT.md`.
 
-- [ ] **3.1 `skill-obsidian-vault-architect`** — M6 / ADR-21: git-backed vault client
-      (GitHub API / local clone), YAML frontmatter writer, PARA path helpers, Zettelkasten
+- [x] **3.1 `skill-obsidian-vault-architect`** — M6 / ADR-21: git-backed vault client
+      (GitHub Contents API), YAML frontmatter writer, PARA path helpers, Zettelkasten
       link builder; first-boot guard test asserts `Contacts/` `Call_Transcripts/` `Studies/`
       `Voice_Memos/` `Daily_Logs/` + profile files exist.
+      Done 2026-08-31: `src/vault.py` (Contents API transport + Git Data API structural
+      commits + idempotent bootstrap + Studies migration) and `src/skills/social_graph.py`
+      (3.1b dossier/extract/file); 31 new tests (181 total), gate green; no plaintext tokens.
       *AC*: `test_obsidian_para.py` + vault-dir guard test; no plaintext tokens.
 - [ ] **3.2 `skill-dynamic-vault-expander`** — M5: Sara grows directories/tag ontologies as
       domains emerge; every structural change is an auditable git commit; PARA backbone
