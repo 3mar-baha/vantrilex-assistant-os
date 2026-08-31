@@ -9,6 +9,20 @@ product release tags start independently at v1.0.0.)
 ## [Unreleased]
 
 ### Added
+- **Sprint 4 / task 4.3 — skill-polymath-tutor (M9)**: `src/tutor.py` — first-principles
+  tutoring as a persona behavior of the existing chat+brain+vault loop, NO new engine:
+  `study_artifact(topic, level, language, gateway, vault)` drives ONE `Tier.HEAVY`
+  conversation (temperature 0.4, 4096-token budget) under `TUTOR_SYSTEM_PROMPT` —
+  first-principles deconstruction (concept/why/how it's built), a graded learning
+  path, 5 drills with answers, bilingual key terms, in the requested language
+  verbatim (10 languages, Arabic-first). Artifacts file to
+  `Studies/<topic>/Study Guide.md` with complete YAML frontmatter
+  (type/topic/level/language/links/created/tags) and wikilinks; oversized topics cap
+  at 120 chars. Boundaries: no provider or PC surface in the module (AST-scanned);
+  generated content is DATA — imperative strings store verbatim and trigger nothing;
+  vault failure logs ERROR + raises `StudyFilingError` carrying the FULL content with
+  an Arabic apology so the reply never loses the guide. 6 new tests (253 total),
+  gate green.
 - **Sprint 4 / task 4.2 — skill-dynamic-capability-expansion (M4)**:
   `src/expansion.py` — Sara gains capabilities at runtime, no redeploy (ADR-15 state
   re-derivation): the owner hands a credential env NAME in chat; `CapabilityScheduler`

@@ -171,10 +171,18 @@ Final teardown → `docs/10-CHECKPOINT.md` (v1.0.0 entry).
       disables loudly with one owner notify, state record `State/capabilities.json` +
       `restore(pipelines)` re-derivation on restart (ADR-15); 10 new tests (247 total),
       gate green. AC10 live smoke (owner registers a real task on Telegram) is owner-side.
-- [ ] **4.3 `skill-polymath-tutor`**: curriculum compiler — study guides + 10-language
+- [x] **4.3 `skill-polymath-tutor`**: curriculum compiler — study guides + 10-language
       lessons with YAML frontmatter filed to `Studies/`; first-principles deconstruction;
       no new engine (chat + 3-tier brain + vault).
       *AC*: lesson artifact renders from a fixture topic through mocked brain.
+      Done 2026-08-31: `src/tutor.py` — `TUTOR_SYSTEM_PROMPT` (first-principles
+      contract, 10 languages, content-as-data clause) + `study_artifact` (ONE
+      `Tier.HEAVY` call, topic capped at 120 chars, YAML frontmatter
+      type/topic/level/language/links/created/tags, filed to
+      `Studies/<topic>/Study Guide.md`); vault failure raises `StudyFilingError`
+      carrying the FULL content (loud ERROR + Arabic apology — never lost); AST-scanned
+      zero provider/PC surface; 6 new tests (253 total), gate green. AC6 live smoke
+      (one real study session) is owner-side.
 - [ ] **4.4 Production hardening + release (HF Spaces primary, Cloud Run documented
       fallback)**: **>=85% BRANCH coverage** (pytest-cov `--cov-branch`) in `make gate`,
       pre-commit secret scanning, $0.00 verification step, Space Dockerfile (`app_port`,
