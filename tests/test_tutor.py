@@ -13,9 +13,9 @@ import httpx
 import pytest
 from helpers_vault import FakeGitHub
 from loguru import logger
-from src.tutor import MAX_TOPIC_CHARS, TUTOR_SYSTEM_PROMPT, StudyFilingError, study_artifact
 
 from src.gateway import Tier
+from src.tutor import MAX_TOPIC_CHARS, TUTOR_SYSTEM_PROMPT, StudyFilingError, study_artifact
 from src.vault import VaultClient
 
 TOKEN = "your-github-test-pat-abcdef0123456789"
