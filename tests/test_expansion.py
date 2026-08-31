@@ -20,8 +20,8 @@ from loguru import logger
 
 from src.config import Settings
 from src.expansion import (
-    RESERVED_TASK_NAMES,
     CAPABILITIES_STATE_PATH,
+    RESERVED_TASK_NAMES,
     CapabilityScheduler,
     ExpansionError,
     parse_nl_cron,
@@ -48,9 +48,8 @@ def _vault() -> tuple[VaultClient, FakeGitHub]:
 
 
 def _scheduler(vault, *, notifier=None, **kwargs) -> CapabilityScheduler:
-    return CapabilityScheduler(
-        vault=vault, notifier=notifier or FakeNotifier(), task_timeout_s=2.0, **kwargs
-    )
+    kwargs.setdefault("task_timeout_s", 2.0)
+    return CapabilityScheduler(vault=vault, notifier=notifier or FakeNotifier(), **kwargs)
 
 
 def _register(scheduler, settings: Settings, name: str = "weather-fetch", pipeline=None):
@@ -107,12 +106,10 @@ async def test_invalid_credential_rejected_loudly(make_settings):
     records: list = []
     handler_id = logger.add(records.append, level="DEBUG")
     try:
-        with mock.patch.dict(os.environ, {}, clear=True):  # credential absent
-            with pytest.raises(ExpansionError):
-                await _register(scheduler, make_settings())
-        with mock.patch.dict(os.environ, {CRED_ENV: "short"}):  # bad format
-            with pytest.raises(ExpansionError):
-                await _register(scheduler, make_settings())
+        with mock.patch.dict(os.environ, {}, clear=True), pytest.raises(ExpansionError):
+            await _register(scheduler, make_settings())
+        with mock.patch.dict(os.environ, {CRED_ENV: "short"}), pytest.raises(ExpansionError):
+            await _register(scheduler, make_settings())
         assert scheduler.inventory() == []  # nothing registered
     finally:
         logger.remove(handler_id)
@@ -137,15 +134,14 @@ async def test_task_failure_disables_and_logs(make_settings):
 
     with mock.patch.dict(os.environ, {CRED_ENV: SECRET_VALUE}):
         handle = await _register(scheduler, make_settings(), pipeline=pipeline)
-    ran = await scheduler.run_once("weather-fetch")
-    assert ran is True
-    assert calls, "pipeline never executed"
-    assert handle.enabled is False
-    assert "boom" in (handle.last_error or "")
-
     captured: list = []
     hid = logger.add(captured.append, level="ERROR")
     try:
+        ran = await scheduler.run_once("weather-fetch")
+        assert ran is True
+        assert calls, "pipeline never executed"
+        assert handle.enabled is False
+        assert "boom" in (handle.last_error or "")
         again = await scheduler.run_once("weather-fetch")
     finally:
         logger.remove(hid)
@@ -230,9 +226,11 @@ async def test_reserved_names_refused(make_settings):
     assert RESERVED_TASK_NAMES
     for name in ("triage", "bridge", "telemetry"):
         assert name in RESERVED_TASK_NAMES
-        with mock.patch.dict(os.environ, {CRED_ENV: SECRET_VALUE}):
-            with pytest.raises(ExpansionError):
-                await _register(scheduler, make_settings(), name=name)
+        with (
+            mock.patch.dict(os.environ, {CRED_ENV: SECRET_VALUE}),
+            pytest.raises(ExpansionError),
+        ):
+            await _register(scheduler, make_settings(), name=name)
     assert scheduler.inventory() == []
 
 
@@ -261,7 +259,6 @@ async def test_concurrent_registration_single_entry(make_settings):
 def test_next_run_advances():
     """Support — next-occurrence arithmetic: daily spec advances a day in its tz."""
     spec = parse_nl_cron("كل صباح 7")
-    scheduler = CapabilityScheduler()
     now = spec.now_tz() - timedelta(minutes=1)
     nxt = spec.next_after(now)
     assert nxt.hour == 7
