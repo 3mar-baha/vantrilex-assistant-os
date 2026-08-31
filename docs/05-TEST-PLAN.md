@@ -35,7 +35,7 @@
 | `test_obsidian_para.py` | Note create/update; YAML frontmatter; Zettelkasten links; PARA path routing; first-boot mandatory-dir guard |
 | `test_vault_expand.py` | M5: new domain -> dir + tags; structural change = git commit; PARA backbone immutable |
 | `test_post_call_summary.py` | Action-summary prompt fires only when actionable tasks exist |
-| `test_telemetry.py` | `GET /telemetry/live-state`: foreground window, whitelisted processes, categorized screen time — authed channel only |
+| `test_desktop_telemetry.py` | Sprint 3.5: psutil LiveState snapshot (degraded-on-failure); Bearer-gated `GET /telemetry/live-state` + tunnel cmd `telemetry.state`; Tier-1 Arabic narration with verbatim numbers + fallback; honest offline line; payload free of secrets |
 | `test_bridge_protocol.py` | Envelope conformance, heartbeat, auth rejection, outbound-only + zero listening ports assertion |
 | `test_whitelist_guardrail.py` | Non-whitelisted blocks; confirmation round-trip; audit confirmation IDs persisted (sacred floor) |
 | `test_wol_idle.py` | Magic-packet bytes match MAC; single idle offer per window |

@@ -9,6 +9,17 @@ product release tags start independently at v1.0.0.)
 ## [Unreleased]
 
 ### Added
+- **Sprint 4 / task 4.1 — module-syllabus-to-dag-parser**: `src/syllabus.py` turns a
+  course syllabus PDF into an executable study plan — threaded `pypdf` extraction
+  (length-capped untrusted input), ONE TIER3 `HEAVY_MODEL` call with strict-JSON output
+  (one malformed retry, then loud `SyllabusError`; temperature 0, max_tokens 4096
+  budget), nx-free DAG validation (cycles and orphan prereqs rejected with named
+  offenders, deadlines parsed), weighted capped review schedule (60-min sessions
+  backward from each deadline, daily cap, `[sara:syllabus:...]` idempotency tags on
+  every Calendar event and Tasks entry), and the compiled plan filed to
+  `Studies/<course>/` with YAML frontmatter. PDF text is DATA never instructions —
+  the module has no PC-action surface (AST-scanned by AC7). New dep `pypdf>=5` (BSD-3).
+  9 new tests (237 total), gate green.
 - **Sprint 3 / task 3.5 — skill-desktop-telemetry-protocol**: one psutil snapshot
   (`bridge/telemetry.live_state()` — cpu, ram, C:/D: disks, uptime, top-CPU process,
   <2 s) that degrades unmeasurable metrics to None instead of crashing; served two

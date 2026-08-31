@@ -152,10 +152,14 @@ Skills ingested (Sprint 4): `guard-skills` docs-guard + test-guard ·
 `universal-agentic-os` github-release-packager + circuit-breaker-guard.
 Final teardown → `docs/10-CHECKPOINT.md` (v1.0.0 entry).
 
-- [ ] **4.1 `module-syllabus-to-dag-parser`**: `pypdf` extraction + Tier-3 heavy model
+- [x] **4.1 `module-syllabus-to-dag-parser`**: `pypdf` extraction + Tier-3 heavy model
       (ADR-16) parsing syllabus PDFs into Task DAGs -> Google Calendar / Tasks review
       schedules; artifacts filed to `Studies/`.
       *AC*: fixture syllabus PDF produces a valid DAG + scheduled reviews.
+      Done 2026-08-31: `src/syllabus.py` — threaded extraction, TIER3 strict-JSON parse
+      (one retry then loud), validated DAG (cycles/orphans named), weighted capped
+      schedule with idempotency tags, Studies filing; 9 new tests (237 total), gate
+      green. AC10 live smoke (real PDF -> real Calendar sandbox) is owner-side.
 - [ ] **4.2 `skill-dynamic-capability-expansion`** — M4: owner-supplied credentials -> new
       scheduled async tasks without redeploy; natural-language Arabic cron; loud failure
       disables a task; secrets enter via `.env` only, never chat logs.

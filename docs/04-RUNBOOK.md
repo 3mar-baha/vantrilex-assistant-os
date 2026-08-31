@@ -68,6 +68,20 @@ subsequent edits coalesce at `STREAM_EDIT_INTERVAL_MS`, and the final bubble tex
 exact. Live: send the owner a text message — the «…» bubble appears immediately and the
 first words replace it within a quarter second.
 
+### Syllabus parser smoke (task 4.1, fixture PDF -> DAG)
+
+```powershell
+pytest tests/test_syllabus_parser.py -q
+```
+
+Runs the full parser contract against the committed fixture
+`tests/fixtures/syllabus_sample.pdf`: threaded pypdf extraction, TIER3 strict-JSON
+parse (brain doubled), DAG validation (cycles/orphans named), weighted capped review
+schedule, Calendar/Tasks materialization with `[sara:syllabus:...]` idempotency tags,
+Studies filing, and the untrusted-PDF boundary (injection text travels as DATA only).
+Live (AC10, manual): a real PDF -> real Calendar sandbox — the review schedule appears
+in Calendar/Tasks with the tags.
+
 ## 4. HF Space Deployment (production, free tier — ADR-15)
 
 Supersedes VPS deployment (ADR-05). One Docker Space co-locates OmniRoute +
