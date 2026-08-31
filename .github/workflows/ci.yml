@@ -29,9 +29,8 @@ jobs:
       - name: Test Guard (pytest)
         run: python -m pytest -v
 
-      - name: Security Scan (bandit)
-        run: |
-          if [ -d src ]; then bandit -q -r src/; else echo "no src/ yet — scan activates with first implementation"; fi
+      - name: Security Gate (bandit + secret scan)
+        run: python scripts/security_gate.py
 
       - name: Docs Guard
         run: python scripts/docs_guard.py

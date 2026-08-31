@@ -26,7 +26,7 @@ class FakeCommunicate:
         self.pitch = pitch
         FakeCommunicate.instances.append(self)
 
-    async def stream(self):  # pragma: no cover - scripted by _script()
+    async def stream(self):  # pragma: no cover -- scripted by _script()
         raise NotImplementedError
 
 

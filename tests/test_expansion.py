@@ -30,7 +30,7 @@ from src.vault import VaultClient
 
 TOKEN = "your-github-test-pat-abcdef0123456789"
 CRED_ENV = "MY_NEW_API_KEY"
-SECRET_VALUE = "sk-test-credential-value-0123456789"  # >= 16 chars, no whitespace
+SECRET_VALUE = "your-test-credential-value-0123456789"  # placeholder, >= 16 chars, no whitespace
 
 
 class FakeNotifier:
