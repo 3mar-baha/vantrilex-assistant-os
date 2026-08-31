@@ -9,6 +9,19 @@ product release tags start independently at v1.0.0.)
 ## [Unreleased]
 
 ### Added
+- **Sprint 3 / task 3.2 — skill-dynamic-vault-expander (M5)**:
+  `src/vault_expand.py` — `VaultExpander.expand(domain, dirs, tags)` grows new domain
+  trees under `01_Projects/<domain>` as structure emerges in conversation: sanitized
+  sub-directories, an `_index.md` per directory (wikilinked to the domain root), and the
+  tag ontology `<domain>/_tags.yaml` (`domain` / `created` ISO-UTC / `tags`, Arabic
+  intact). Every expansion lands as ONE auditable commit (`sara: expand vault —
+  <domain>`) through the Git Data API. PARA backbone (`01_Projects/ 02_Areas/
+  03_Resources/ 04_Archives/ Contacts/ Call_Transcripts/ Studies/ Voice_Memos/
+  Daily_Logs/`) is expansion-only — backbone-touching requests raise
+  `BackboneImmutableError` pre-flight (zero API calls) and the module has no
+  delete/move code path. Idempotent (vault state IS the memory — re-run = empty delta,
+  no commit); invalid proposals refused pre-flight; token never in logs/exceptions.
+  10 new tests (191 total), gate green.
 - **Sprint 3 / task 3.1 — skill-obsidian-vault-architect (M6 / ADR-21)**:
   `src/vault.py` — THE read/write surface for Sara's git-backed Obsidian vault:
   `VaultClient` over the GitHub Contents API (Bearer + versioned headers, `?ref=VAULT_BRANCH`;

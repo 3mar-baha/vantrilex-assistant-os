@@ -111,10 +111,13 @@ test-guard · `everything-claude-code` systems-architect. Teardown → `docs/10-
       commits + idempotent bootstrap + Studies migration) and `src/skills/social_graph.py`
       (3.1b dossier/extract/file); 31 new tests (181 total), gate green; no plaintext tokens.
       *AC*: `test_obsidian_para.py` + vault-dir guard test; no plaintext tokens.
-- [ ] **3.2 `skill-dynamic-vault-expander`** — M5: Sara grows directories/tag ontologies as
+- [x] **3.2 `skill-dynamic-vault-expander`** — M5: Sara grows directories/tag ontologies as
       domains emerge; every structural change is an auditable git commit; PARA backbone
       expansion-only.
       *AC*: `tests/test_vault_expand.py` per spec M5.
+      Done 2026-08-31: `src/vault_expand.py` — `VaultExpander` (one-commit domain growth
+      via Git Data API, `_tags.yaml` ontology, backbone immutable pre-flight, idempotent
+      vault-state-as-memory); 10 new tests (191 total), gate green.
 - [ ] **3.3 `skill-verbal-action-summary-protocol` + conversation capture**: preference
       extraction -> `User_Info.md`, colloquialisms -> `Dialect_Notes.md`; summary protocol
       («هل بتحب ألخص لك شو رح أعمل هسا؟») on task-bearing turns, suppressed for casual ones.
