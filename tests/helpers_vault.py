@@ -27,6 +27,7 @@ class FakeGitHub:
         self.requests: list[httpx.Request] = []
         self.fail_get_status: dict[str, int] = {}  # path -> forced GET status (401, ...)
         self.put_conflicts: dict[str, int] = {}  # path -> number of 409s to inject
+        self.break_data_api = False  # True -> Git Data API endpoints return 500
         self._ids = itertools.count(1)
         self._head = "commit-0000-base"
         self._tree = "tree-0000-base"
@@ -53,6 +54,8 @@ class FakeGitHub:
             return self._get_contents(parts.removeprefix("contents/"))
         if method == "PUT" and parts.startswith("contents/"):
             return self._put_contents(parts.removeprefix("contents/"), json.loads(request.content))
+        if parts.startswith("git/") and self.break_data_api:
+            return self._json({"message": "data api down"}, status=500)
         if method == "GET" and parts == f"git/ref/heads/{self.branch}":
             return self._json({"object": {"sha": self._head}})
         if method == "GET" and parts.startswith("git/commits/"):
