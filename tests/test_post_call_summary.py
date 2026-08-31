@@ -11,11 +11,10 @@ import json
 from datetime import UTC, datetime
 
 import httpx
-import pytest
+from helpers_vault import FakeGitHub
 from loguru import logger
 
 from common.consent import SUMMARY_PROMPT, is_affirmative
-from helpers_vault import FakeGitHub
 from src.gateway import GatewayError, Tier
 from src.summary import ActionTask, ConversationSummary, PendingSummary, TaskExtractor
 from src.vault import CONVERSATIONS_DIR, VaultClient, split_frontmatter
@@ -50,12 +49,18 @@ class FakeNotifier:
         self.sent.append(text)
 
 
-def _summary(brain: FakeBrain, *, deferred=lambda: False) -> tuple[ConversationSummary, FakeGitHub, FakeNotifier]:
+def _summary(
+    brain: FakeBrain, *, deferred=lambda: False
+) -> tuple[ConversationSummary, FakeGitHub, FakeNotifier]:
     gh = FakeGitHub()
     session = httpx.AsyncClient(transport=gh.transport, base_url="https://api.github.com")
     vault = VaultClient("owner/vault-repo", TOKEN, session=session)
     notifier = FakeNotifier()
-    return ConversationSummary(vault, TaskExtractor(brain), notifier, deferred=deferred), gh, notifier
+    return (
+        ConversationSummary(vault, TaskExtractor(brain), notifier, deferred=deferred),
+        gh,
+        notifier,
+    )
 
 
 async def test_prompt_only_when_actionable_tasks_exist():
@@ -104,7 +109,7 @@ async def test_decline_discards_pending_summary():
 async def test_confirmation_arbitration_deterministic():
     """AC5 — a live confirmation owns the channel; the summary is re-asked after."""
     flag = {"deferred": False}
-    s, gh, notifier = _summary(FakeBrain(TWO_TASKS, "[]"), deferred=lambda: flag["deferred"])
+    s, _gh, notifier = _summary(FakeBrain(TWO_TASKS, "[]"), deferred=lambda: flag["deferred"])
     pending = await s.process_turn("خلصنا الاجتماع", "جهزت لك الخلاصة")
     assert pending is not None
     flag["deferred"] = True
@@ -162,7 +167,7 @@ async def test_extractor_garbage_is_contained():
 
 async def test_brain_failure_never_breaks_reply():
     """AC9 — brain failure: turn completes uncaptured; an active pending survives."""
-    s, gh, notifier = _summary(FakeBrain(TWO_TASKS, GatewayError("pool down"), "[]"))
+    s, _gh, notifier = _summary(FakeBrain(TWO_TASKS, GatewayError("pool down"), "[]"))
     pending = await s.process_turn("خلصنا الاجتماع", "جهزت لك الخلاصة")
     assert pending is not None
     assert await s.process_turn("رسالة أثناء العطل", "رد") is None  # no raise, no capture
@@ -173,7 +178,7 @@ async def test_brain_failure_never_breaks_reply():
 
 async def test_extraction_dispatches_tier2_medium():
     """AC10 — extraction rides the TIER 2 MEDIUM dispatch."""
-    s, _, _ = _summary(FakeBrain(TWO_TASKS))
+    s, _gh, _ = _summary(FakeBrain(TWO_TASKS))
     await s.process_turn("خلصنا الاجتماع", "جهزت لك الخلاصة")
     brain = s._extractor._brain
     assert brain.calls, "extractor never called the brain"
