@@ -106,6 +106,13 @@ The bridge daemon's `BRIDGE_SERVER_URL` simply points at the Cloud Run WSS URL i
    LAN address, and no other LISTENING entry for the daemon.
 4. Enable Wake-on-LAN in the NIC's advanced properties + BIOS ("Wake on Magic Packet"),
    on Ethernet.
+5. Whitelist editing (owner, `config/whitelist.json`): the guard RE-READS the file on
+   every check — edits apply live, no daemon restart. A corrupt/unreadable file fails
+   CLOSED (everything requires confirmation) and logs CRITICAL.
+6. Audit trail: every PC action appends one line to `04_Archives/Audit/pc-ledger.md`
+   (`ts | audit_code | action | outcome | reason`); each confirmed command has a
+   Confirmations note (`Confirmations/YYYY-MM-DD_<id8>.md`) persisted BEFORE the command
+   leaves the core. Quote the «رمز التدقيق» from Sara's message when auditing.
 
 > **Wake reality check**: the WoL *sender* runs on the PC itself, so a suspended or
 > powered-off PC cannot send a magic packet to its own NIC. Waking it requires an

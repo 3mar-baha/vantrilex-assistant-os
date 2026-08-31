@@ -9,6 +9,23 @@ product release tags start independently at v1.0.0.)
 ## [Unreleased]
 
 ### Added
+- **Sprint 3 / task 3.4 — skill-pc-whitelist-safety-guardrail (M5)**:
+  the PC control plane. `common/protocol.py` — v1 wire (JSON-per-frame, Hello/HelloAck
+  token handshake: bad token closed 4401, second session 4400, token never logged);
+  `bridge/guard.py` — whitelist re-read per check, fail-CLOSED on corrupt file
+  (CRITICAL), power actions ALWAYS need a confirmation id; `bridge/executor.py` —
+  detached `shell=False` spawns, audit codes `PC-YYYYMMDD-HHMMSS-4hex`, traversal/UNC
+  refusal (`outside_allowed_roots`), missing exe «البرنامج مش موجود عالجهاز»;
+  `bridge/wol.py` + `bridge/idle.py` — exact 102-byte magic packet (one UDP:9 sendto)
+  and the latched idle monitor (one offer per window, sustained-activity re-arm);
+  `src/bridge_server.py` — single-session acceptor, silence watchdog, honest
+  `BridgeOffline`; `bridge/daemon.py` — outbound-only dialer (AST-asserted: never
+  binds), heartbeat + capped exponential backoff; `src/pc_actions.py` — owner-origin
+  gate (`RefusedOrigin`), confirmations-note-BEFORE-command, one audit code chaining
+  note → cmd → ExecResult → Telegram, append-only `04_Archives/Audit/pc-ledger.md`;
+  `docs/06-API-SPECIFICATION.md` formalizes the contracts (force semantics DROPPED).
+  13 new tests (216 total), gate green.
+
 - **Sprint 3 / task 3.3 — skill-verbal-action-summary-protocol**:
   `src/summary.py` + `common/consent.py` — task-bearing turns close with the exact
   Jordanian prompt «هل بتحب ألخص لك شو رح أعمل هسا؟»; `TaskExtractor` rides ONE TIER 2

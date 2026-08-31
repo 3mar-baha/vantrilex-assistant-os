@@ -125,12 +125,18 @@ test-guard · `everything-claude-code` systems-architect. Teardown → `docs/10-
       Done 2026-08-31: `src/summary.py` (TIER-2 extractor, one-pending state machine,
       arbitration + consent binding) + `common/consent.py` (shared grammar for 3.4);
       10 new tests (201 total), gate green.
-- [ ] **3.4 `skill-pc-whitelist-safety-guardrail`**: Windows daemon — outbound-only TLS
+- [x] **3.4 `skill-pc-whitelist-safety-guardrail`**: Windows daemon — outbound-only TLS
       WebSocket to the Space, LAN port 8000, zero public inbound (asserted), WoL magic
       packet UDP:9, 20-min idle -> one offer per window, strict `config/whitelist.json`
       enforcement, unique audit confirmation IDs persisted to vault.
       *AC*: `test_whitelist_guardrail.py` blocks non-whitelisted and records approvals;
       packet bytes match target MAC; 0% unauthorized executions.
+      Done 2026-08-31 — `common/protocol.py` (v1 wire, 4401/4400 auth), `bridge/`
+      (guard fail-closed + executor + wol + idle + daemon + LanServer + `__main__`),
+      `src/pc_actions.py` (origin gate, confirmations-before-command, audit ledger),
+      `src/bridge_server.py` (single session, silence watchdog); 13 new tests (216
+      total); `docs/06-API-SPECIFICATION.md` formalized (force semantics DROPPED,
+      confirmation_id + audit_code documented).
 - [ ] **3.5 `skill-desktop-telemetry-protocol`**: `GET /telemetry/live-state` over the
       authenticated bridge — foreground window, whitelisted processes, daily categorized
       screen time.

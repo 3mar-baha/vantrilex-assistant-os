@@ -52,6 +52,7 @@ graph TD
     WSS <-->|outbound-only link| Bridge[Windows PC Bridge Daemon]
     subgraph PC [Windows PC - may sleep]
         Bridge --> MCP[Windows-MCP executor]
+        Bridge --> LAN[LanServer :8000 loopback/LAN - /health]
         Bridge --> WoL[Wake-on-LAN sender UDP:9]
         Bridge --> Idle[Idle monitor 20 min]
         MCP --> Apps[Whitelisted apps / files C:, D:]
@@ -120,16 +121,26 @@ posture. True Pub/Sub webhook (public HTTPS) is deferred to v1.1.
 }
 ```
 
-Flow: request -> lookup in `config/whitelist.json` -> whitelisted => execute via
-Windows-MCP and notify -> NOT whitelisted => confirmation prompt on Telegram
-(v1.0 text/voice note; v1.1 live call: "هاد البرنامج مش بالقائمة المعتمدة، هل
-بتأكدلي صراحة؟") => explicit approval recorded (confirmation ID persisted to vault)
-=> execute. Idle >20 min => Sara offers shutdown/sleep by message.
+Flow (realized in sprint-3 3.4, `bridge/` + `src/pc_actions.py`): the daemon dials OUT to
+the core's WSS endpoint (zero inbound PC ports) and is the only process on the PC that
+executes commands — the guard re-checks `config/whitelist.json` on EVERY check (owner
+edits apply live; a corrupt file fails CLOSED, confirming everything, with a CRITICAL
+log). request -> lookup -> whitelisted (`auto_approve`) => execute and notify ->
+NOT whitelisted => confirmation prompt on Telegram (v1.0 text/voice note; v1.1 live call:
+"هاد البرنامج مش بالقائمة المعتمدة، هل بتأكدلي صراحة؟") => explicit approval => the core
+mints a `confirmation_id` + audit code (`PC-YYYYMMDD-HHMMSS-4hex`), persists the
+Confirmations note BEFORE the command leaves (approval without audit is void), then
+re-sends WITH the id => execute. One audit code chains note -> command -> ExecResult ->
+the owner-quotable «رمز التدقيق». Every event lands one line in
+`04_Archives/Audit/pc-ledger.md`. Power actions ALWAYS need a confirmation id regardless
+of any whitelist flag. Idle >20 min => Sara offers sleep/shutdown once per idle window
+(real activity re-arms); the owner's choice rides the same confirmation flow.
 
-The same bridge channel (LAN port 8000, authenticated WSS + `BRIDGE_TOKEN`) serves the
-**desktop telemetry protocol**: `GET /telemetry/live-state` returns the active foreground
-window, running whitelisted processes, and daily categorized screen time — consumed by
-Tier 2 (ADR-16) for briefs and check-ins.
+The same bridge channel (LAN port 8000, token-authenticated, loopback/LAN-bound — never
+0.0.0.0) serves the **desktop telemetry protocol**: `GET /telemetry/live-state` returns
+the active foreground window, running whitelisted processes, and daily categorized screen
+time — consumed by Tier 2 (ADR-16) for briefs and check-ins. Wire contract + audit-code
+lifecycle: `docs/06-API-SPECIFICATION.md`.
 
 ## 6. Knowledge Vault Layout (PARA + Zettelkasten)
 
