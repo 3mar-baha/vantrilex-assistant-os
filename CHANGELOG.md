@@ -8,6 +8,28 @@ product release tags start independently at v1.0.0.)
 
 ## [Unreleased]
 
+## [1.0.1] — 2026-08-31
+
+Patch release closing the two gaps discovered while preparing the first cloud deploy.
+
+### Fixed
+- **Container could never start the gateway**: OmniRoute is a Node/npm application
+  (engines `node >=22.22`) while the image was `python:3.12-slim` — no Node runtime.
+  The Dockerfile now installs Node 24 via NodeSource and installs the vendored
+  OmniRoute clone globally (`npm install -g /app/scripts/omniroute` — the clone pins
+  the gateway version), with `ENV OMNIROUTE_CMD="omniroute run"` as the zero-config
+  default. Asserted by `tests/test_packaging.py::test_dockerfile_contract`.
+
+### Changed
+- **ADR-15 amended: Oracle Cloud Always Free replaces the HF Space as production host**
+  (owner ruling 2026-08-31). HF made Docker/Gradio Spaces a paid PRO feature ($9/mo —
+  breaks the $0.00 invariant); Render/Koyeb/Cloud-Run free tiers (512 MB) cannot carry
+  the full stack. The container design is unchanged and host-agnostic; the
+  disposable-filesystem rule stays as a design principle, and the OAuth client JSON may
+  live on the VM (never git), resolving the Space-era Google gap. Owner deploy guide:
+  `docs/09-ORACLE-DEPLOY.md`; RUNBOOK §4 re-anchored; keep-alive cron now optional
+  (the VM never sleeps).
+
 ## [1.0.0] — 2026-08-31
 
 First tagged release: **Sara (سارة)** — an owner-only, strictly-zero-cost executive

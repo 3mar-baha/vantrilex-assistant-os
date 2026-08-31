@@ -57,8 +57,9 @@ def test_no_live_call_stack_in_artifacts_and_source():
 
 def test_v100_documents_scope_deferrals():
     """AC3 — the [1.0.0] CHANGELOG section carries a Deferred-to-v1.1 block naming
-    the PyTgCalls engine and the Mem0/Firestore memory evaluation."""
-    _date, section = make_release.changelog_release(make_release.current_version())
+    the PyTgCalls engine and the Mem0/Firestore memory evaluation. Pinned to v1.0.0:
+    the deferral contract belongs to that first scope-freeze release, not to HEAD."""
+    _date, section = make_release.changelog_release("1.0.0")
     assert re.search(r"#+\s*Deferred", section), "no deferral section in the [1.0.0] notes"
     assert re.search(r"pytgcalls", section, re.IGNORECASE)
     assert re.search(r"mem0|firestore", section, re.IGNORECASE)
