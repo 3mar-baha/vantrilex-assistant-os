@@ -220,6 +220,130 @@ class VaultClient:
             note.path, write_frontmatter(note.frontmatter, note.body), message=message
         )
 
+    async def append_section(
+        self, path: str, heading: str, lines: list[str], *, commit_prefix: str
+    ) -> WriteResult:
+        """Append a `## heading` section (append-only dossier/log discipline)."""
+        try:
+            existing = (await self.read(path)).rstrip("\n")
+        except FileNotFoundError:
+            existing = ""
+        block = "\n".join([f"## {heading}", "", *lines])
+        merged = f"{existing}\n\n{block}\n" if existing else f"{block}\n"
+        return await self.upsert(path, merged, message=f"{commit_prefix}: {heading}")
+
+    async def commit_files(self, changes: dict[str, str | None], *, message: str) -> str:
+        """Land many file changes as ONE structural commit (Git Data API):
+        blobs -> tree -> commit -> ref update. None deletes a path."""
+        ref = await self._http.get(
+            f"/repos/{self._repo}/git/ref/heads/{self._branch}", headers=self._headers
+        )
+        ref.raise_for_status()
+        base = ref.json()["object"]["sha"]
+        head = await self._http.get(
+            f"/repos/{self._repo}/git/commits/{base}", headers=self._headers
+        )
+        head.raise_for_status()
+        base_tree = head.json()["tree"]["sha"]
+
+        tree = []
+        for path, content in changes.items():
+            if content is None:
+                tree.append({"path": path, "mode": "100644", "type": "blob", "sha": None})
+                continue
+            blob = await self._http.post(
+                f"/repos/{self._repo}/git/blobs",
+                json={"content": content, "encoding": "utf-8"},
+                headers=self._headers,
+            )
+            blob.raise_for_status()
+            tree.append({"path": path, "mode": "100644", "type": "blob", "sha": blob.json()["sha"]})
+
+        tree_response = await self._http.post(
+            f"/repos/{self._repo}/git/trees",
+            json={"base_tree": base_tree, "tree": tree},
+            headers=self._headers,
+        )
+        tree_response.raise_for_status()
+        commit = await self._http.post(
+            f"/repos/{self._repo}/git/commits",
+            json={"message": message, "tree": tree_response.json()["sha"], "parents": [base]},
+            headers=self._headers,
+        )
+        commit.raise_for_status()
+        sha = commit.json()["sha"]
+        update = await self._http.patch(
+            f"/repos/{self._repo}/git/refs/heads/{self._branch}",
+            json={"sha": sha},
+            headers=self._headers,
+        )
+        update.raise_for_status()
+        logger.info("vault structural commit {sha}: {message}", sha=sha, message=redact_secret(message))
+        return sha
+
+    async def ensure_mandatory_dirs(self) -> list[WriteResult]:
+        """M6 first-boot bootstrap: one index note per missing dir + both profile
+        files; idempotent (re-run = zero writes); migrates legacy Studies first."""
+        results: list[WriteResult] = []
+        await self._migrate_studies()
+        targets: list[tuple[str, dict, str]] = []
+        for directory in (*MANDATORY_DIRS, *CONTACTS_SUBDIRS):
+            name = directory.rstrip("/")
+            targets.append(
+                (
+                    f"{directory}{INDEX_NOTE_NAME}",
+                    {"type": "vault-index", "dir": name},
+                    f"# {name}\n\n{_PURPOSES[directory]}\n",
+                )
+            )
+        targets.append(
+            (
+                PROFILE_USER_INFO,
+                {"type": "profile", "name": "User_Info"},
+                "# User Info\n\nOwner profile — identity, preferences, context. Sara keeps this current.\n",
+            )
+        )
+        targets.append(
+            (
+                PROFILE_DIALECT,
+                {"type": "profile", "name": "Dialect_Notes"},
+                "# Dialect Notes\n\nJordanian (ar-JO) speech patterns feeding Sara's adaptive loop.\n",
+            )
+        )
+        for path, frontmatter, body in targets:
+            try:
+                await self.read(path)
+                continue  # exists — idempotent, zero writes
+            except FileNotFoundError:
+                results.append(
+                    await self.upsert_note(
+                        Note(path=path, frontmatter=frontmatter, body=body),
+                        message=f"sara: bootstrap {path}",
+                    )
+                )
+        return results
+
+    async def _migrate_studies(self) -> None:
+        """One-time legacy migration: 02_Areas/Studies/ notes MOVE to top-level
+        Studies/ as ONE structural commit; absent legacy -> nothing."""
+        response = await self._http.get(
+            f"/repos/{self._repo}/contents/02_Areas/Studies/",
+            params={"ref": self._branch},
+            headers=self._headers,
+        )
+        if response.status_code == 404:
+            return
+        response.raise_for_status()
+        data = response.json()
+        notes = [item for item in data if item.get("type") == "file" and item["name"].endswith(".md")]
+        if not isinstance(data, list) or not notes:
+            return
+        changes: dict[str, str | None] = {}
+        for item in notes:
+            changes[f"Studies/{item['name']}"] = await self.read(item["path"])
+            changes[item["path"]] = None
+        await self.commit_files(changes, message="sara: migrate Studies to top-level")
+
     async def _lookup_sha(self, path: str) -> str | None:
         response = await self._http.get(
             f"/repos/{self._repo}/contents/{path}", params={"ref": self._branch}, headers=self._headers
