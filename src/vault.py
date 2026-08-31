@@ -140,7 +140,9 @@ def split_frontmatter(text: str) -> tuple[dict, str]:
     return (meta or {}), text[match.end() :]
 
 
-def zettel_link(title: str, *, alias: str | None = None, block: str | None = None, embed: bool = False) -> str:
+def zettel_link(
+    title: str, *, alias: str | None = None, block: str | None = None, embed: bool = False
+) -> str:
     inner = title
     if alias:
         inner += f"|{alias}"
@@ -182,14 +184,16 @@ class VaultClient:
 
     async def read(self, path: str) -> str:
         response = await self._http.get(
-            f"/repos/{self._repo}/contents/{path}", params={"ref": self._branch}, headers=self._headers
+            f"/repos/{self._repo}/contents/{path}",
+            params={"ref": self._branch},
+            headers=self._headers,
         )
         if response.status_code == 404:
             raise FileNotFoundError(path)
         response.raise_for_status()  # auth errors propagate loudly (no retry)
         data = response.json()
         if isinstance(data, list):
-            raise ValueError(f"{path} is a directory, not a note")
+            raise TypeError(f"{path} is a directory, not a note")
         text = base64.b64decode(data["content"].replace("\n", "")).decode("utf-8")
         try:
             split_frontmatter(text)
@@ -200,9 +204,7 @@ class VaultClient:
     async def upsert(self, path: str, content: str, *, message: str) -> WriteResult:
         payload = content.encode("utf-8")
         if len(payload) > MAX_NOTE_BYTES:
-            raise ValueError(
-                f"payload for {path} exceeds {MAX_NOTE_BYTES} bytes ({len(payload)})"
-            )
+            raise ValueError(f"payload for {path} exceeds {MAX_NOTE_BYTES} bytes ({len(payload)})")
         sha = await self._lookup_sha(path)
         response = await self._put(path, content, message, sha)
         if response.status_code == 409:
@@ -278,7 +280,9 @@ class VaultClient:
             headers=self._headers,
         )
         update.raise_for_status()
-        logger.info("vault structural commit {sha}: {message}", sha=sha, message=redact_secret(message))
+        logger.info(
+            "vault structural commit {sha}: {message}", sha=sha, message=redact_secret(message)
+        )
         return sha
 
     async def ensure_mandatory_dirs(self) -> list[WriteResult]:
@@ -335,7 +339,9 @@ class VaultClient:
             return
         response.raise_for_status()
         data = response.json()
-        notes = [item for item in data if item.get("type") == "file" and item["name"].endswith(".md")]
+        notes = [
+            item for item in data if item.get("type") == "file" and item["name"].endswith(".md")
+        ]
         if not isinstance(data, list) or not notes:
             return
         changes: dict[str, str | None] = {}
@@ -346,7 +352,9 @@ class VaultClient:
 
     async def _lookup_sha(self, path: str) -> str | None:
         response = await self._http.get(
-            f"/repos/{self._repo}/contents/{path}", params={"ref": self._branch}, headers=self._headers
+            f"/repos/{self._repo}/contents/{path}",
+            params={"ref": self._branch},
+            headers=self._headers,
         )
         if response.status_code == 404:
             return None

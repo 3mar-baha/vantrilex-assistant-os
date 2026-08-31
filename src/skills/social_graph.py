@@ -22,6 +22,8 @@ from src.vault import Note, VaultClient, WriteResult, redact_secret, split_front
 
 CONTACT_CATEGORIES = ("Family", "Friends", "Colleagues")  # + Ignored/Unknown (system-managed)
 
+_AMMAN = ZoneInfo("Asia/Amman")
+
 _SYSTEM_PROMPT = (
     "You extract people mentioned in the owner's Arabic daily narration. "
     "Reply with ONLY a JSON array, no prose, no code fences. Each element: "
@@ -68,7 +70,7 @@ class SocialGraph:
         vault: VaultClient,
         brain,  # OmniRouteClient — FAST-tier extraction (ADR-16)
         *,
-        tz: ZoneInfo = ZoneInfo("Asia/Amman"),
+        tz: ZoneInfo = _AMMAN,
     ) -> None:
         self._vault = vault
         self._brain = brain
@@ -153,7 +155,9 @@ class SocialGraph:
         if m.category_inferred == "Ignored":  # tracking: false — never appends
             return []
         if m.category_inferred not in (*CONTACT_CATEGORIES, "Unknown"):
-            logger.warning("social graph: unknown category {c} for {n}", c=m.category_inferred, n=m.name)
+            logger.warning(
+                "social graph: unknown category {c} for {n}", c=m.category_inferred, n=m.name
+            )
             return []
         heading = m.mentioned_at.strftime("%Y-%m-%d")
         results = [

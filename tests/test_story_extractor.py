@@ -7,9 +7,8 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 
 import httpx
-import pytest
-
 from helpers_vault import FakeGitHub
+
 from src.gateway import Tier
 from src.skills.social_graph import SocialGraph
 from src.vault import VaultClient
@@ -19,7 +18,11 @@ MENTIONED_AT = datetime(2026, 8, 31, 20, 15, tzinfo=AMMAN)
 NARRATION = "اليوم اجتمعت مع أحمد ورتبنا خطة الربع، وكلمت محمد بالتلفون."
 ENTITIES_JSON = json.dumps(
     [
-        {"name": "أحمد", "action_summary": "اجتماع وترتيب خطة الربع", "category_inferred": "Colleagues"},
+        {
+            "name": "أحمد",
+            "action_summary": "اجتماع وترتيب خطة الربع",
+            "category_inferred": "Colleagues",
+        },
         {"name": "محمد", "action_summary": "مكالمة هاتفية", "category_inferred": None},
         {"name": "زيزي", "action_summary": "ثلاث مكالمات", "category_inferred": "Ignored"},
     ],
@@ -46,7 +49,9 @@ class FakeBrain:
 
 def _graph(gh: FakeGitHub, reply: str = ENTITIES_JSON) -> tuple[FakeBrain, SocialGraph]:
     session = httpx.AsyncClient(transport=gh.transport, base_url="https://api.github.com")
-    vault = VaultClient("owner/vault-repo", "your-github-test-pat-abcdef0123456789", session=session)
+    vault = VaultClient(
+        "owner/vault-repo", "your-github-test-pat-abcdef0123456789", session=session
+    )
     brain = FakeBrain(reply)
     return brain, SocialGraph(vault=vault, brain=brain, tz=AMMAN)
 
@@ -85,5 +90,5 @@ async def test_daily_narration_files_actions_to_contacts_and_log():
 async def test_extractor_garbage_output_returns_empty():
     """Error mode: LLM output is DATA — unparseable reply yields [], loudly."""
     gh = FakeGitHub()
-    brain, graph = _graph(gh, reply="س 史 <<<not json>>>")
+    _brain, graph = _graph(gh, reply="س 史 <<<not json>>>")
     assert await graph.extract_entities("نص عشوائي", now=MENTIONED_AT) == []

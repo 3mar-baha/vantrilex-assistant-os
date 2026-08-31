@@ -12,9 +12,9 @@ from pathlib import Path
 
 import httpx
 import pytest
+from helpers_vault import FakeGitHub
 from loguru import logger
 
-from helpers_vault import FakeGitHub
 from src.vault import (
     Note,
     VaultClient,

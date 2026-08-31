@@ -9,10 +9,15 @@ without credentials (pure constants + mocked transport) — it runs in make gate
 from pathlib import Path
 
 import httpx
-import pytest
-
 from helpers_vault import FakeGitHub
-from src.vault import CONTACTS_SUBDIRS, MANDATORY_DIRS, MANDATORY_FILES, VaultClient, split_frontmatter
+
+from src.vault import (
+    CONTACTS_SUBDIRS,
+    MANDATORY_DIRS,
+    MANDATORY_FILES,
+    VaultClient,
+    split_frontmatter,
+)
 
 
 def _client(gh: FakeGitHub) -> VaultClient:
@@ -28,7 +33,9 @@ async def test_first_boot_creates_mandatory_tree_idempotent():
 
     results = await client.ensure_mandatory_dirs()
     written = {r.path for r in results}
-    expected = {f"{d}_index.md" for d in (*MANDATORY_DIRS, *CONTACTS_SUBDIRS)} | set(MANDATORY_FILES)
+    expected = {f"{d}_index.md" for d in (*MANDATORY_DIRS, *CONTACTS_SUBDIRS)} | set(
+        MANDATORY_FILES
+    )
     assert written == expected
     for path in written:
         meta, body = split_frontmatter(gh.objects[path][1])
