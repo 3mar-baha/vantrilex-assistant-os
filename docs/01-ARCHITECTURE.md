@@ -194,6 +194,27 @@ automatically. Conversations that produce actionable tasks close with Sara askin
 "هل بتحب ألخص لك شو رح أعمل هسا؟" — then recites the summary and files it
 (suppressed for casual check-ins). Full transcript persistence applies to calls from v1.1.
 
+Verbal action summary protocol (sprint-3 3.3, `src/summary.py` + `common/consent.py`):
+`TaskExtractor.extract` rides ONE TIER 2 MEDIUM call per turn (ADR-16 — the tool-executor
+tier); the reply is strict JSON validated into `ActionTask` models — LLM output is DATA,
+garbage/injection-shaped replies collapse to `[]` loudly (logged by SHA-256 hash, never
+content). A turn with tasks mints ONE `PendingSummary` and sends the exact prompt string
+«هل بتحب ألخص لك شو رح أعمل هسا؟»; a newer turn supersedes an unanswered older pending;
+casual turns capture nothing (zero vault writes). Consent grammar is shared with 3.4 via
+`common/consent.py` (`AFFIRMATIVES`, `is_affirmative` — first-token Jordanian affirmative
+match; ambiguous replies are declines, never guessed as consent), and the binding rule is
+structural: the affirmative mints consent only when it FOLLOWS the live prompt — a stale
+or foreign pending id is inert. On «ايه/نعم/تمام…» the summary files as
+`04_Archives/Conversations/YYYY-MM-DD-HHMMSS-summary.md` — frontmatter `id`, `asked_at`,
+`resolved_at`, `task_count`, `tags: [action-summary]`; numbered tasks (due dates inline) +
+a Zettelkasten wikilink to that day's daily log. Arbitration (safety > convenience): when
+a 3.4 pending confirmation is also active, the confirmation consumer owns the next owner
+message; the summary question is re-asked ONCE after the confirmation resolves
+(deterministic, tested). Brain failure leaves the turn uncaptured (learning loss
+acceptable, breakage not); a failed vault filing retains the pending for one retry then
+drops loudly; in-memory pendings are lost on restart — accepted ceiling (ponytail note in
+code documents the vault-scratch-note upgrade path).
+
 Voice-to-vault leg (sprint-2 2.5, `src/skills/voice_to_vault_transcriber.py`): after the
 2.3 biometric gate passes, the owner's voice note decodes in-memory (ffmpeg, 16 kHz mono
 s16le) and transcribes via LOCAL faster-whisper (MIT, CPU `int8` — cloud STT settled to
