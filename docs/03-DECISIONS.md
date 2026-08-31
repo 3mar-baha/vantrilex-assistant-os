@@ -99,7 +99,7 @@ Supersedes draft preference for Google Cloud Run deployment.
 - **Consequences**: No dependency on OS-repo internals for daily flow; upstream pulls
   still deliver diagnostics/tooling improvements via `uos doctor` + toolkit sync.
 
-## ADR-15: HF Spaces as the v1.0 Runtime Host — **Accepted** (2026-08-29, MASTER DIRECTIVE)
+## ADR-15: HF Spaces as the v1.0 Runtime Host — **Accepted** (2026-08-29, MASTER DIRECTIVE; **amended 2026-08-31: Oracle Always Free**)
 - **Context**: Master directive ordered cloud deployment over free tiers. Candidate hosts
   evaluated: Hugging Face Spaces (2 vCPU / 16 GB RAM / 50 GB, Docker, no card),
   Koyeb Nano (0.1 vCPU / 512 MB), Render free (512 MB + 15-min sleep). ADR-05's
@@ -117,6 +117,19 @@ Supersedes draft preference for Google Cloud Run deployment.
   (2) Free Spaces may idle-sleep after prolonged inbound silence — the keep-alive ping is
   mandatory config, documented in RUNBOOK. (3) Sprint-4 packaging = Space Dockerfile with
   `app_port`, single-image OmniRoute+core supervision.
+- **AMENDMENT (owner, 2026-08-31, `التالي`)**: **Oracle Cloud Always Free replaces HF
+  Spaces as the production host.** Discovered at deploy time: HF made Docker/Gradio Spaces
+  a paid PRO feature ($9/month — breaks the $0.00 invariant); Render/Koyeb free tiers
+  (512 MB / 0.1 vCPU, scale-to-zero) cannot carry the full stack (whisper + biometrics +
+  OmniRoute + core), and Cloud Run's free grant caps at the same 512 MB for an always-on
+  service. Oracle's always-free Ampere A1 VM (2 OCPU / 12 GB provisioned, expandable to
+  4 OCPU / 24 GB) is truly always-on — no keep-alive pinger, no sleep. The container design
+  is unchanged and host-agnostic ($PORT, supervised single tree, health+WSS on one port);
+  the disposable-filesystem rule STAYS as a design principle (vault remains the only
+  durable store — redeploys are trivial), but the OAuth client JSON may now live on the VM
+  (never in git), which RESOLVES the Space-era Google gap (03: Google features fully work
+  on the VM). Owner deploy guide: `docs/09-ORACLE-DEPLOY.md`. v1.0.1 ships the Node-24
+  layer the gateway always needed.
 
 ## ADR-16: Three-Tier Brain via OmniRoute (Gemini retired) — **Accepted** (2026-08-29, MASTER DIRECTIVE; amended 2026-08-30)
 - **Context**: Gemini is dead for this project: Google denies the key at API level

@@ -15,8 +15,9 @@ invariant) executive AI assistant named **Sara (سارة)** — Chief of Staff, 
 Jordanian Arabic (`ar-JO`). Primary transport is **Telegram** (Aiogram 3.x; chat + Ogg Opus
 voice notes). Her "brain" is a **3-tier multi-model router** (OmniRoute gateway) behind a
 fast front-door dispatcher. All durable state lives in a **git-backed Obsidian vault**
-(PARA + Zettelkasten) on GitHub. Production host is **one free Hugging Face Space** running
-a single supervised container (OmniRoute + core as one process tree). Authoritative mission
+(PARA + Zettelkasten) on GitHub. Production host (ADR-15 as amended 2026-08-31) is **one
+Oracle Cloud Always-Free VM** running a single supervised container (OmniRoute + core as
+one process tree) behind Caddy TLS; the container is host-agnostic. Authoritative mission
 record: `docs/01-ARCHITECTURE.md` §1. Vision: `docs/00-VISION.md`.
 
 ## 2. Binding rules — a new agent MUST respect these (owner-approved, non-negotiable)
@@ -46,19 +47,20 @@ record: `docs/01-ARCHITECTURE.md` §1. Vision: `docs/00-VISION.md`.
 8. **Model scope**: the Claude Code dev harness runs GLM only — never conflated with Sara's
    brain (OmniRoute tiers), which is configured exclusively via `.env` model pins.
 
-## 3. Current state snapshot (2026-08-31, at v1.0.0)
+## 3. Current state snapshot (2026-08-31, at v1.0.1)
 
 | Measure | Value |
 |---|---|
-| Product release | **v1.0.0** — annotated tag pushed to origin; GitHub Release published from CHANGELOG: https://github.com/3mar-baha/vantrilex-assistant-os/releases/tag/v1.0.0 |
-| Version source | `src/__version__ = "1.0.0"` (single source; consistency-guarded by `scripts/make_release.py`) |
+| Product release | **v1.0.1** — annotated tag pushed to origin; GitHub Release published from CHANGELOG. v1.0.0 remains at https://github.com/3mar-baha/vantrilex-assistant-os/releases/tag/v1.0.0 |
+| Version source | `src/__version__ = "1.0.1"` (single source; consistency-guarded by `scripts/make_release.py`) |
 | Test suite | **285 passed, 1 skipped** (skip = docker-build test: dev machine lacks docker + OmniRoute clone) |
-| Coverage | **85.71% branch** (>=85% gate is LIVE in pytest addopts — fail-closed) |
+| Coverage | **>=85% branch** (gate is LIVE in pytest addopts — fail-closed; 85.7% at v1.0.1) |
 | Quality gate | `make gate` green: Ruff (lint+format) → pytest → security gate (bandit + vendored secret scanner) → docs guard (16 canonical files) |
 | Repo | github.com/3mar-baha/vantrilex-assistant-os — everything on `main`, clean tree, pushed |
 | Vault repo | github.com/3mar-baha/vantrilex-vault (private, git-backed, PARA dirs created by first-boot `ensure_mandatory_dirs()`) |
+| Host decision | **Oracle Cloud Always Free** (owner, 2026-08-31, ADR-15 amendment) — HF Docker Spaces went paid ($9/mo), Render/Koyeb free can't carry the stack. Deploy guide: `docs/09-ORACLE-DEPLOY.md` |
 | Owner steps done | `.env` filled with real keys (local, gitignored); health probe green (`python -m src.main --health` → `overall: ok`); all 4 brain pins verified present in the local OmniRoute pools (1066 models) |
-| **NOT done yet** | **No deployment exists yet** — no HF Space, no Render, nothing running in the cloud. Local dev machine only. See §9 gaps + `docs/08-OWNER-NEXT-STEPS.md`. |
+| **NOT done yet** | **No deployment exists yet** — the Oracle VM, DuckDNS record, `sara.env` and compose-up are the owner's next physical steps per `docs/09-ORACLE-DEPLOY.md`. See §9 gaps + `docs/08-OWNER-NEXT-STEPS.md`. |
 
 ## 4. Architecture in one page
 
@@ -96,12 +98,15 @@ record: `docs/01-ARCHITECTURE.md` §1. Vision: `docs/00-VISION.md`.
   spawn + audit codes `PC-YYYYMMDD-HHMMSS-4hex` + append-only vault ledger; WoL magic
   packet; latched idle monitor; `src/pc_actions.py` owner-origin gate + confirmations
   BEFORE commands; LAN surface `GET /telemetry/live-state` (Bearer) + tunnel cmd.
-- **Runtime host (ADR-15)**: ONE Docker Space; `scripts/supervise.py` supervises the
-  OmniRoute child + core child as ONE tree (first exit → teardown → container exit →
-  Space restarts whole); core reads `$PORT`, serves `GET /health` + authenticated bridge
-  WSS on the single public port; disposable filesystem — durable state ONLY in the vault
-  (enforced by `tests/test_packaging.py::test_durable_state_only_in_vault`); keep-alive
-  GitHub Actions cron pings `/health` every 10 min.
+- **Runtime host (ADR-15, amended 2026-08-31)**: ONE container on an Oracle Always-Free
+  VM; `scripts/supervise.py` supervises the OmniRoute child + core child as ONE tree
+  (first exit → teardown → container exit → docker `restart: unless-stopped` restarts
+  whole); core reads `$PORT`, serves `GET /health` + authenticated bridge WSS on the
+  single public port; Caddy 2 terminates TLS (auto-HTTPS via a free DuckDNS name); the
+  image carries Node 24 + a globally installed OmniRoute (v1.0.1). Disposable-filesystem
+  STAYS as a design principle — durable state ONLY in the vault (enforced by
+  `tests/test_packaging.py::test_durable_state_only_in_vault`); on the no-sleep VM the
+  keep-alive cron is an OPTIONAL liveness alarm, not life support.
 
 ## 5. Component map (what exists, where)
 
@@ -153,7 +158,11 @@ record: `docs/01-ARCHITECTURE.md` §1. Vision: `docs/00-VISION.md`.
   policy) → **HF Spaces packaging** (supervised ONE container, `$PORT` health+WSS,
   deploy smoke with secret masking, durable-state audit, keep-alive cron) → **v1.0.0
   release** (version single-source, CHANGELOG drained with Security + Deferred sections,
-  scope-lock test, verify-then-tag script, tag + GitHub Release executed).
+  scope-lock test, verify-then-tag script, tag + GitHub Release executed) →
+  **v1.0.1 + Oracle migration** (HF Docker Spaces discovered paid at deploy time →
+  owner ruled Oracle Always Free; ADR-15 amended; Dockerfile gains the Node-24 layer +
+  global gateway install the npm gateway always needed; `docs/09-ORACLE-DEPLOY.md`
+  written; RUNBOOK/HANDOFF re-anchored).
 - Full narrative with commit hashes: `docs/PROJECT-JOURNEY.md` (§10-13) and
   `docs/10-CHECKPOINT.md` (per-sprint skill-rotation ledger).
 
@@ -165,8 +174,9 @@ record: `docs/01-ARCHITECTURE.md` §1. Vision: `docs/00-VISION.md`.
 | `docs/00-VISION.md` | Mission, persona, discovery record |
 | `docs/01-ARCHITECTURE.md` | §1 binding mission record, system architecture, ADR index, §8 staged components (not in v1.0), §9 master-directive capability map |
 | `docs/02-BACKLOG.md` | Task list with ACs + per-task done records; Deferred Backlog (v1.1+) |
-| `docs/03-DECISIONS.md` | **ADRs 1-21+** — every architectural decision with rationale (ADR-15 HF host, ADR-16 brain, ADR-17 biometrics, ADR-18 dispatcher, ADR-19 TokenJuice, ADR-21 vault) |
-| `docs/04-RUNBOOK.md` | Setup, env vars, deploy (§4 HF Space / §4b keep-alive / §4c Cloud Run fallback), smokes, troubleshooting, dated validation checklists |
+| `docs/03-DECISIONS.md` | **ADRs 1-21+** — every architectural decision with rationale (ADR-15 host + Oracle amendment, ADR-16 brain, ADR-17 biometrics, ADR-18 dispatcher, ADR-19 TokenJuice, ADR-21 vault) |
+| `docs/04-RUNBOOK.md` | Setup, env vars, deploy (§4 Oracle primary / §4b keep-alive legacy / §4c other hosts), smokes, troubleshooting, dated validation checklists |
+| `docs/09-ORACLE-DEPLOY.md` | The owner's Arabic step-by-step Oracle Cloud deploy guide (account → VM → DuckDNS → Docker → build → sara.env → compose+Caddy → verify → PC bridge) |
 | `docs/05-TEST-PLAN.md` | Test strategy, coverage gates, sacred floor, AC→pytest index |
 | `docs/06-API-SPECIFICATION.md` | Wire contracts: bridge v1 protocol, LAN surface, vault API usage |
 | `docs/07-HANDOFF.md` | THIS FILE |
@@ -175,7 +185,7 @@ record: `docs/01-ARCHITECTURE.md` §1. Vision: `docs/00-VISION.md`.
 | `docs/PROJECT-JOURNEY.md` | Full narrative history §1-13 with commit hashes |
 | `docs/specs/sprint-{1..4}.md` | Implementation specs — interfaces, ACs, error modes (THE contract) |
 | `docs/specs/master-directive-2026-08-29.md` | M1-M9 capability directives |
-| `CHANGELOG.md` | Keep-a-changelog: `[1.0.0]` full Added/Changed/Security/Deferred-to-v1.1 |
+| `CHANGELOG.md` | Keep-a-changelog: `[1.0.1]` (container Node fix + Oracle host) + `[1.0.0]` full Added/Changed/Security/Deferred-to-v1.1 |
 | `.env.example` | Credential manifest (names + where to obtain; values never) |
 
 ## 8. Verification & ops commands
@@ -193,27 +203,24 @@ make run-bridge   # PC bridge daemon
 
 ## 9. Known gaps & blockers (honest, discovered 2026-08-31)
 
-1. **No deployment exists yet.** Code/packaging/tests are complete and tagged; creating the
-   Space + secrets + pools is the owner's next physical step
-   (`docs/08-OWNER-NEXT-STEPS.md`).
-2. **Dockerfile cannot start OmniRoute today (v1.0.0)**: OmniRoute is a **Node/npm**
-   application (`npm install -g omniroute` → `omniroute run`, port 20128) while the image
-   is `python:3.12-slim` with **no Node runtime**. The supervised container therefore
-   cannot launch the gateway child as-is. **Fix (recommended, v1.0.1)**: add
-   `nodejs npm` to the apt layer + install omniroute at build (or npm-ci the vendored
-   clone) and pin `OMNIROUTE_CMD=omniroute run`; bump version, retag `v1.0.1`. Until this
-   patch, `deploy_smoke`'s gateway check fails inside a Space.
+1. **No deployment exists yet.** Code/packaging/tests are complete and tagged; creating
+   the Oracle VM + secrets + pools is the owner's next physical step — hand-held in
+   `docs/09-ORACLE-DEPLOY.md` (Arabic) + `docs/08-OWNER-NEXT-STEPS.md`.
+2. ~~Dockerfile cannot start OmniRoute~~ **FIXED in v1.0.1**: OmniRoute is a **Node/npm**
+   application (`npm install -g omniroute` → `omniroute run`, port 20128) whose engines
+   demand node >=22.22; the image now installs **Node 24 via NodeSource** and installs the
+   vendored clone globally (`npm install -g /app/scripts/omniroute`), with
+   `ENV OMNIROUTE_CMD="omniroute run"` as the zero-config default
+   (`tests/test_packaging.py::test_dockerfile_contract` asserts all three).
 3. **Google 403 (upstream, from sprint 1)**: the Gemini pools were blocked by Google
    ("project denied access"). Gemini is now RETIRED from the brain pins, but the same
    Google Cloud project hosts the OAuth client — if the block extends to API enablement,
    the owner must fix it in Google Cloud console before Gmail/Calendar work anywhere.
-4. **Google integration is local-first in v1.0.0**: `src/google_auth.py` reads the OAuth
-   client JSON from a FILE (`config/google_oauth_client.json`), which is deliberately
-   excluded from the Docker build context (CLAUDE.md rule 2 + `.dockerignore`). So inside
-   a fresh Space, Gmail/Calendar/consent cannot run until a Space-side mechanism is chosen
-   (v1.1 candidate: base64-encoded HF Secret decoded at boot, or keep Google features on a
-   local/VPS core). The encrypted token CACHE is vault-persisted and survives restarts —
-   the client JSON is the only missing piece.
+4. ~~Google integration blocked inside a Space~~ **RESOLVED by the Oracle host (ADR-15
+   amendment)**: the OAuth client JSON (`config/google_oauth_client.json`) still never
+   enters git or the image, but on a persistent VM it can be scp'd to
+   `~/sara/config/` on the server — Gmail/Calendar/consent run fully on the VM. The
+   encrypted token CACHE remains vault-persisted and survives restarts.
 
 ## 10. Roadmap (decided, not yet built)
 
@@ -226,7 +233,6 @@ make run-bridge   # PC bridge daemon
 - `tech-hardware-scout` (GPU/CPU pricing, AI news, tracked sites, voice summaries).
 - `career-project-incubator` (micro-SaaS ideas, CV-boosting portfolio projects).
 - Mem0/Firestore persistent memory layer (evaluation only — vault loop must prove out).
-- Space-side OAuth client mechanism (gap §9.4).
 
 **Parked Future Scope (no version, enters via standard spec pipeline when prioritized)**:
 PC Health Monitor · Voice Read-It-Later · Emotional Context Memory · Silent Vault Backup ·

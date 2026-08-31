@@ -10,7 +10,7 @@ Reproducibility rule: anything a build needs is checked, scripted, and documente
 | Git | 2.54+ | `git --version` |
 | FFmpeg | any recent | `winget install Gyan.FFmpeg` then reopen shell; `ffmpeg -version` |
 | GNU make | 4.4+ | `choco install make` (already present on dev machine) |
-| OmniRoute | latest | clone https://github.com/diegosouzapw/OmniRoute beside the core (co-located in the HF Space, ADR-15; locally for dev); start bound to localhost:20128 |
+| OmniRoute | latest | clone https://github.com/diegosouzapw/OmniRoute beside the core (co-located in the ONE container / on the Oracle VM, ADR-15; locally for dev); start bound to localhost:20128 |
 | jq (optional) | — | `winget install jqlang.jq` (some uos scripts want it) |
 | uos CLI (optional) | 1.1.x | Local Universal Agentic OS developer CLI (bash) — `uos doctor`, worktree dispatch; not required to build or run Sara |
 
@@ -101,73 +101,88 @@ Sara accepts new scheduled background tasks at runtime (M4). The owner flow:
    `schedule_text`, `credential_env` (the NAME, never the value), `enabled`,
    `last_error`.
 
-## 4. HF Space Deployment (production, free tier — ADR-15)
+## 4. Production Deployment — Oracle Cloud Always Free (ADR-15 as amended 2026-08-31)
 
-Production deploys pin a release tag — clone/checkout `v1.0.0` (or later) before
-building the Space image; never deploy an untagged `main` tip.
+Production deploys pin a release tag — checkout `v1.0.1` (or later) before building;
+never deploy an untagged `main` tip.
 
-Supersedes VPS deployment (ADR-05). One Docker Space co-locates OmniRoute + the core
-behind the supervised entrypoint (`scripts/supervise.py` — both children run as ONE
-process tree; the first child to exit tears the container down so the Space restarts it).
-The Space's single public port (`app_port: 7860`, README metadata) serves `GET /health`
-(keep-alive target) and the authenticated bridge WSS.
+**Owner hand-holding guide (Arabic, step by step): `docs/09-ORACLE-DEPLOY.md`** — this
+section is the engineering summary. Why Oracle: HF made Docker Spaces paid ($9/mo,
+breaks the $0.00 invariant) and Render/Koyeb free tiers (512 MB) cannot carry the full
+stack. The always-free Ampere A1 VM is truly always-on (no keep-alive pinger, no sleep).
+The container itself is host-agnostic: it reads `$PORT`, runs `scripts/supervise.py`
+(OmniRoute gateway child + core child as ONE process tree — first exit tears the tree
+down so the host restarts it) and serves `GET /health` + the authenticated bridge WSS
+on the single public port. Since v1.0.1 the image carries Node 24 (NodeSource) and
+installs the vendored OmniRoute clone globally — `ENV OMNIROUTE_CMD="omniroute run"`
+works with zero variables.
 
-1. Create a private HF Space (Docker, free CPU tier) in the owner account; the repo
-   README carries the Space metadata (`sdk: docker`, `app_port: 7860`).
-2. Clone OmniRoute beside the supervisor BEFORE the image builds:
+1. Provision the always-free VM (Ubuntu 24.04, `VM.Standard.A1.Flex` 2 OCPU / 12 GB,
+   expandable to 4/24) and open TCP 22/80/443 in the VNIC security list — §1-2 of the
+   guide, incl. the HOME-REGION-IS-PERMANENT warning and the card-verification note.
+2. Install Docker (`curl -fsSL https://get.docker.com | sudo sh`) — guide §4.
+3. Fetch the tag and clone the gateway BEFORE the build (the clone pins the version):
+   `git checkout v1.0.1` then
    `git clone https://github.com/diegosouzapw/OmniRoute scripts/omniroute`
    (`.dockerignore` re-includes `scripts/omniroute/` + `scripts/supervise.py`; everything
-   else — tests, docs, `.env`, OAuth client JSON, sessions — never enters the context).
-3. Space variables: `OMNIROUTE_CMD` (how the gateway starts inside the image) and
-   `CORE_CMD` (optional; defaults to `python -m src.main`). The core reads `$PORT`
-   and serves `/health` + the bridge WSS on it.
-4. All secrets go to **HF Secrets** (bot token, owner ID, VAULT_ENC_KEY, OAuth client,
-   vault PAT, bridge token) — never the repo; `.env` is local-only for development.
-5. Configure free provider pools (3-tier brain per ADR-16) in OmniRoute.
-6. **Disposable filesystem (ADR-15 invariant)**: anything that must survive a restart
-   lives in the git-backed vault; the OAuth token cache is vault-persisted (encrypted)
-   or the owner re-consents after restarts. The automated audit lives at
+   else — tests, docs, `.env`, sessions — never enters the build context). `docker build -t sara-os .`
+4. Environment on the VM (`~/sara-secrets/sara.env`, never committed): the 21 variables
+   listed in `docs/08-OWNER-NEXT-STEPS.md` + `PORT=8080`. The OAuth client JSON may live
+   on the VM (`config/google_oauth_client.json`) — a persistent VM resolves the Space-era
+   Google gap; the file itself still NEVER enters git or the image.
+5. Serve TLS: Caddy 2 in the same compose project (auto-HTTPS via a free DuckDNS
+   subdomain) reverse-proxying to the container — compose + Caddyfile in guide §7.
+   `restart: unless-stopped` replaces the keep-alive contract on a no-sleep VM.
+6. **Durable state (ADR-15 principle kept)**: anything that must survive a rebuild lives
+   in the git-backed vault; the audit test stays authoritative:
    `tests/test_packaging.py::test_durable_state_only_in_vault`.
-7. Verify: bot responds to the owner; `curl -m 5 <SPACE_URL>/health` returns 200;
-   then run the smoke: `python scripts/deploy_smoke.py` — exit 0 = Sara is alive.
+7. Verify: `curl -m 5 https://<domain>/health` → 200; owner messages the bot on
+   Telegram; bridge daemon dials `wss://<domain>/bridge`; on the VM, a smoke against the
+   live stack (run `python scripts/deploy_smoke.py` locally against the public URL for
+   the space_health-class check, or container logs for the rest).
 
-### 4b. Keep-alive (shipped contract, not an ops footnote)
+### 4b. Keep-alive (legacy — obsolete on the no-sleep VM, kept for sleeping hosts)
 
 `.github/workflows/keepalive.yml` pings `GET <SPACE_URL>/health` every 10 minutes
-(`*/10 * * * *` cron; free GitHub Actions minutes) and fails the step loudly on any
-non-200 (`::error::` + exit 1). One prerequisite: the repository secret `SPACE_URL`
-(the Space's public root). Free Spaces idle-sleep after prolonged silence — this ping
-is what keeps Sara on 24/7 duty.
+(`*/10 * * * *` cron) and fails the step loudly on any non-200 (`::error::` + exit 1).
+On Oracle (ADR-15 amendment) the VM never sleeps — the workflow is OPTIONAL and only
+worth arming (repo secret `SPACE_URL` = the public URL) as a free external liveness
+alarm that also alerts if the VM is down.
 
-### 4c. Cloud Run fallback (secondary host — documented alternative)
+### 4c. Other hosts (documented alternatives, none active)
 
-If the Space is unavailable: build the SAME image (§4) and deploy to Google Cloud Run
-free tier — the container already reads `PORT` (the core's public-port entry is
-host-agnostic), min-instances=0 (cold starts noted; the keep-alive pinger keeps it
-warm), all secrets via Cloud Run environment variables. No committed terraform/CI for
-this path in v1.0.0 — activating it is an owner action documented here. The bridge
-daemon's `BRIDGE_SERVER_URL` simply points at the Cloud Run WSS URL instead, and
-`SPACE_URL` moves to the Cloud Run service URL.
+- **HF Space**: was ADR-15's original choice — Docker Spaces now REQUIRE the paid PRO
+  plan ($9/mo): rejected by the $0.00 invariant. Historical packaging (README metadata
+  `sdk: docker` / `app_port: 7860`) remains valid if the owner ever buys PRO.
+- **Google Cloud Run**: build the SAME image; the container reads `PORT` and serves the
+  same public port. Free grant caps an always-on service at 512 MB memory — same
+  starvation that disqualified Render/Koyeb; only viable for a reduced text-only trial.
+- **Render / Koyeb free**: 512 MB / 0.1 vCPU + scale-to-zero — text-only Sara at best,
+  plus an external pinger dependency. Documented, not recommended.
 
-### 4-validation. Dated deploy validation (2026-08-31, sprint-4 task 4.4b AC10)
+### 4-validation. Dated deploy validation (2026-08-31, sprint-4 task 4.4b AC10; re-anchored to Oracle with the ADR-15 amendment)
 
-Executed order on a fresh Space deploy; every box verified before ticking:
+Executed order on a fresh VM deploy (guide: `docs/09-ORACLE-DEPLOY.md`); every box
+verified before ticking:
 
-- [ ] `docker build` of the repo root succeeds locally (or `test_docker_build_succeeds`
+- [ ] `docker build` of the repo root succeeds on the VM (or `test_docker_build_succeeds`
       run on a docker-equipped machine) — image carries src/, common/, OmniRoute clone.
-- [ ] Space boots: container reaches RUNNING; logs show the supervisor starting both
-      children (`supervisor started omniroute…` / `supervisor started core…`).
-- [ ] `GET <SPACE_URL>/health` returns 200 `{"status":"ok"}`.
-- [ ] Keep-alive workflow enabled with `SPACE_URL` secret; first scheduled run green.
+- [ ] Container boots: `docker compose up -d` then `docker compose logs -f sara` shows
+      the supervisor starting both children
+      (`supervisor started omniroute…` / `supervisor started core…`).
+- [ ] `GET https://<domain>/health` returns 200 `{"status":"ok"}` (Caddy TLS green).
+- [ ] `restart: unless-stopped` active — `sudo reboot` on the VM brings Sara back
+      without manual action (the no-sleep host replaces the keep-alive contract).
 - [ ] Owner messages the bot on Telegram; Sara answers in Jordanian Arabic.
-- [ ] Bridge daemon on the PC dials the Space WSS (`bridge session online` in core logs).
-- [ ] `python scripts/deploy_smoke.py` exits 0 (all five checks green) against the live
-      Space — the checklist ends when the smoke exits 0.
+- [ ] Bridge daemon on the PC dials the VM WSS (`bridge session online` in core logs).
+- [ ] Full smoke against the live VM — container health + Telegram round-trip; the
+      checklist ends when every probe is green.
 
 ## 5. PC Bridge Daemon (Windows)
 
 1. `make setup` on the PC; fill `[CORE <-> BRIDGE]` block of `.env`
-   (`BRIDGE_SERVER_URL` points at the Space WSS endpoint; shared `BRIDGE_TOKEN`).
+   (`BRIDGE_SERVER_URL` points at the Oracle VM's WSS endpoint, e.g.
+   `wss://sara-os.duckdns.org/bridge`; shared `BRIDGE_TOKEN`).
 2. Register as an auto-start task:
    `schtasks /Create /SC ONLOGON /TN VantrilexBridge /TR "pwsh -NoProfile -Command 'cd <repo>; make run-bridge'"`
 3. Listener check (directive: LAN port 8000): the daemon's ONLY listener is the
@@ -347,9 +362,10 @@ state (no local cache to invalidate).
 | `GatewayError: all models exhausted (<tier chain>)` | A whole tier's chain down/quota — pools drained or OmniRoute offline | Check OmniRoute dashboard pools + `curl -m 5 http://localhost:20128/v1/models`; the log line names the last cause per model in the chain |
 | `GatewayError: fatal HTTP 401/403 on <model>` | Bad/missing gateway key | Verify `OMNIROUTE_API_KEY` in `.env`; never appears in logs (only status + body snippet) |
 | `dispatcher ... -> default tier2` (warning) | Tier-1 router failed or replied non-JSON (ADR-18 degradation) | Service continues at Tier 2; inspect the logged router reply; persistent repeats -> probe the `google/gemini-3.5-flash-lite` pool |
-| Space container restart-looping / supervisor exits 2 | `OMNIROUTE_CMD` missing or a child fails to spawn | Set `OMNIROUTE_CMD` in Space variables; the log line names the failing child |
-| `GET /health` returns 404/426 on the Space | Hitting a non-public path, or core not up yet | Only `/health` answers HTTP (200); the WSS endpoint is auth-gated — wait for RUNNING then re-probe |
-| Keep-alive workflow failing (`::error::`) | `SPACE_URL` repo secret unset/wrong, or Space asleep | Set the `SPACE_URL` secret to the Space public root; a red run means the Space was NOT healthy at that minute |
+| Container restart-looping / supervisor exits 2 | `OMNIROUTE_CMD` missing or a child fails to spawn | The image ships `ENV OMNIROUTE_CMD="omniroute run"`; if the build ran before cloning `scripts/omniroute`, rebuild — the log line names the failing child |
+| `GET /health` returns 404/426 | Hitting a non-public path, or core not up yet | Only `/health` answers HTTP (200); the WSS endpoint is auth-gated — wait for the supervisor's two start lines then re-probe |
+| Caddy serves no TLS / no cert | DuckDNS record stale or port 80 blocked in the VNIC security list | Update the DuckDNS record to the VM's Public IP; re-check Ingress Rules (guide §2.5) |
+| Keep-alive workflow failing (`::error::`) | `SPACE_URL` repo secret unset/wrong, or a sleeping host is down | Set `SPACE_URL` to the public root; on Oracle this workflow is an OPTIONAL liveness alarm only |
 | `deploy_smoke` exits 1 — which check? | Any of the five probes red | The log names each check + a masked detail (secrets never appear); fix that surface and re-run |
 
 ## 8. Operational Safety
