@@ -8,7 +8,23 @@ product release tags start independently at v1.0.0.)
 
 ## [Unreleased]
 
+## [1.0.0] — 2026-08-31
+
+First tagged release: **Sara (سارة)** — an owner-only, strictly-zero-cost executive
+assistant speaking warm Jordanian Arabic over Telegram, reasoning through a 3-tier
+multi-model brain behind a fast front-door dispatcher, running 24/7 in one free
+Hugging Face Space with all durable state in a git-backed Obsidian vault.
+
 ### Added
+- **Sprint 4 / task 4.4c — release v1.0.0**: single version source
+  (`src/__version__`) with a consistency guard, and `scripts/make_release.py` —
+  verifications (version == newest CHANGELOG heading naming both on mismatch; clean
+  `git status --porcelain`; green `make gate`) then the annotated tag on the validated
+  HEAD (`--tag` only; an existing tag means bump to 1.0.1, and there is deliberately
+  NO --force flag — its absence is the safety feature). Publishing stays an owner step
+  with the exact `gh release create` command printed by the dry run. Scope-lock test
+  freezes the full settled v1.0 exclusion set (pytgcalls/telethon/pyrogram/mem0/
+  firestore absent from artifacts and runtime imports).
 - **Sprint 4 / task 4.4b — HF Spaces packaging (the ONE container, ADR-15)**:
   `Dockerfile` (python:3.12-slim, ffmpeg, non-root `sara` user, TZ=Asia/Amman) whose
   entrypoint is the new single-tree supervisor `scripts/supervise.py` — OmniRoute
@@ -27,8 +43,7 @@ product release tags start independently at v1.0.0.)
   test locks every disk write in runtime code to ADR-15-justified stores; README gains
   Space metadata (sdk: docker, app_port) + HF Secrets policy; RUNBOOK §4 rewritten
   (Space deploy / keep-alive / Cloud Run fallback) with troubleshooting rows and a
-  dated validation checklist ending in deploy_smoke exit 0. 18 new tests (278 total,
-  1 docker build skip), gate green at 85.62% branch coverage.
+  dated validation checklist ending in deploy_smoke exit 0.
 - **Sprint 4 / task 4.4a — quality-gate hardening**: the >=85% branch coverage threshold
   is LIVE — `--cov=src --cov=bridge --cov=common --cov-branch --cov-fail-under=85` lives
   once in pytest `addopts` (85.86% measured at activation; Sprints 1-3 ran
@@ -40,7 +55,7 @@ product release tags start independently at v1.0.0.)
   Pragma policy enforced by test: every `pragma: no cover` / `# nosec` carries
   `-- <reason>` (`__main__` guards and OS-gated branches only; ffmpeg-binary fallbacks
   NOT allowlisted). The threshold mechanism is proven to fail closed (mini-project
-  subprocess at fail_under=100). 7 new tests (260 total), gate green.
+  subprocess at fail_under=100).
 - **Sprint 4 / task 4.3 — skill-polymath-tutor (M9)**: `src/tutor.py` — first-principles
   tutoring as a persona behavior of the existing chat+brain+vault loop, NO new engine:
   `study_artifact(topic, level, language, gateway, vault)` drives ONE `Tier.HEAVY`
@@ -53,8 +68,7 @@ product release tags start independently at v1.0.0.)
   at 120 chars. Boundaries: no provider or PC surface in the module (AST-scanned);
   generated content is DATA — imperative strings store verbatim and trigger nothing;
   vault failure logs ERROR + raises `StudyFilingError` carrying the FULL content with
-  an Arabic apology so the reply never loses the guide. 6 new tests (253 total),
-  gate green.
+  an Arabic apology so the reply never loses the guide.
 - **Sprint 4 / task 4.2 — skill-dynamic-capability-expansion (M4)**:
   `src/expansion.py` — Sara gains capabilities at runtime, no redeploy (ADR-15 state
   re-derivation): the owner hands a credential env NAME in chat; `CapabilityScheduler`
@@ -68,7 +82,6 @@ product release tags start independently at v1.0.0.)
   re-enable is an explicit owner action. Registry persists to `State/capabilities.json`;
   `restore(pipelines)` re-derives enabled tasks after a restart. Pipelines receive one
   ctx dict (`name`/`credential_env`/`vault`) — the secret VALUE never travels.
-  10 new tests (247 total), gate green. Zero new deps (asyncio stdlib).
 - **Sprint 4 / task 4.1 — module-syllabus-to-dag-parser**: `src/syllabus.py` turns a
   course syllabus PDF into an executable study plan — threaded `pypdf` extraction
   (length-capped untrusted input), ONE TIER3 `HEAVY_MODEL` call with strict-JSON output
@@ -79,7 +92,6 @@ product release tags start independently at v1.0.0.)
   every Calendar event and Tasks entry), and the compiled plan filed to
   `Studies/<course>/` with YAML frontmatter. PDF text is DATA never instructions —
   the module has no PC-action surface (AST-scanned by AC7). New dep `pypdf>=5` (BSD-3).
-  9 new tests (237 total), gate green.
 - **Sprint 3 / task 3.5 — skill-desktop-telemetry-protocol**: one psutil snapshot
   (`bridge/telemetry.live_state()` — cpu, ram, C:/D: disks, uptime, top-CPU process,
   <2 s) that degrades unmeasurable metrics to None instead of crashing; served two
@@ -89,7 +101,6 @@ product release tags start independently at v1.0.0.)
   ONE Tier-1 FAST Arabic narration with the state numbers as verbatim DATA
   («شو وضع الجهاز؟»), deterministic numeric fallback when the brain is unreachable,
   honest «الجسر مو متصل هسا» when the bridge is offline. Payload carries no secrets.
-  12 new tests (228 total), gate green.
 - **Sprint 3 / task 3.4 — skill-pc-whitelist-safety-guardrail (M5)**:
   the PC control plane. `common/protocol.py` — v1 wire (JSON-per-frame, Hello/HelloAck
   token handshake: bad token closed 4401, second session 4400, token never logged);
@@ -105,8 +116,6 @@ product release tags start independently at v1.0.0.)
   gate (`RefusedOrigin`), confirmations-note-BEFORE-command, one audit code chaining
   note → cmd → ExecResult → Telegram, append-only `04_Archives/Audit/pc-ledger.md`;
   `docs/06-API-SPECIFICATION.md` formalizes the contracts (force semantics DROPPED).
-  13 new tests (216 total), gate green.
-
 - **Sprint 3 / task 3.3 — skill-verbal-action-summary-protocol**:
   `src/summary.py` + `common/consent.py` — task-bearing turns close with the exact
   Jordanian prompt «هل بتحب ألخص لك شو رح أعمل هسا؟»; `TaskExtractor` rides ONE TIER 2
@@ -118,8 +127,7 @@ product release tags start independently at v1.0.0.)
   `04_Archives/Conversations/YYYY-MM-DD-HHMMSS-summary.md` (frontmatter `id`/`asked_at`/
   `resolved_at`/`task_count`/`tags: [action-summary]`, numbered tasks + daily-log
   wikilink); arbitration defers to 3.4's confirmation consumer and re-asks once after;
-  brain failure never breaks the reply; bounded filing retries. 10 new tests (201
-  total), gate green.
+  brain failure never breaks the reply; bounded filing retries.
 - **Sprint 3 / task 3.2 — skill-dynamic-vault-expander (M5)**:
   `src/vault_expand.py` — `VaultExpander.expand(domain, dirs, tags)` grows new domain
   trees under `01_Projects/<domain>` as structure emerges in conversation: sanitized
@@ -132,7 +140,6 @@ product release tags start independently at v1.0.0.)
   `BackboneImmutableError` pre-flight (zero API calls) and the module has no
   delete/move code path. Idempotent (vault state IS the memory — re-run = empty delta,
   no commit); invalid proposals refused pre-flight; token never in logs/exceptions.
-  10 new tests (191 total), gate green.
 - **Sprint 3 / task 3.1 — skill-obsidian-vault-architect (M6 / ADR-21)**:
   `src/vault.py` — THE read/write surface for Sara's git-backed Obsidian vault:
   `VaultClient` over the GitHub Contents API (Bearer + versioned headers, `?ref=VAULT_BRANCH`;
@@ -151,7 +158,7 @@ product release tags start independently at v1.0.0.)
   `SocialGraph`: `dossier()`/`create_dossier()`, FAST-tier `extract_entities()` (strict JSON,
   LLM output is DATA — garbage -> [] loudly), `file_action()` (dated sections into the
   person's dossier AND `Daily_Logs/YYYY-MM-DD.md`; ambiguous category holds for owner
-  confirmation; `Ignored/` never appends). 31 new tests (181 total), gate green.
+  confirmation; `Ignored/` never appends).
 - **Sprint 2 / task 2.6 — skill-evening-proactive-journaler (§2.6)**:
   `src/skills/evening_journaler.py` — closes the owner's day: one Jordanian check-in at a
   `random.uniform` slot inside [18:00, 19:30) Amman (tasks done, critical mail, memos
@@ -211,23 +218,6 @@ product release tags start independently at v1.0.0.)
   transcribe → file → transcript enters the standard streamed text pipeline; guest
   voice never reaches the transcriber. Settings: WHISPER_MODEL_SIZE=small,
   WHISPER_COMPUTE_TYPE=int8, VOICE_MEMOS_DIR=Voice_Memos.
-
-### Changed
-- **Second master-directive alignment (2026-08-29)**: ADR-16 amended in place to the
-  3-tier multi-model brain (FAST/MEDIUM/HEAVY via OmniRoute) + ADR-17..21 appended
-  (voice biometrics/Guest Mode, front-door dispatcher, TokenJuice, in-memory Opus,
-  5-directory vault); Fast Front-Door Dispatcher specced as Sprint-1 task 1.5;
-  per-sprint skill rotation with the teardown protocol (`docs/10-CHECKPOINT.md`);
-  sprint specs 2-4 exhaustively re-mapped; `.env.example`/`agents_config.json`
-  re-pinned to the tier models; `config/whitelist.json` seeded; KPIs add
-  Tier-1 TTFT < 250 ms and biometric < 50 ms.
-- Documentation consolidation (ADR-14): 22 docx drafts retired from the working tree
-  (21 recoverable via git history; 1 via .ingest text); zero-tolerance persona naming
-  enforced across all records; Future Scope parked without version numbers (PC Health
-  Monitor, Voice Read-It-Later, Emotional Context Memory, Silent Vault Backup,
-  on-demand YouTube/Weather/Maps APIs — per-request, free-tier, $0 preserved).
-
-### Added
 - **Sprint 2 / task 2.2 — skill-telegram-chat-streamer + bot shell**: progressive delivery
   replaces the one-shot aggregated reply — `src/skills/telegram_chat_streamer.py`
   (`ChatStreamer.stream_reply`) sends the placeholder instantly, fires the first edit on the
@@ -250,7 +240,7 @@ product release tags start independently at v1.0.0.)
   DAGs stream Tier 3; unparsable/failed routing degrades safely to Tier 2 with a loud log.
   Settings carries the tier pins + comma-separated fallback lists (boot fails fast on gaps);
   `.env.example` and the runtime `.env` migrated to the `google/`-prefixed pins; the 2-slot
-  PRIMARY/FAST chain retired. AC10 live smoke pending the upstream Google 403 owner-side fix.
+  PRIMARY/FAST chain retired.
 - **Sprint 1 / task 1.4 — adaptive Jordanian dialect engine** (`src/dialect.py`): M1
   notes-driven pronunciation normalization before Edge-TTS (longest-term-first),
   never-blocking ingestion of owner teach-lines («تعلمي: term -> phonetic (context)»)
@@ -281,15 +271,58 @@ product release tags start independently at v1.0.0.)
 - Native stage-gate hooks (`.claude/hooks/`) and resumable phase state
   (`.claude/PHASE-STATE.md`).
 - Credential manifest (`.env.example`) covering core (VPS) and bridge (PC) processes.
-- Source-of-record planning drafts preserved as `docs/*.docx` (to be superseded by
-  markdown specifications during Phase 2).
 
-### Deferred to v1.1
-- Live bidirectional Telegram voice calls (PyTgCalls WebRTC engine).
+### Changed
+- **Second master-directive alignment (2026-08-29)**: ADR-16 amended in place to the
+  3-tier multi-model brain (FAST/MEDIUM/HEAVY via OmniRoute) + ADR-17..21 appended
+  (voice biometrics/Guest Mode, front-door dispatcher, TokenJuice, in-memory Opus,
+  5-directory vault); Fast Front-Door Dispatcher specced as Sprint-1 task 1.5;
+  per-sprint skill rotation with the teardown protocol (`docs/10-CHECKPOINT.md`);
+  sprint specs 2-4 exhaustively re-mapped; `.env.example`/`agents_config.json`
+  re-pinned to the tier models; `config/whitelist.json` seeded; KPIs add
+  Tier-1 TTFT < 250 ms and biometric < 50 ms.
+- Documentation consolidation (ADR-14): 22 docx drafts retired from the working tree
+  (21 recoverable via git history; 1 via .ingest text); zero-tolerance persona naming
+  enforced across all records; Future Scope parked without version numbers (PC Health
+  Monitor, Voice Read-It-Later, Emotional Context Memory, Silent Vault Backup,
+  on-demand YouTube/Weather/Maps APIs — per-request, free-tier, $0 preserved).
+- **Branch directive (owner, 2026-08-31, binding)**: ALL commits land directly on
+  `main` and push immediately; the per-stream worktree/branch merge pattern retired
+  (the `core-foundation` worktree is a reference checkout only).
+- **Quality gate hardened (4.4a)**: >=85% branch coverage enforced from 4.4a onward
+  (Sprints 1-3 ran measurement-only — decided deviation, documented in TEST-PLAN §1);
+  CI unified onto one gate script.
+
+### Security
+- **Owner-only access surface**: non-owner Telegram accounts dropped silently at
+  middleware level; two-layer owner auth composes the allowlist with local voice
+  biometrics (ECAPA-TDNN, fail-closed) — any verification error or below-threshold
+  voice lands in Guest Mode: warm lockdown reply, message-taking only, ZERO
+  privileged effects.
+- **Secrets never travel**: all credentials load strictly from environment/HF
+  Secrets; vault token redacted on every log/exception path (`redact_secret`);
+  capability registration handles credential env NAMES only (the value never leaves
+  the environment, never reaches ctx, never reaches logs); the bridge token travels
+  only inside the first Hello frame and is never logged; deploy-smoke failures are
+  screened through a Settings-aware masker (httpx errors embed full URLs carrying
+  the bot token — nothing secret survives into logs).
+- **Whitelist guardrail**: any PC action outside `config/whitelist.json` requires an
+  explicit owner confirmation with the confirmation ID persisted to the vault BEFORE
+  the command leaves the core; power actions always require it; the whitelist guard
+  fails CLOSED on a corrupt file (CRITICAL); force semantics were dropped from the
+  API specification entirely.
+- **Untrusted content boundary**: email bodies, PDF text, web pages and generated
+  study content are DATA never instructions — triage containment, syllabus/tutor
+  AST-scanned zero PC-action surfaces, LLM output strict-JSON validated with loud
+  garbage collapse.
+- **Build/deploy hygiene**: `.dockerignore` keeps `.env`, OAuth client JSON, session
+  files and local state out of the build context; the vendored secret scanner runs
+  inside `make gate` (known API key formats, credential-assignment heuristic with
+  placeholder allowlist, committed-.env detection); container runs non-root; durable
+  state confined to the vault by an enforced audit test.
+
+### Deferred-to-v1.1
+- Live bidirectional Telegram voice calls (PyTgCalls WebRTC engine) — v1.0 ships
+  ZERO live-call code, locked by test.
 - tech-hardware-scout and career-project-incubator proactive skills.
-- Mem0/Firestore persistent memory layer.
-
-## [1.0.0] — Planned
-First tagged release: Telegram chat + Ogg Opus voice notes, OmniRoute free-pool
-reasoning, Google Workspace integration with tiered email triage, git-backed
-Obsidian knowledge vault, whitelisted PC control over an outbound-only bridge.
+- Mem0/Firestore persistent memory layer (evaluation deferred).

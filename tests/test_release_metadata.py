@@ -6,7 +6,6 @@ from __future__ import annotations
 
 import ast
 import re
-import subprocess
 import sys
 from pathlib import Path
 from unittest import mock
@@ -17,7 +16,7 @@ from loguru import logger
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "scripts"))
 
-import make_release  # noqa: E402
+import make_release
 
 
 def _captured_errors(caplog_sink: list) -> str:
