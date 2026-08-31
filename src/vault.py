@@ -13,11 +13,14 @@ FileNotFoundError; oversize payloads are refused pre-flight.
 
 from __future__ import annotations
 
+import base64
 import re
 from datetime import date
 from typing import Any
 
+import httpx
 import yaml
+from loguru import logger
 from pydantic import BaseModel
 
 PARA = {
@@ -144,3 +147,96 @@ def zettel_link(title: str, *, alias: str | None = None, block: str | None = Non
     if block:
         inner += f"#^{block}"
     return ("!" if embed else "") + f"[[{inner}]]"
+
+
+class VaultClient:
+    """GitHub Contents API client over httpx (Bearer + versioned headers).
+
+    A caller-injected session is never owned or closed; a self-made one is."""
+
+    _API = "https://api.github.com"
+
+    def __init__(
+        self,
+        repo: str,
+        token: str,
+        branch: str = "main",
+        session: httpx.AsyncClient | None = None,
+    ) -> None:
+        self._repo = repo
+        self._branch = branch
+        self._headers = {
+            "Authorization": f"Bearer {token}",
+            "Accept": "application/vnd.github+json",
+            "X-GitHub-Api-Version": "2022-11-28",
+        }
+        _REGISTERED_SECRETS.add(token)
+        self._owns_session = session is None
+        self._http = session or httpx.AsyncClient(
+            base_url=self._API, headers=self._headers, timeout=30.0
+        )
+
+    async def aclose(self) -> None:
+        if self._owns_session:
+            await self._http.aclose()
+
+    async def read(self, path: str) -> str:
+        response = await self._http.get(
+            f"/repos/{self._repo}/contents/{path}", params={"ref": self._branch}, headers=self._headers
+        )
+        if response.status_code == 404:
+            raise FileNotFoundError(path)
+        response.raise_for_status()  # auth errors propagate loudly (no retry)
+        data = response.json()
+        if isinstance(data, list):
+            raise ValueError(f"{path} is a directory, not a note")
+        text = base64.b64decode(data["content"].replace("\n", "")).decode("utf-8")
+        try:
+            split_frontmatter(text)
+        except ValueError as error:
+            raise ValueError(f"{path}: {error}") from error
+        return text
+
+    async def upsert(self, path: str, content: str, *, message: str) -> WriteResult:
+        payload = content.encode("utf-8")
+        if len(payload) > MAX_NOTE_BYTES:
+            raise ValueError(
+                f"payload for {path} exceeds {MAX_NOTE_BYTES} bytes ({len(payload)})"
+            )
+        sha = await self._lookup_sha(path)
+        response = await self._put(path, content, message, sha)
+        if response.status_code == 409:
+            logger.warning("vault conflict on {path}; retrying GET->PUT once", path=path)
+            sha = await self._lookup_sha(path)
+            response = await self._put(path, content, message, sha)
+            if response.status_code == 409:
+                raise VaultConflictError(f"vault conflict persists for {path}")
+        response.raise_for_status()
+        data = response.json()
+        return WriteResult(path=path, commit_sha=data["commit"]["sha"], created=sha is None)
+
+    async def upsert_note(self, note: Note, *, message: str) -> WriteResult:
+        return await self.upsert(
+            note.path, write_frontmatter(note.frontmatter, note.body), message=message
+        )
+
+    async def _lookup_sha(self, path: str) -> str | None:
+        response = await self._http.get(
+            f"/repos/{self._repo}/contents/{path}", params={"ref": self._branch}, headers=self._headers
+        )
+        if response.status_code == 404:
+            return None
+        response.raise_for_status()
+        return response.json()["sha"]
+
+    async def _put(self, path: str, content: str, message: str, sha: str | None) -> httpx.Response:
+        body: dict[str, str] = {
+            "message": message,
+            "content": base64.b64encode(content.encode("utf-8")).decode("ascii"),
+            "branch": self._branch,
+        }
+        if sha is not None:
+            body["sha"] = sha
+        return await self._http.put(
+            f"/repos/{self._repo}/contents/{path}", json=body, headers=self._headers
+        )
