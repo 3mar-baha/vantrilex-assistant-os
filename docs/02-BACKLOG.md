@@ -118,10 +118,13 @@ test-guard · `everything-claude-code` systems-architect. Teardown → `docs/10-
       Done 2026-08-31: `src/vault_expand.py` — `VaultExpander` (one-commit domain growth
       via Git Data API, `_tags.yaml` ontology, backbone immutable pre-flight, idempotent
       vault-state-as-memory); 10 new tests (191 total), gate green.
-- [ ] **3.3 `skill-verbal-action-summary-protocol` + conversation capture**: preference
+- [x] **3.3 `skill-verbal-action-summary-protocol` + conversation capture**: preference
       extraction -> `User_Info.md`, colloquialisms -> `Dialect_Notes.md`; summary protocol
       («هل بتحب ألخص لك شو رح أعمل هسا؟») on task-bearing turns, suppressed for casual ones.
       *AC*: `test_post_call_summary.py` triggers only when actionable tasks exist.
+      Done 2026-08-31: `src/summary.py` (TIER-2 extractor, one-pending state machine,
+      arbitration + consent binding) + `common/consent.py` (shared grammar for 3.4);
+      10 new tests (201 total), gate green.
 - [ ] **3.4 `skill-pc-whitelist-safety-guardrail`**: Windows daemon — outbound-only TLS
       WebSocket to the Space, LAN port 8000, zero public inbound (asserted), WoL magic
       packet UDP:9, 20-min idle -> one offer per window, strict `config/whitelist.json`

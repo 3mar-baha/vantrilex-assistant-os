@@ -9,6 +9,19 @@ product release tags start independently at v1.0.0.)
 ## [Unreleased]
 
 ### Added
+- **Sprint 3 / task 3.3 — skill-verbal-action-summary-protocol**:
+  `src/summary.py` + `common/consent.py` — task-bearing turns close with the exact
+  Jordanian prompt «هل بتحب ألخص لك شو رح أعمل هسا؟»; `TaskExtractor` rides ONE TIER 2
+  MEDIUM call per turn, strict-JSON validated (LLM output is DATA — garbage collapses to
+  `[]` loudly, hashed not logged); one pending per turn (newer supersedes, casual turns
+  capture nothing); consent grammar shared with 3.4 (`is_affirmative` first-token
+  Jordanian match) with the structural binding rule — only an affirmative FOLLOWING the
+  live prompt mints consent; approval files
+  `04_Archives/Conversations/YYYY-MM-DD-HHMMSS-summary.md` (frontmatter `id`/`asked_at`/
+  `resolved_at`/`task_count`/`tags: [action-summary]`, numbered tasks + daily-log
+  wikilink); arbitration defers to 3.4's confirmation consumer and re-asks once after;
+  brain failure never breaks the reply; bounded filing retries. 10 new tests (201
+  total), gate green.
 - **Sprint 3 / task 3.2 — skill-dynamic-vault-expander (M5)**:
   `src/vault_expand.py` — `VaultExpander.expand(domain, dirs, tags)` grows new domain
   trees under `01_Projects/<domain>` as structure emerges in conversation: sanitized
