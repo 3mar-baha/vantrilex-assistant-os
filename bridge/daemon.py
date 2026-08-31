@@ -14,6 +14,7 @@ from websockets.asyncio.client import connect
 from websockets.exceptions import WebSocketException
 
 from bridge.executor import ExecResult, Executor, mint_audit_code
+from bridge.telemetry import live_state
 from bridge.wol import send_wol
 from common.protocol import (
     AUTH_TIMEOUT_S,
@@ -131,11 +132,8 @@ class BridgeDaemon:
                     audit_code=mint_audit_code(),
                 )
             elif frame.cmd == "telemetry.state":
-                result = ExecResult(
-                    status="error",
-                    detail="telemetry not wired yet (3.5)",
-                    audit_code=mint_audit_code(),
-                )
+                # never raises: live_state degrades unmeasurable metrics to None
+                return "ok", live_state().model_dump(mode="json")
             else:
                 result = ExecResult(
                     status="error",

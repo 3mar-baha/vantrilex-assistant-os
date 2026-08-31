@@ -19,7 +19,6 @@ from datetime import UTC, datetime, timedelta
 
 import psutil
 import pytest
-from pydantic import ValidationError
 
 from bridge.daemon import BridgeDaemon
 from bridge.executor import Executor
@@ -37,18 +36,18 @@ STATE_FIELDS = set(LiveState.model_fields)
 
 
 def _sample_state(**overrides) -> LiveState:
-    values = dict(
-        cpu_percent=23.0,
-        ram_used_gb=5.2,
-        ram_total_gb=16.0,
-        disk_c_used_gb=120.0,
-        disk_c_total_gb=500.0,
-        disk_d_used_gb=250.0,
-        uptime_hours=3.5,
-        top_process="chrome.exe",
-        top_process_cpu=7.0,
-        captured_at=datetime.now(UTC),
-    )
+    values = {
+        "cpu_percent": 23.0,
+        "ram_used_gb": 5.2,
+        "ram_total_gb": 16.0,
+        "disk_c_used_gb": 120.0,
+        "disk_c_total_gb": 500.0,
+        "disk_d_used_gb": 250.0,
+        "uptime_hours": 3.5,
+        "top_process": "chrome.exe",
+        "top_process_cpu": 7.0,
+        "captured_at": datetime.now(UTC),
+    }
     values.update(overrides)
     return LiveState(**values)
 
@@ -80,7 +79,7 @@ def _http_get(url: str, *, token: str | None = None) -> tuple[int, bytes]:
     if token is not None:
         request.add_header("Authorization", f"Bearer {token}")
     try:
-        with urllib.request.urlopen(request, timeout=5) as resp:  # noqa: S310 - loopback test
+        with urllib.request.urlopen(request, timeout=5) as resp:
             return resp.status, resp.read()
     except urllib.error.HTTPError as exc:
         return exc.code, exc.read()
@@ -199,7 +198,7 @@ async def test_missing_second_disk_degrades(monkeypatch):
 
     def no_d_drive(path):
         if str(path).upper().startswith("D"):
-            raise psutil.DiskNotFoundError(2, "no such drive D:")
+            raise FileNotFoundError(2, "no such drive D:")
         return real_disk_usage(path)
 
     monkeypatch.setattr(psutil, "disk_usage", no_d_drive)
@@ -210,7 +209,7 @@ async def test_missing_second_disk_degrades(monkeypatch):
     boom = _Brain(error=RuntimeError("gateway down"))
     client = TelemetryClient(BridgeServer(TOKEN), boom)
     line = await client.narrate(state)
-    assert "D" not in line  # neither «القرص دي» nor a D: path leaks in
+    assert "القرص دي" not in line and "D:" not in line  # the second disk is never mentioned
 
 
 async def test_offline_bridge_reported_honestly():
@@ -278,7 +277,7 @@ async def test_cmd_registered_and_correlated(tmp_path):
     try:
         server = BridgeServer(TOKEN)
         server._resolve_result(new_envelope(type="result", status="ok", payload={}))
-        assert any("unknown" in record["message"].lower() for record in records)
+        assert any("unknown" in r.record["message"].lower() for r in records)
     finally:
         logger.remove(handler_id)
 

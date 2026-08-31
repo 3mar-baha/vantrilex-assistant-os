@@ -65,6 +65,13 @@ class BridgeServer:
         finally:
             self._pending.pop(env.id, None)
 
+    def _resolve_result(self, frame: Envelope) -> None:
+        fut = self._pending.pop(frame.id, None)
+        if fut is not None and not fut.done():
+            fut.set_result(frame.payload)
+        elif fut is None:
+            logger.warning("result for unknown cmd id {id} — dropped", id=frame.id)
+
     async def _handler(self, connection: ServerConnection) -> None:
         peer = connection.remote_address
         try:
@@ -100,11 +107,7 @@ class BridgeServer:
                 if frame.type == "heartbeat":
                     self.heartbeats += 1
                 elif frame.type == "result":
-                    fut = self._pending.pop(frame.id, None)
-                    if fut is not None and not fut.done():
-                        fut.set_result(frame.payload)
-                    elif fut is None:
-                        logger.warning("result for unknown cmd id {id} — dropped", id=frame.id)
+                    self._resolve_result(frame)
         except (TimeoutError, ProtocolError) as exc:
             logger.warning("bridge peer dropped: {exc}", exc=exc)
         finally:
