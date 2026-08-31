@@ -36,8 +36,10 @@ class BridgeServer:
         self.heartbeats = 0
         self.security_log: list[str] = []
 
-    async def start(self, host: str = "127.0.0.1", port: int = 0) -> int:
-        self._server = await serve(self._handler, host, port, max_size=None)
+    async def start(self, host: str = "127.0.0.1", port: int = 0, *, process_request=None) -> int:
+        self._server = await serve(
+            self._handler, host, port, max_size=None, process_request=process_request
+        )
         return self._server.sockets[0].getsockname()[1]
 
     async def close(self) -> None:

@@ -9,13 +9,12 @@ import sys
 from pathlib import Path
 
 import httpx
-import pytest
 
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "scripts"))
 
-import deploy_smoke  # noqa: E402
-from deploy_smoke import CheckResult, run_all  # noqa: E402
+import deploy_smoke
+from deploy_smoke import CheckResult, run_all
 
 TELEGRAM_TOKEN = "your-telegram-token-value-0123456789"
 GH_TOKEN = "your-github-pat-value-0123456789"
@@ -88,6 +87,10 @@ async def test_single_failure_exits_one_others_still_run(make_settings, tmp_path
     assert by_name["telegram"].ok and by_name["vault"].ok and by_name["space_health"].ok
     assert by_name["google_token_cache"].ok
 
+
+def test_main_exit_codes(make_settings, monkeypatch):
+    """AC7 — the verdict: exit 0 iff every check is green."""
+    settings = make_settings(**SECRET_SETTINGS)
     red = [CheckResult("gateway", False, "models endpoint HTTP 500")] + [
         CheckResult(name, True, "ok") for name in CHECK_ORDER[1:]
     ]

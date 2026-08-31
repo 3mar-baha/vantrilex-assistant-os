@@ -85,6 +85,7 @@ class Settings(BaseSettings):
     target_pc_mac_address: str | None = None
     target_pc_ip: str | None = None
     target_pc_wol_port: int = 9
+    space_url: str | None = None  # SPACE_URL (public Space root; deploy smoke + keep-alive target)
     tz: str = "Asia/Amman"
     log_level: str = "INFO"
     idle_shutdown_minutes: int = 20

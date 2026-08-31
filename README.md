@@ -1,3 +1,13 @@
+---
+title: Vantrilex Assistant OS — Sara
+emoji: 🌟
+colorFrom: purple
+colorTo: blue
+sdk: docker
+app_port: 7860
+pinned: false
+---
+
 # Vantrilex Assistant OS (نظام فانتريلكس المساعد)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
@@ -62,6 +72,14 @@ make run-core                   # start Sara's core
 
 On the Windows PC (bridge): same repo, fill the `[CORE <-> BRIDGE]` block of `.env`, then
 `make run-bridge`.
+
+### Production (Hugging Face Space — ADR-15)
+
+One private Docker Space co-locates OmniRoute + the core behind the supervised entrypoint
+(`scripts/supervise.py`); the single public port (`app_port: 7860`) serves `/health` and the
+bridge WSS. Every credential lives in **HF Secrets** — never the repo. Deploy walkthrough,
+keep-alive and the smoke check: [`docs/04-RUNBOOK.md` §4](docs/04-RUNBOOK.md).
+Verify a deployment with `python scripts/deploy_smoke.py` (exit 0 = Sara is alive).
 
 Ops health probe (no Telegram traffic): `python -m src.main --health` prints a JSON report
 (`gateway` / `telegram_token` / `ffmpeg` / `overall`) and exits 0 when ok, 1 when degraded.

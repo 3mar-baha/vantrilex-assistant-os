@@ -20,7 +20,7 @@ import pytest
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "scripts"))
 
-import supervise  # noqa: E402
+import supervise
 
 PY = sys.executable
 
@@ -61,7 +61,6 @@ def _exit_child(marker: Path, delay_s: float, code: int) -> list[str]:
 async def test_supervision_both_children_pinned(tmp_path):
     """AC3 — both configured children launch; the FIRST exit propagates as the
     container exit code; the surviving child is torn down (no half-alive tree)."""
-    marker_a = tmp_path / "core.started"
     alive_a = tmp_path / "core.alive"
     marker_b = tmp_path / "omniroute.started"
     children = {
@@ -70,7 +69,7 @@ async def test_supervision_both_children_pinned(tmp_path):
     }
     code = await supervise.supervise(children)
     assert marker_b.exists(), "the omniroute child never launched"
-    assert marker_a.exists(), "the core child never launched"
+    assert alive_a.exists(), "the core child never launched"
     assert code == 3
     frozen = (alive_a.read_text(), alive_a.stat().st_mtime)
     await asyncio.sleep(0.5)
@@ -119,10 +118,10 @@ def test_dockerfile_contract():
     for tree in ("src/", "common/", "scripts/omniroute/"):
         assert f"COPY {tree}" in dockerfile, f"the image must carry {tree}"
     assert "useradd" in dockerfile and "sara" in dockerfile
-    assert re.search(r"^USER sara\s*$", dockerfile, re.M), "container must run non-root"
+    assert re.search(r"^USER sara\s*$", dockerfile, re.MULTILINE), "container must run non-root"
     assert "ENV TZ=Asia/Amman" in dockerfile
     assert "$PORT" in dockerfile, "the Space contract: the container listens on $PORT"
-    assert re.search(r'^CMD \["python", "scripts/supervise\.py"\]$', dockerfile, re.M), (
+    assert re.search(r'^CMD \["python", "scripts/supervise\.py"\]$', dockerfile, re.MULTILINE), (
         "entrypoint is the supervised tree, not a bare child"
     )
 

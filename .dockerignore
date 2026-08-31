@@ -1,0 +1,24 @@
+# Secrets and local state never enter the build context (sprint-4 4.4b AC2).
+.git
+.venv
+.env
+.env.*
+tests/
+docs/
+.github/
+.claude/
+.ingest/
+*.docx
+config/google_oauth_client.json
+*.session
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+scripts/
+
+# Runtime re-includes AFTER the scripts/ exclusion (order matters to docker):
+# the supervisor entrypoint and the co-located OmniRoute clone (RUNBOOK §1).
+!scripts/supervise.py
+!scripts/omniroute/

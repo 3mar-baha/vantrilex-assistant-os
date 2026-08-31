@@ -1,0 +1,25 @@
+name: keep-alive
+
+# Free-tier Spaces idle-sleep after prolonged silence (ADR-15) — this ping is part
+# of the shipped v1.0 contract, not an ops footnote (sprint-4 4.4b AC5).
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Ping Space /health
+        env:
+          SPACE_URL: ${{ secrets.SPACE_URL }}
+        run: |
+          code=$(curl -s -o /dev/null -w "%{http_code}" -m 15 "${SPACE_URL}/health")
+          echo "GET /health -> HTTP $code"
+          if [ "$code" != "200" ]; then
+            echo "::error::keep-alive ping failed — Space /health returned HTTP $code"
+            exit 1
+          fi
