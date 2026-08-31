@@ -11,6 +11,8 @@ CRITICAL_FIELDS = (
     "heavy_model",
     "telegram_bot_token",
     "authorized_user_id",
+    "vault_github_repo",
+    "vault_github_token",
 )
 
 
@@ -36,7 +38,9 @@ def test_settings_accept_all_env_example_vars(make_settings):
     assert s.telegram_api_id is None
     assert s.telegram_api_hash is None
     assert s.telegram_user_session_string is None
-    assert s.vault_github_token is None
+    assert s.vault_github_repo == "owner/vault-repo"
+    assert s.vault_github_token.get_secret_value() == "your-github-fine-grained-pat"
+    assert s.vault_branch == "main"
     assert s.obsidian_api_key is None
     assert s.bridge_token is None
 

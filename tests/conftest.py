@@ -67,7 +67,8 @@ ENV_EXAMPLE: dict[str, str] = {
     "VOICE_RATE": "+0%",
     "VOICE_PITCH": "+0Hz",
     "VAULT_GITHUB_REPO": "owner/vault-repo",
-    "VAULT_GITHUB_TOKEN": "",
+    "VAULT_GITHUB_TOKEN": "your-github-fine-grained-pat",  # sprint-3 3.1: required (SecretStr)
+    "VAULT_BRANCH": "main",
     "OBSIDIAN_REST_API_URL": "https://127.0.0.1:27124",
     "OBSIDIAN_API_KEY": "",
     "GOOGLE_OAUTH_CLIENT_JSON": "./config/google_oauth_client.json",

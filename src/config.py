@@ -4,7 +4,7 @@ from datetime import time
 from functools import lru_cache
 from pathlib import Path
 
-from pydantic import field_validator
+from pydantic import SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # Sprint-1 critical: no defaults -> boot fails fast without them.
@@ -17,6 +17,8 @@ _REQUIRED_FIELDS = (
     "telegram_bot_token",
     "authorized_user_id",
     "vault_enc_key",  # consumed by task 2.1 vault-state encryption (ADR-15)
+    "vault_github_repo",  # consumed by task 3.1 vault architect (ADR-21)
+    "vault_github_token",  # consumed by task 3.1 vault architect (ADR-21)
 )
 
 
@@ -68,8 +70,9 @@ class Settings(BaseSettings):
     voice_name: str = "ar-JO-SanaNeural"
     voice_rate: str = "+0%"
     voice_pitch: str = "+0Hz"
-    vault_github_repo: str | None = None
-    vault_github_token: str | None = None
+    vault_github_repo: str  # VAULT_GITHUB_REPO (private vault repo, "owner/name")
+    vault_github_token: SecretStr  # VAULT_GITHUB_TOKEN (fine-grained PAT, repo scope)
+    vault_branch: str = "main"  # VAULT_BRANCH (vault git branch)
     obsidian_rest_api_url: str | None = None
     obsidian_api_key: str | None = None
     google_oauth_client_json: str = "./config/google_oauth_client.json"
