@@ -22,31 +22,34 @@
   (`ar-JO-SanaNeural`) streamed in-memory via `io.BytesIO`, transcoded by ffmpeg to native
   Ogg Opus voice bubbles (<600 ms first-chunk target); live bidirectional calls via PyTgCalls
   arrive in v1.1.
-- **Validated deployment path (ADR-15, 2026-08-29)**: free-tier **Hugging Face Spaces** hosts
-  ONE Docker Space co-locating core + OmniRoute + Edge-TTS (single public port = WSS bridge
-  endpoint + `/health`; HF Secrets; keep-alive cron ping every 10 min); the Space's filesystem is
-  disposable — all durable state lives in the git-backed vault; **Windows PC Bridge daemon**
+- **Validated deployment path (ADR-15 as amended 2026-08-31)**: **Oracle Cloud Always-Free
+  VM** hosts ONE Docker container co-locating core + OmniRoute + Edge-TTS (single public
+  port behind Caddy TLS = WSS bridge endpoint + `/health`; environment file on the VM;
+  `restart: unless-stopped` — the VM never sleeps, the keep-alive cron is an optional
+  liveness alarm); the disposable-filesystem rule stays as a design principle — all durable
+  state lives in the git-backed vault; **Windows PC Bridge daemon**
   connects outbound-only (TLS WebSocket, zero inbound ports) executing WoL + Windows-MCP tasks.
-  PC may sleep; Sara stays up.
+  PC may sleep; Sara stays up. (Amendment history: HF Space chosen 2026-08-29 — HF made
+  Docker Spaces paid $9/mo, discovered at deploy time 2026-08-31; owner ruled Oracle.)
 
 ## 2. Component Topology
 
 ```mermaid
 graph TD
     User([Owner]) <-->|Chat / Voice Notes / v1.1 Calls| TG[Telegram]
-    TG <--> Core[HF Space: Aiogram 3.x Core + Orchestrator]
+    TG <--> Core[Oracle VM: Aiogram 3.x Core + Orchestrator]
 
-    subgraph Space [HF Space Docker - 24/7, keep-alive ping /health 10min]
+    subgraph VM [Oracle Always-Free Docker - 24/7, Caddy TLS, restart unless-stopped]
         Core <--> Disp[Fast Front-Door Dispatcher ADR-18]
         Disp <--> Omni[OmniRoute :20128 - 3-tier ADR-16]
-        Omni <--> T1[Tier1 FAST: gemini-3.5-flash-lite]
-        Omni <--> T2[Tier2 MEDIUM: gemini-3.7-flash]
+        Omni <--> T1[Tier1 FAST: gpt-oss-20b]
+        Omni <--> T2[Tier2 MEDIUM: gpt-oss-20b]
         Omni <--> T3[Tier3 HEAVY: nemotron-3-ultra-550b]
         Core <--> TTS[Edge-TTS -> BytesIO -> ffmpeg -> Ogg Opus]
         Core <--> Bio[Voice biometrics ECAPA-TDNN + Guest Mode]
         Core <--> G[Google Suite clients: Calendar / Gmail / Drive / Contacts / Tasks]
         Core <--> Vault[(Git-backed Obsidian Vault via GitHub API)]
-        Core --> WSS[Space public port: WSS bridge endpoint + /health]
+        Core --> WSS[Public port via Caddy: WSS bridge endpoint + /health]
     end
 
     WSS <-->|outbound-only link| Bridge[Windows PC Bridge Daemon]
@@ -167,8 +170,9 @@ expansion-only.
 
 Vault transport (sprint-3 3.1, `src/vault.py`): `VaultClient` speaks the GitHub Contents API
 directly (`api.github.com`, `Bearer VAULT_GITHUB_TOKEN` + versioned headers, `?ref=VAULT_BRANCH`)
-— chosen over a local clone because the core lives on HF Spaces (ADR-15) with a disposable
-filesystem and owner-only write volume makes per-write commits cheap. `upsert` reads the sha
+— chosen over a local clone because the core's container filesystem is disposable by
+design (ADR-15 principle, kept on the Oracle VM) and owner-only write volume makes
+per-write commits cheap. `upsert` reads the sha
 first (404 -> create, 200 -> sha update), retries one 409 via GET->PUT then raises
 `VaultConflictError`; auth errors propagate loudly with zero retries. Structural changes (the
 Studies migration, 3.2 expansion) land as ONE commit through the Git Data API (`commit_files`:
@@ -342,8 +346,8 @@ randomized evening check-in (Sprint 2.7) · triage token compaction (Sprint 2.4,
 mandatory vault directories + dynamic taxonomy expansion (Sprint 3.1/3.4, ADR-21) ·
 dynamic capability expansion with natural-language Arabic cron (Sprint 4.2, M4) ·
 syllabus PDF-to-DAG parser (Sprint 4.1, TIER3) · polymath tutor (Sprint 4.3, M9;
-artifacts filed to `Studies/`) · >=85% coverage gate (Sprint 4.4a) · HF Spaces
-packaging (Sprint 4.4b, ADR-15) · per-sprint skill rotation + teardown
+artifacts filed to `Studies/`) · >=85% coverage gate (Sprint 4.4a) · ONE-container
+packaging (Sprint 4.4b, ADR-15; host amended to Oracle 2026-08-31) · per-sprint skill rotation + teardown
 (`.claude/skills/` wiped at sprint exit, outcomes in `docs/10-CHECKPOINT.md`) ·
 VAD + barge-in on live calls (v1.1, M8). Hosting and brain-routing rulings: ADR-15 / ADR-16 / ADR-17 / ADR-18 /
 ADR-19 / ADR-20 / ADR-21 in `docs/03-DECISIONS.md`.

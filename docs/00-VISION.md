@@ -10,9 +10,9 @@ via Telegram in warm, authentic Jordanian Arabic.
 
 ## 2. Confirmed Mission (v1.0)
 
-An owner-only, strictly $0.00/month executive assistant living 24/7 in a free
-Hugging Face Space (ADR-15 — one Docker container co-locating the OmniRoute
-gateway; all durable state in the git-backed vault) — conversing in Jordanian
+An owner-only, strictly $0.00/month executive assistant living 24/7 on an Oracle
+Cloud Always-Free VM (ADR-15 as amended 2026-08-31 — one Docker container co-locating
+the OmniRoute gateway; all durable state in the git-backed vault) — conversing in Jordanian
 Arabic over Telegram text and Ogg Opus voice notes, reasoning through the
 3-tier multi-model brain via OmniRoute's free pools (ADR-16: fast reflex / tool
 execution / heavy planning behind the Fast Front-Door Dispatcher, ADR-18), triaging Gmail into

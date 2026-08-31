@@ -124,3 +124,15 @@ Upstream toolkit inventory: `worldflowai/everything-claude-code` · `mattpocock/
 - **Outcome**: 285 tests green; **v1.0.0 shipped — the sprint-level HALT lands with the
   owner** (Release publish, AC8 post-tag smoke, then v1.1 decisions: PyTgCalls live
   calls, tech-hardware-scout + career-project-incubator, Mem0/Firestore evaluation).
+
+## Post-release addendum — 2026-08-31: v1.0.1 + Oracle pivot (no sprint, no skills)
+
+Skill rotation: **none ingested** (closed-loop patch + docs only). Commits directly on
+`main`: `83a61f7` red (Dockerfile must carry Node >=22 — OmniRoute npm engines) ·
+`9545753` green (NodeSource 24 layer + global gateway install + `OMNIROUTE_CMD`
+default) · `5f07db9` docs (ADR-15 amendment → Oracle Always Free; `docs/09-ORACLE-DEPLOY.md`
+Arabic owner guide; RUNBOOK/HANDOFF/OWNER-NEXT-STEPS re-anchored) · `7e49f85` release
+(version 1.0.1 + CHANGELOG `[1.0.1]`; scope-deferral test pinned to v1.0.0). Tag
+`v1.0.1` pushed; GitHub Release published. Full gate green throughout (285 passed).
+Owner deploy blocked at Oracle card verification — bank contact 2026-09-01, recovery
+checklist in `docs/09-ORACLE-DEPLOY.md` §1. Record: `docs/PROJECT-JOURNEY.md` §14.

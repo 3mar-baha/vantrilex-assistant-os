@@ -54,6 +54,10 @@
    directive): `PRIMARY_MODEL=gemini/gemini-3.7-flash` (extended thinking; deep agentic/
    tutoring), `FAST_MODEL=gemini/gemini-3.5-flash-lite` (<600ms TTS text, classification);
    pool-level failover covers the gemini-3.1-pro class.
+   **Brain pins SUPERSEDED (ADR-16 amended 2026-08-30 + owner bake-off 2026-08-31)**:
+   Gemini RETIRED; current pins live in `.env.example` — FAST/MEDIUM
+   `groq/openai/gpt-oss-20b` (fb minimax-m2.7:free, gpt-oss-120b), HEAVY
+   `openrouter/nvidia/nemotron-3-ultra-550b-a55b:free` (fb gpt-oss-120b). Harness stays GLM-only.
    **Branch directive (owner, 2026-08-31, binding — supersedes loop item 1's merge rule)**:
    ALL commits land directly on `main` and push immediately (owner: «اريد ان يتم توجيه
    جميع الكوميتات الى main»). The per-stream worktree/branch pattern is retired — `main`
@@ -63,14 +67,16 @@
 
 Updated at every phase exit and every significant turn end.
 
-## Mission (confirmed 2026-08-26)
+## Mission (confirmed 2026-08-26; host updated 2026-08-31)
 
-Vantrilex Assistant OS v1.1.0 — **Sara (سارة)**. Owner-only, strictly $0.00/month,
-free-tier VPS-primary core + OmniRoute brain (`http://localhost:20128/v1`), Telegram
+Vantrilex Assistant OS — **Sara (سارة)** — product v1.0.1. Owner-only, strictly
+$0.00/month, **Oracle Cloud Always-Free VM** host (ADR-15 amendment; supersedes VPS-primary
+and the HF-Space interim) + OmniRoute brain (`http://localhost:20128/v1`), Telegram
 chat/Ogg Opus voice notes in Jordanian Arabic (`ar-JO-SanaNeural`), Google suite +
 tiered email triage, git-backed Obsidian PARA vault, whitelisted PC control over an
 outbound-only Windows bridge daemon. Live calls -> v1.1; scouts -> v1.1; SIP -> v1.5;
-social agent -> v2.0.
+social agent -> v2.0. ("v1.1.0" in framework branding = the Universal Agentic OS, not the
+product.)
 
 ## Discovery rulings (binding)
 
@@ -419,14 +425,42 @@ social agent -> v2.0.
       `gh release create v1.0.0 --verify-tag ...` command; post-tag container-from-tag
       rebuild + deploy_smoke re-run (AC8, manual); then v1.1 decisions. Sprint record:
       `docs/10-CHECKPOINT.md` (Sprint 4) + `docs/PROJECT-JOURNEY.md` §13.
-      ← **current: v1.0.0 shipped — sprint-level HALT, awaiting owner**
+
+      ### POST-RELEASE ARC — v1.0.1 + Oracle migration (2026-08-31, owner `التالي`)
+      Owner pivoted at deploy time: HF Docker Spaces now PAID ($9/mo PRO — owner
+      screenshots), Render/Koyeb free can't carry the stack → **owner ruled Oracle
+      Always Free; $0.00 invariant kept**. Executed directly on `main` (closed loop):
+      83a61f7 red (container must carry Node >=22 for the npm gateway — OmniRoute
+      engines node >=22.22) → 9545753 green (Dockerfile: NodeSource 24 layer +
+      `npm install -g /app/scripts/omniroute` + `ENV OMNIROUTE_CMD="omniroute run"`;
+      gate 285/85.67%) → 5f07db9 docs (ADR-15 amendment, `docs/09-ORACLE-DEPLOY.md`
+      Arabic guide, RUNBOOK §4/4b/4c/validation/troubleshooting re-anchored, HANDOFF
+      + OWNER-NEXT-STEPS synced) → 7e49f85 release (version 1.0.1 + CHANGELOG
+      [1.0.1]; scope-deferral test pinned to v1.0.0 — patch releases carry no
+      deferral block). Release sequence: dry-run green → tag `v1.0.1` pushed →
+      GitHub Release published. **OWNER NEXT (physical)**: Oracle account + VM +
+      DuckDNS + `sara.env` per `docs/09-ORACLE-DEPLOY.md`; then /enroll-voice +
+      Google consent (works on the VM) + PC bridge `BRIDGE_SERVER_URL=wss://<domain>/bridge`.
+      ← **current: v1.0.1 shipped — sprint-level HALT, awaiting owner (Oracle deploy is owner-side)**
 
 ## Open items / blockers
 
+- **ACTIVE BLOCKER (2026-08-31, owner pausing for today)**: Oracle signup declined the
+  owner's bank card ("Your credit card has been declined…"). Owner contacts the bank
+  TOMORROW (2026-09-01) to enable online/international transactions, then retries signup.
+  Recovery checklist already given to the owner + documented in `docs/09-ORACLE-DEPLOY.md`
+  §1 (bank-side toggles, OTP check, exact name/address match, no VPN, 24h retry, alternative
+  real card — $1 hold only, never charged). NOTHING on the dev side is blocked — the
+  machine-side work (v1.0.1, docs, guides) is COMPLETE; only the owner-side Oracle deploy
+  waits on the card.
+- **Google 403 (upstream, from sprint 1)**: project `vantrilex-assistant-2008` blocked by
+  Google ("project denied access") — owner must unblock in Google Cloud console before
+  Gmail/Calendar anywhere (Gemini itself retired from the brain; OAuth client shares the project).
+- **Key rotation (recommended, optional)**: real secrets were pasted in at least two chat
+  sessions — GitHub PAT, Telegram API_HASH, Groq/OpenRouter keys should rotate when
+  convenient (owner informed; plan in `docs/08-OWNER-NEXT-STEPS.md`).
 - DONE (2026-08-26): FFmpeg 9.0.1 · OmniRoute verified live · bot token (getMe) · vault repo
   seeded · Google OAuth client delivered at `config/google_oauth_client.json` (gitignored).
-- Remaining owner-side: free-tier VPS provisioning (before Sprint 4); workflow-repo upgrade
-  handover (owner finalizing).
 - Delivered (2026-08-26): TELEGRAM_API_ID/API_HASH stored (v1.1 calling ready — session
   string itself generated at v1.1 login flow) · Google Cloud project `vantrilex-assistant-2008`
   recorded + OAuth client JSON in place. Sprint-2 first boot will run the one-time consent flow ·
@@ -438,4 +472,6 @@ social agent -> v2.0.
 
 Mission record: `docs/01-ARCHITECTURE.md` · Backlog+ACs: `docs/02-BACKLOG.md` ·
 ADRs: `docs/03-DECISIONS.md` · Setup/troubleshooting: `docs/04-RUNBOOK.md` ·
-Gates: `docs/05-TEST-PLAN.md` · Drafts source-of-record: `docs/*.docx` (extraction cache `.ingest/`, gitignored).
+Oracle deploy guide (owner, Arabic): `docs/09-ORACLE-DEPLOY.md` ·
+Gates: `docs/05-TEST-PLAN.md` · Handoff briefing: `docs/07-HANDOFF.md` ·
+Owner steps: `docs/08-OWNER-NEXT-STEPS.md`.

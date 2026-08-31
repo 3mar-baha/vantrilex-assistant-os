@@ -205,6 +205,11 @@ Final teardown → `docs/10-CHECKPOINT.md` (v1.0.0 entry).
       green 85.62%. Tag + GitHub Release publish are owner steps (script prints the
       exact `gh` command). AC8 post-tag smoke (container from tag + deploy_smoke) is
       owner-side after tagging.
+      *Post-release amendment (2026-08-31)*: v1.0.0 released fully (tag + GitHub
+      Release published); HF Space host discovered PAID → **ADR-15 amended to Oracle
+      Always Free**; v1.0.1 shipped the Node-24 layer the gateway always needed
+      (`docs/09-ORACLE-DEPLOY.md` = the deploy guide). Keep-alive cron = optional
+      liveness alarm on the no-sleep VM.
 
 ## Deferred Backlog
 

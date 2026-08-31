@@ -21,9 +21,12 @@ strictly-zero-cost executive AI assistant named **Sara (سارة)**.
   tutoring, syllabus PDF-to-DAG, deep coding). Dispatcher: single/dual-tool -> Tier 2;
   complex DAG -> Tier 3; Tier 1 always answers first.
   Distinct layers: the dev harness runs GLM-only — never conflated with Sara's brain.
-- **Runtime Host (ADR-15)**: Hugging Face Spaces — ONE Docker Space co-locating OmniRoute + core;
-  single public port serves WSS bridge endpoint + `/health`; HF Secrets; keep-alive cron ping
-  every 10 min. Disposable filesystem: ALL durable state lives in the git-backed vault.
+- **Runtime Host (ADR-15, amended 2026-08-31)**: Oracle Cloud Always-Free VM — ONE Docker
+  container co-locating OmniRoute + core; single public port behind Caddy TLS serves WSS
+  bridge endpoint + `/health`; credentials in the VM environment file (never git);
+  `restart: unless-stopped` (the VM never sleeps — keep-alive cron optional).
+  Disposable-filesystem stays as a design principle: ALL durable state lives in the
+  git-backed vault. Owner deploy guide: `docs/09-ORACLE-DEPLOY.md`.
 - **Knowledge Base**: Git-backed Obsidian vault (PARA + Zettelkasten) via GitHub API / local clone.
   Mandatory directories (ADR-21): `Contacts/`, `Call_Transcripts/`, `Studies/`, `Voice_Memos/`,
   `Daily_Logs/` + `02_Areas/Profile/User_Info.md`, `02_Areas/Profile/Dialect_Notes.md`.

@@ -452,3 +452,68 @@ fail-closed whitelist guardrail, telemetry narration, syllabus/tutor/expansion s
 packaged as ONE free HF Space container. 285 tests green, 85.62% branch coverage, gate
 green end-to-end. Sprint-level HALT: owner publishes the Release and decides the v1.1
 agenda (PyTgCalls live calls, hardware-scout/career-incubator, Mem0/Firestore evaluation).
+
+## 14. Addendum — 2026-08-31 (post-release): v1.0.1 + the Oracle pivot
+
+### 14.1 The deploy-time platform discovery
+
+Post-release deploy attempts hit a wall: HF made Docker/Gradio Spaces a **paid PRO
+feature ($9/month)** — the owner verified with screenshots ("Gradio and Docker Spaces
+require a paid plan"; earlier assistant knowledge that cpu-basic Docker Spaces were free
+was outdated, and the assistant acknowledged the error explicitly). An honest host
+re-audit followed, owner present:
+
+| Candidate | Verdict |
+|---|---|
+| Render / Koyeb free | ✗ 512 MB / 0.1 vCPU + scale-to-zero — cannot carry whisper + biometrics + OmniRoute + core; text-only Sara |
+| Google Cloud Run free grant | ✗ same 512 MB cap for an always-on service |
+| HF PRO | ✗ $9/mo — breaks the absolute $0.00 invariant (owner: «قراري هو اني لن اكسر القاعدة») |
+| **Oracle Cloud Always Free** | ✓ **OWNER-CHOSEN** — Ampere A1 VM (2 OCPU/12 GB, expandable 4/24), truly always-on, $0 forever, card for verification only |
+
+ADR-15 amended in place (owner `التالي`): the container design is unchanged and
+host-agnostic; the disposable-filesystem rule STAYS as a design principle (vault remains
+the only durable store); and the OAuth client JSON may live on the VM (never git) —
+**resolving the Space-era Google gap**.
+
+### 14.2 v1.0.1 — the Node gap, closed-loop
+
+While re-verifying the container for a real deploy, the fatal gap surfaced: OmniRoute is
+an **npm application** (engines `node >=22.22`), and the image was `python:3.12-slim` —
+no Node runtime, the gateway child could never start. Closed loop on `main`:
+
+- `83a61f7` red: `test_dockerfile_contract` extended (NodeSource 24, global install of
+  the vendored clone, zero-config `OMNIROUTE_CMD`).
+- `9545753` green: Dockerfile gains the Node 24 layer + `npm install -g
+  /app/scripts/omniroute` + `ENV OMNIROUTE_CMD="omniroute run"`. Gate 285 passed /
+  85.67% branch.
+- One test harness fix in the release commit: `test_v100_documents_scope_deferrals`
+  was pinned to v1.0.0 — it had been accidentally tracking HEAD's CHANGELOG section,
+  which a patch release legitimately does not carry a deferral block.
+
+### 14.3 Documentation wave (`5f07db9`, `7e49f85`)
+
+- **`docs/09-ORACLE-DEPLOY.md`** — the owner's Arabic hand-held guide: account (home
+  region PERMANENT) → VM (Ubuntu 24.04, A1.Flex 2/12, ingress 22/80/443) → DuckDNS →
+  Docker → build from `v1.0.1` + OmniRoute clone → `~/sara-secrets/sara.env` (21 vars +
+  `PORT=8080`) → compose + Caddy TLS → verification → PC bridge → maintenance +
+  troubleshooting tables.
+- RUNBOOK §4 rewritten Oracle-primary (§4b keep-alive now legacy/optional on the
+  no-sleep VM; §4c documents HF-paid/Cloud-Run/Render-Koyeb as rejected alternatives);
+  §4-validation checklist re-anchored to VM terms; §1 table + §5 bridge first step +
+  troubleshooting rows de-Space'd.
+- HANDOFF (07) snapshot → v1.0.1 + Oracle; §9.2 marked FIXED, §9.4 marked RESOLVED-on-VM;
+  docs map gains 09. OWNER-NEXT-STEPS (08) rewritten around Oracle with the full
+  21-variable `sara.env` template.
+- Release commit `7e49f85` (version + CHANGELOG `[1.0.1]` in one commit, per policy) →
+  dry-run green → annotated tag `v1.0.1` pushed → **GitHub Release published**
+  (notes via temp file — process substitution `<(...)` is broken on Windows Git Bash).
+
+### 14.4 Where the day stopped
+
+The owner's Oracle signup was blocked at card verification ("Your credit card has been
+declined") — a bank-side card flag in the overwhelming majority of cases (online/
+international transactions disabled, OTP, name/address mismatch). The owner paused work
+for 2026-08-31 and will contact the bank on 2026-09-01; the recovery checklist is
+documented in `docs/09-ORACLE-DEPLOY.md` §1. All machine-side work is complete and
+pushed; only the owner-side Oracle deploy (docs/09) waits on the card. PHASE-STATE
+marker: **v1.0.1 shipped — HALT pending Oracle card resolution**.

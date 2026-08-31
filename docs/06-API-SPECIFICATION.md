@@ -10,7 +10,8 @@ executable form of this document.
 
 Transport: ONE JSON document per WebSocket text frame. The core LISTENS on its single
 public port (ADR-15, path `/bridge`); the daemon dials OUT — the PC holds zero inbound
-ports. Token auth only (the tunnel rides the HF Space's own TLS termination).
+ports. Token auth only (the tunnel rides the host's TLS termination — Caddy 2 on the
+Oracle VM, ADR-15 as amended 2026-08-31).
 
 Constants (`common/protocol.py`):
 
