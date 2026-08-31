@@ -183,13 +183,28 @@ Final teardown → `docs/10-CHECKPOINT.md` (v1.0.0 entry).
       carrying the FULL content (loud ERROR + Arabic apology — never lost); AST-scanned
       zero provider/PC surface; 6 new tests (253 total), gate green. AC6 live smoke
       (one real study session) is owner-side.
-- [ ] **4.4 Production hardening + release (HF Spaces primary, Cloud Run documented
+- [x] **4.4 Production hardening + release (HF Spaces primary, Cloud Run documented
       fallback)**: **>=85% BRANCH coverage** (pytest-cov `--cov-branch`) in `make gate`,
       pre-commit secret scanning, $0.00 verification step, Space Dockerfile (`app_port`,
       OmniRoute+core single-image supervision, HF Secrets, keep-alive ping `/health` every
       10 min), disposable-filesystem audit, Cloud Run alternative documented in RUNBOOK.
       *AC*: clean deploy end-to-end; restart proves state re-derives from vault; coverage
       gate green; version 1.0.0 tagged + CHANGELOG finalized.
+      Done 2026-08-31 — three slices:
+      **4.4a** coverage gate LIVE (`--cov-branch --cov-fail-under=85` in addopts, 85.86%
+      measured), secret scanner in `make gate` (`scripts/secret_scan.py`), CI unified on
+      `scripts/security_gate.py`, pragma-reason policy enforced (7 tests);
+      **4.4b** `Dockerfile` + `scripts/supervise.py` single-tree supervision,
+      `$PORT` health+WSS public port (`start_public_port`), `.dockerignore` with runtime
+      negations, keep-alive cron workflow, `scripts/deploy_smoke.py` (5 masked checks),
+      durable-state audit test, README Space metadata, RUNBOOK §4/§4b/§4c rewrite (18
+      tests, 278 total); **4.4c** `src/__version__='1.0.0'` single source, CHANGELOG
+      drained to `## [1.0.0] — 2026-08-31` (Added/Changed/Security/Deferred-to-v1.1),
+      `scripts/make_release.py` (consistency/clean-tree/gate verifications, --tag-only,
+      NO --force), scope-lock test complete exclusion set (7 tests, 285 total), gate
+      green 85.62%. Tag + GitHub Release publish are owner steps (script prints the
+      exact `gh` command). AC8 post-tag smoke (container from tag + deploy_smoke) is
+      owner-side after tagging.
 
 ## Deferred Backlog
 

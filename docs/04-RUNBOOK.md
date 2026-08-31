@@ -103,6 +103,9 @@ Sara accepts new scheduled background tasks at runtime (M4). The owner flow:
 
 ## 4. HF Space Deployment (production, free tier — ADR-15)
 
+Production deploys pin a release tag — clone/checkout `v1.0.0` (or later) before
+building the Space image; never deploy an untagged `main` tip.
+
 Supersedes VPS deployment (ADR-05). One Docker Space co-locates OmniRoute + the core
 behind the supervised entrypoint (`scripts/supervise.py` — both children run as ONE
 process tree; the first child to exit tears the container down so the Space restarts it).

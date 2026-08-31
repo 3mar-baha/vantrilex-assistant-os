@@ -15,6 +15,7 @@ pinned: false
 [![Telegram: Aiogram 3.x](https://img.shields.io/badge/Telegram-Aiogram%203.x-blue.svg)](https://docs.aiogram.dev)
 [![Voice: ar-JO-SanaNeural](https://img.shields.io/badge/Voice-ar--JO--SanaNeural-purple.svg)](https://github.com/rany2/edge-tts)
 [![Brain: OmniRoute](https://img.shields.io/badge/Brain-OmniRoute%20free%20pools-orange.svg)](https://github.com/diegosouzapw/OmniRoute)
+[![Version: v1.0.0](https://img.shields.io/badge/Version-v1.0.0-8A2BE2.svg)](CHANGELOG.md#100---2026-08-31)
 [![Cost: $0.00/month](https://img.shields.io/badge/Cost-%240.00%2Fmonth-brightgreen.svg)](docs/03-DECISIONS.md)
 
 > **نظام تشغيل وكلاء ذكي موحد** يجسّد مساعدة تنفيذية ومعلمة موسوعية شاملة (**سارة**) تعمل
