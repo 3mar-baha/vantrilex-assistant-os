@@ -12,12 +12,12 @@ from pathlib import Path
 
 import httpx
 import pytest
+from helpers_vault import FakeGitHub
 
 from bridge.executor import Executor
 from bridge.guard import Guard
 from bridge.idle import IDLE_OFFER_TEXT_AR, IdleMonitor
 from bridge.wol import magic_packet, send_wol
-from helpers_vault import FakeGitHub
 from src.pc_actions import PCActionCoordinator
 from src.vault import CONFIRMATIONS_DIR, VaultClient, split_frontmatter
 
@@ -59,8 +59,17 @@ def test_magic_packet_bytes_and_udp9_send(monkeypatch):
             return False
 
     recorded: list = []
-    monkeypatch.setattr(socket_mod, "socket", lambda family, type_: FakeSock(recorded))
-    sent = asyncio.run(send_wol("AA-BB-CC-DD-EE-FF", "192.168.1.50", 9))
+
+    # patch INSIDE the running loop: loop construction itself dials socket.socket
+    # (Windows self-pipe), so the fake must only cover the send path
+    async def _patched_send() -> int:
+        monkeypatch.setattr(socket_mod, "socket", lambda *args, **kwargs: FakeSock(recorded))
+        try:
+            return await send_wol("AA-BB-CC-DD-EE-FF", "192.168.1.50", 9)
+        finally:
+            monkeypatch.undo()
+
+    sent = asyncio.run(_patched_send())
     assert sent == 102
     assert len(recorded) == 1  # exactly ONE sendto
     data, addr = recorded[0]

@@ -10,10 +10,7 @@ from collections.abc import Awaitable, Callable
 
 from loguru import logger
 
-IDLE_OFFER_TEXT_AR = (
-    "⏳ الجهاز ساكت من {minutes} دقيقة. بتحب أخليه بنوم ولا أطفاء؟ "
-    "رد بـ«نوم» أو «اطفاء» — أو «خليها زي ما هي»."
-)
+IDLE_OFFER_TEXT_AR = "صرت مدة طويلة بدون استخدام، بدهني أفعل وضع النوم أو إطفاء الجهاز؟"
 
 
 def windows_last_input_seconds() -> float:
@@ -45,6 +42,7 @@ class IdleMonitor:
 
     async def run(self, stop: asyncio.Event) -> None:
         offered = False
+        rearm_streak = 0
         while not stop.is_set():
             try:
                 idle_s = await self._source()
@@ -52,6 +50,7 @@ class IdleMonitor:
                 logger.exception("idle source failed — treating machine as active")
                 idle_s = 0.0
             if idle_s >= self._threshold_s:
+                rearm_streak = 0
                 if not offered:
                     offered = True  # latch kept even if the callback fails — no spam
                     try:
@@ -59,7 +58,13 @@ class IdleMonitor:
                     except Exception:  # noqa: BLE001 - a failing callback must not kill the monitor
                         logger.exception("idle callback failed — latch kept")
             elif idle_s < self._threshold_s / 2:
-                offered = False
+                # a momentary input blip must not re-arm; only SUSTAINED sub-half
+                # activity does (two consecutive polls)
+                rearm_streak += 1
+                if rearm_streak >= 2:
+                    offered = False
+            else:
+                rearm_streak = 0
             try:
                 await asyncio.wait_for(stop.wait(), timeout=self._poll)
             except TimeoutError:
