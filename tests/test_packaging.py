@@ -109,7 +109,9 @@ def test_supervise_requires_both_children():
 
 
 def test_dockerfile_contract():
-    """AC1 — base pin, ffmpeg, non-root USER sara, TZ, $PORT-aware supervised entry."""
+    """AC1 — base pin, ffmpeg, non-root USER sara, TZ, $PORT-aware supervised entry;
+    v1.0.1: a Node >=22 runtime + global omniroute install (the gateway is an npm
+    app — OmniRoute engines require node >=22.22) with a zero-config default command."""
     dockerfile = _read("Dockerfile")
     assert "FROM python:3.12-slim" in dockerfile
     assert "ffmpeg" in dockerfile
@@ -123,6 +125,16 @@ def test_dockerfile_contract():
     assert "$PORT" in dockerfile, "the Space contract: the container listens on $PORT"
     assert re.search(r'^CMD \["python", "scripts/supervise\.py"\]$', dockerfile, re.MULTILINE), (
         "entrypoint is the supervised tree, not a bare child"
+    )
+    assert "setup_24.x" in dockerfile, (
+        "OmniRoute engines demand node >=22.22 — Debian's stock nodejs is far older; "
+        "the image must install Node 24 via NodeSource"
+    )
+    assert "npm install -g /app/scripts/omniroute" in dockerfile, (
+        "the vendored clone pins the gateway version and must be installed globally"
+    )
+    assert 'ENV OMNIROUTE_CMD="omniroute run"' in dockerfile, (
+        "zero-config default: the supervisor finds its gateway command without variables"
     )
 
 
