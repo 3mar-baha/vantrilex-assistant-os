@@ -14,12 +14,13 @@ from pathlib import Path
 
 import httpx
 import websockets
+import websockets.asyncio.client
+from helpers_vault import FakeGitHub
 
 from bridge.daemon import BridgeDaemon
 from bridge.executor import Executor
 from bridge.guard import Guard
 from bridge.server import LanServer
-from helpers_vault import FakeGitHub
 from src.bridge_server import BridgeServer
 from src.vault import VaultClient
 
@@ -49,6 +50,16 @@ async def test_auth_success_flow_and_lan_only_surface(tmp_path: Path):
     session = httpx.AsyncClient(transport=gh.transport, base_url="https://api.github.com")
     VaultClient("owner/vault-repo", TOKEN, session=session)  # vault unused here; wiring parity
     executor = Executor(_tmp_guard(tmp_path))
+
+    class _SpawnSpy:
+        def __init__(self) -> None:
+            self.calls: list[list[str]] = []
+
+        async def __call__(self, argv: list[str]) -> None:
+            self.calls.append(argv)
+
+    spawn_spy = _SpawnSpy()
+    executor._spawn = spawn_spy  # OS process edge stays a spy; the TUNNEL is the real boundary
     daemon = BridgeDaemon(
         f"ws://127.0.0.1:{port}", TOKEN, executor, heartbeat_interval_s=0.05, backoff_cap_s=0.1
     )
@@ -64,6 +75,7 @@ async def test_auth_success_flow_and_lan_only_surface(tmp_path: Path):
     # command round-trip: whitelisted launch executes through the real tunnel
     payload = await server.send_cmd("exec.launch", {"name": "calculator"}, timeout_s=5.0)
     assert payload["status"] == "ok"
+    assert spawn_spy.calls == [["calc.exe"]]
 
     stop.set()
     await asyncio.wait_for(runner, timeout=5)
@@ -80,9 +92,13 @@ async def test_auth_success_flow_and_lan_only_surface(tmp_path: Path):
     bound_host, bound_port = await lan.start()
     import ipaddress
 
-    assert ipaddress.ip_address(bound_host).is_loopback or ipaddress.ip_address(bound_host).is_private
+    assert (
+        ipaddress.ip_address(bound_host).is_loopback or ipaddress.ip_address(bound_host).is_private
+    )
     assert bound_host != "0.0.0.0"
-    with urllib.request.urlopen(f"http://127.0.0.1:{bound_port}/health", timeout=5) as resp:
+    with urllib.request.urlopen(  # noqa: ASYNC210 - loopback /health, bounded by timeout
+        f"http://127.0.0.1:{bound_port}/health", timeout=5
+    ) as resp:
         assert resp.status == 200 and json.loads(resp.read())["status"] == "ok"
     await lan.close()
 
@@ -91,7 +107,7 @@ async def test_wrong_token_closed_4401(tmp_path: Path):
     """AC10 companion — wrong token is closed 4401, WARNING names peer IP not token."""
     server = BridgeServer(TOKEN, silence_timeout_s=45.0)
     port = await server.start(host="127.0.0.1", port=0)
-    rejected = await websockets.connect(f"ws://127.0.0.1:{port}", max_size=None)
+    rejected = await websockets.asyncio.client.connect(f"ws://127.0.0.1:{port}", max_size=None)
     await rejected.send(json.dumps({"v": 1, "token": "wrong-token", "hostname": "x"}))
     closed_code = None
     try:

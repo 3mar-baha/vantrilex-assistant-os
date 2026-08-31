@@ -40,6 +40,7 @@ class HelloAck(BaseModel):
 
 
 class Envelope(BaseModel):
+    v: int = PROTOCOL_VERSION
     id: str
     type: Literal["heartbeat", "cmd", "result", "event"]
     ts: datetime
@@ -82,5 +83,6 @@ def decode_frame(raw: bytes | str) -> Hello | HelloAck | Envelope:
     raise ProtocolError("frame is neither Envelope, HelloAck, nor Hello")
 
 
-def new_envelope(*, type: str, cmd: CmdName | None = None, **fields) -> Envelope:  # noqa: A002
-    return Envelope(id=uuid.uuid4().hex, type=type, ts=_now(), cmd=cmd, **fields)
+def new_envelope(*, type: str, cmd: CmdName | None = None, **fields) -> Envelope:
+    fields.setdefault("id", uuid.uuid4().hex)
+    return Envelope(type=type, ts=_now(), cmd=cmd, **fields)
