@@ -231,6 +231,26 @@ Legacy `02_Areas/Studies/` notes migrate to top-level `Studies/` as ONE structur
 commit (`sara: migrate Studies to top-level`). Re-runs are no-ops (zero writes).
 Verify: `git log` on the vault repo shows the bootstrap + migration commits.
 
+### Reviewing vault structure via git log (sprint-3 3.2)
+
+Sara grows the vault taxonomy herself as domains emerge — no manual Obsidian re-org, no
+redeploy. Every structural change is ONE commit on the vault repo (`sara: expand vault —
+<domain>`, Git Data API), so structure is reviewed entirely through git history:
+
+```
+git -C <vault-clone> log --oneline --follow -- "01_Projects/<domain>/"
+git -C <vault-clone> show <sha>            # exactly what one expansion created
+```
+
+Each domain root carries `_tags.yaml` (its tag ontology: `domain`, `created` ISO-UTC,
+`tags`) and an `_index.md` per directory (wikilinked to the domain root). The PARA
+backbone is expansion-only — Sara cannot delete, rename, or move anything under
+`01_Projects/ 02_Areas/ 03_Resources/ 04_Archives/ Contacts/ Call_Transcripts/ Studies/
+Voice_Memos/ Daily_Logs/` (refused pre-flight, `BackboneImmutableError`), and re-runs
+of an expansion are no-ops. If a domain tree looks wrong: git history is the audit
+trail — revert the commit on the vault repo and Sara's next read derives the corrected
+state (no local cache to invalidate).
+
 ## 7. Troubleshooting
 
 | Symptom | Cause | Fix |
