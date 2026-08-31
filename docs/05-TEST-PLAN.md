@@ -3,9 +3,18 @@
 ## 1. Test Architecture
 
 - **Framework**: pytest + pytest-asyncio + unittest.mock; no external test containers required.
-- **Coverage target**: >= 85% **branch** coverage (`pytest-cov --cov-branch`) enforced in
-  `make gate` from Sprint-4 task 4.4a; Sprints 1-3 ran measurement-only — explicit decided
-  deviation, not drift. Threshold never auto-lowered (spec amendment required).
+- **Coverage target**: >= 85% **branch** coverage (`pytest-cov --cov-branch`) — LIVE and
+  enforced in `make gate` since Sprint-4 task 4.4a (threshold lives once in pytest
+  `addopts`, so make / bare-pytest / CI all inherit it; 2026-08-31 measured 85.86%).
+  Explicit deviation note (Guide amendment): **threshold enforced from 4.4a; Sprints 1-3
+  ran measurement-only** — a decided deviation, not drift. The threshold is never
+  auto-lowered (lowering requires a spec amendment).
+- **Pragma / nosec policy**: every `pragma: no cover` and `# nosec` MUST carry
+  `-- <reason>` on the same line; allowed reasons exhaustively: `__main__` guards and
+  OS-gated branches (`sys.platform` blocks unreachable on Linux CI, e.g. WoL raw-socket
+  send). ffmpeg-binary-presence fallbacks are NOT allowlisted (Guide amendment) —
+  binary-absence branches are trivially mock-testable. `test_quality_gate.py` fails the
+  gate on any bare pragma/nosec.
 - **Discipline**: TDD red -> green -> refactor per concern; tests are the contract.
 
 ## 2. Test Catalog
@@ -42,7 +51,7 @@
 | `test_syllabus_parser.py` | Sprint 4.1: threaded pypdf extraction; TIER3 strict-JSON parse; DAG cycle/orphan rejection; weighted review schedule; Calendar/Tasks materialization; untrusted-PDF boundary |
 | `test_expansion.py` | Sprint 4.2/M4: Arabic+English NL cron parse (gibberish raises); runtime registration + settings.tz pin; credential probe rejects missing/short with env NAME only in logs (secret value absent); failure/timeout disables loudly + one owner notify + no-op until re-enable; pipeline output files to vault via ctx; `State/capabilities.json` restore re-derivation; reserved-name refusal; concurrent registration serializes on one lock; next-occurrence arithmetic |
 | `test_tutor.py` | Sprint 4.3/M9: gateway-only routing (Tier.HEAVY label, no provider imports — AST scan); artifact filed to `Studies/<topic>/` with complete YAML frontmatter; level+language flow into prompt AND frontmatter; imperative content stored verbatim as DATA with zero other vault writes; vault failure -> loud ERROR + `StudyFilingError` carrying the full content; oversized topic capped |
-| `test_quality_gate.py` | Sprint 4.4a: coverage threshold config; pragma justification; gate order; fails closed; secret scan in gate |
+| `test_quality_gate.py` | Sprint 4.4a: coverage config parsed (fail_under=85, branch, three sources); threshold inherited via addopts by every runner; pragma/nosec all carry `-- <reason>`; Makefile gate order lint->test->security->docs-guard; CI calls all four guards via the gate script; threshold mechanism fails closed (mini-project subprocess, fail_under=100); secret scan wired into gate and fails on a planted credential |
 | `test_packaging.py` / `test_deploy_smoke.py` | Sprint 4.4b: Dockerfile/Space contract; dockerignore; supervision; durable-state audit; keep-alive cron; redacted smoke failures |
 | `test_release_metadata.py` | Sprint 4.4c: version==CHANGELOG; scope lock (no pytgcalls/telethon/pyrogram/mem0/firestore); release script refusals |
 

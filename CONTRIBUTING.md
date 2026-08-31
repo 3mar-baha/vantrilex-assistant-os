@@ -24,11 +24,11 @@ is updated in the same commit for anything user-visible.
 
 ```bash
 make lint    # ruff check + ruff format --check
-make test    # pytest
-make gate    # lint + test + bandit security scan + docs guard
+make test    # pytest (>=85% branch coverage enforced via addopts)
+make gate    # lint + test + security (bandit + secret scan) + docs guard
 ```
 
-All green, no exceptions. Findings are fixed or waived explicitly in `docs/03-DECISIONS.md`.
+All green before merge, no exceptions. Findings are fixed or waived explicitly in `docs/03-DECISIONS.md`.
 
 ## Environment
 

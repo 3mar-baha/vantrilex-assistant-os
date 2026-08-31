@@ -9,6 +9,18 @@ product release tags start independently at v1.0.0.)
 ## [Unreleased]
 
 ### Added
+- **Sprint 4 / task 4.4a — quality-gate hardening**: the >=85% branch coverage threshold
+  is LIVE — `--cov=src --cov=bridge --cov=common --cov-branch --cov-fail-under=85` lives
+  once in pytest `addopts` (85.86% measured at activation; Sprints 1-3 ran
+  measurement-only, per Guide amendment note in TEST-PLAN §1). The vendored
+  `.githooks/pre-commit` secret scanner now runs inside `make gate`
+  (`scripts/secret_scan.py` — the hook's pattern battery over tracked files, placeholder
+  allowlist intact) and a finding fails the gate exactly like a bandit high; CI's bandit
+  step is unified onto `scripts/security_gate.py` (one gate implementation everywhere).
+  Pragma policy enforced by test: every `pragma: no cover` / `# nosec` carries
+  `-- <reason>` (`__main__` guards and OS-gated branches only; ffmpeg-binary fallbacks
+  NOT allowlisted). The threshold mechanism is proven to fail closed (mini-project
+  subprocess at fail_under=100). 7 new tests (260 total), gate green.
 - **Sprint 4 / task 4.3 — skill-polymath-tutor (M9)**: `src/tutor.py` — first-principles
   tutoring as a persona behavior of the existing chat+brain+vault loop, NO new engine:
   `study_artifact(topic, level, language, gateway, vault)` drives ONE `Tier.HEAVY`
