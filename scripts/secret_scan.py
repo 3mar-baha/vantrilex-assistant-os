@@ -17,7 +17,15 @@ import re
 import subprocess
 import sys
 
-SKIP_DIRS = {".git", ".venv", "__pycache__", ".pytest_cache", ".ruff_cache", "htmlcov", "node_modules"}
+SKIP_DIRS = {
+    ".git",
+    ".venv",
+    "__pycache__",
+    ".pytest_cache",
+    ".ruff_cache",
+    "htmlcov",
+    "node_modules",
+}
 BINARY_HINT = re.compile(rb"\x00")
 
 API_KEY_RE = re.compile(
@@ -32,16 +40,12 @@ ASSIGN_RE = re.compile(
     r"(?i)\b(api[_-]?key|secret|token|password)[_a-z0-9]*[\"']?\s*[:=]\s*[\"']?"
     r"[A-Za-z0-9+/_=-]{24,}"
 )
-PLACEHOLDER_RE = re.compile(
-    r"(?i)your[_-]|changeme|example|placeholder|\$\{|<[^>]+>|xxxx"
-)
+PLACEHOLDER_RE = re.compile(r"(?i)your[_-]|changeme|example|placeholder|\$\{|<[^>]+>|xxxx")
 BEARER_RE = re.compile(r"(?i)\"authorization\"\s*:\s*\"bearer [A-Za-z0-9+/_=-]{24,}\"")
 
 
 def _default_files() -> list[pathlib.Path]:
-    tracked = subprocess.run(
-        ["git", "ls-files"], capture_output=True, text=True, check=False
-    )
+    tracked = subprocess.run(["git", "ls-files"], capture_output=True, text=True, check=False)
     if tracked.returncode == 0 and tracked.stdout.strip():
         return [pathlib.Path(line) for line in tracked.stdout.splitlines() if line.strip()]
     # no git (fresh checkout oddity) — fall back to the runtime trees
@@ -70,7 +74,9 @@ def _iter_targets(paths: list[str]):
 def scan(paths: list[str] | None = None) -> list[str]:
     findings: list[str] = []
     for path in _iter_targets(list(paths or [])):
-        if path.name == ".env" or (path.name.startswith(".env.") and path.suffix not in (".example",)):
+        if path.name == ".env" or (
+            path.name.startswith(".env.") and path.suffix not in (".example",)
+        ):
             findings.append(f"{path}: committed .env file (secrets live outside version control)")
             continue
         try:

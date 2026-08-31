@@ -130,8 +130,10 @@ def test_secret_scan_in_gate(tmp_path):
     (clean / "module.py").write_text("value = compute_total(42)\n", encoding="utf-8")
     planted = tmp_path / "planted"
     planted.mkdir()
+    # assembled from fragments so this source file itself never matches the scanner
+    fake_secret = "Zx91" + "Kd8wQ2pLnR7vBc4Md6sHf0jY3ePaTq5WbUzC"
     (planted / "module.py").write_text(
-        'SECRET_KEY = "Zx91Kd8wQ2pLnR7vBc4Md6sHf0jY3ePaTq5WbUzC"\n',
+        f'SECRET_KEY = "{fake_secret}"\n',
         encoding="utf-8",
     )
     scanner = REPO / "scripts" / "secret_scan.py"
