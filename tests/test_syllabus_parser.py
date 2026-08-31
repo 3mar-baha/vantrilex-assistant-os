@@ -169,9 +169,7 @@ def test_dag_validation_rejects_cycles_and_orphans():
     assert "A" in str(exc.value) and "B" in str(exc.value)
 
     orphan = {
-        "topics": [
-            {"name": "C", "weight": 0.5, "deadline": "2027-01-01", "prereqs": ["Ghosts"]}
-        ]
+        "topics": [{"name": "C", "weight": 0.5, "deadline": "2027-01-01", "prereqs": ["Ghosts"]}]
     }
     with pytest.raises(SyllabusError) as exc:
         build_dag(orphan)
