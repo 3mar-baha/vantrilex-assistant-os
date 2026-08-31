@@ -13,6 +13,8 @@ CRITICAL_FIELDS = (
     "authorized_user_id",
     "vault_github_repo",
     "vault_github_token",
+    "bridge_token",  # sprint-3 3.4: PC tunnel shared secret
+    "bridge_server_url",  # sprint-3 3.4: core WSS endpoint
 )
 
 
@@ -29,7 +31,7 @@ def test_settings_accept_all_env_example_vars(make_settings):
     assert s.voice_name == "ar-JO-SanaNeural"
     assert s.google_oauth_client_json == "./config/google_oauth_client.json"
     assert s.google_calendar_id == "primary"
-    assert s.bridge_bind_port == 8443
+    assert s.bridge_lan_port == 8000
     assert s.target_pc_wol_port == 9
     assert s.tz == "Asia/Amman"
     assert s.log_level == "INFO"
@@ -42,7 +44,7 @@ def test_settings_accept_all_env_example_vars(make_settings):
     assert s.vault_github_token.get_secret_value() == "your-github-fine-grained-pat"
     assert s.vault_branch == "main"
     assert s.obsidian_api_key is None
-    assert s.bridge_token is None
+    assert s.bridge_token.get_secret_value() == "your-bridge-shared-token"
 
 
 @pytest.mark.parametrize("field", CRITICAL_FIELDS)

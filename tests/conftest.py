@@ -74,9 +74,9 @@ ENV_EXAMPLE: dict[str, str] = {
     "GOOGLE_OAUTH_CLIENT_JSON": "./config/google_oauth_client.json",
     "GOOGLE_CALENDAR_ID": "primary",
     "GOOGLE_CLOUD_PROJECT": "",
-    "BRIDGE_TOKEN": "",  # empty on purpose: AC1 proves "" normalizes to None
-    "BRIDGE_SERVER_URL": "wss://your-vps-host:8443/bridge",
-    "BRIDGE_BIND_PORT": "8443",
+    "BRIDGE_TOKEN": "your-bridge-shared-token",  # sprint-3 3.4: required (SecretStr)
+    "BRIDGE_SERVER_URL": "wss://your-space-host/bridge",  # sprint-3 3.4: required
+    "BRIDGE_LAN_PORT": "8000",
     "TARGET_PC_MAC_ADDRESS": "AA:BB:CC:DD:EE:FF",
     "TARGET_PC_IP": "192.168.1.100",
     "TARGET_PC_WOL_PORT": "9",

@@ -14,11 +14,11 @@ from pathlib import Path
 
 import httpx
 import pytest
+from helpers_vault import FakeGitHub
 from loguru import logger
 
 from bridge.executor import Executor
 from bridge.guard import Guard
-from helpers_vault import FakeGitHub
 from src.pc_actions import LaunchStatus, PCActionCoordinator, RefusedOrigin
 from src.vault import AUDIT_DIR, CONFIRMATIONS_DIR, VaultClient, split_frontmatter
 
@@ -145,7 +145,7 @@ async def test_bridge_refuses_unconfirmed_execution(tmp_path: Path):
 
 async def test_confirmation_roundtrip_persists_and_executes(tmp_path: Path):
     """AC4 — block -> affirm -> confirmation note (same id + audit_code) -> executed."""
-    coordinator, bridge, spy, _, notifier, gh = _rig(tmp_path, WHITELIST)
+    coordinator, bridge, spy, _, _notifier, gh = _rig(tmp_path, WHITELIST)
     assert await coordinator.request_launch("steam", origin="owner_chat") == (
         LaunchStatus.CONFIRMATION_REQUIRED
     )

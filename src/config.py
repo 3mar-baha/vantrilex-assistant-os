@@ -19,6 +19,8 @@ _REQUIRED_FIELDS = (
     "vault_enc_key",  # consumed by task 2.1 vault-state encryption (ADR-15)
     "vault_github_repo",  # consumed by task 3.1 vault architect (ADR-21)
     "vault_github_token",  # consumed by task 3.1 vault architect (ADR-21)
+    "bridge_token",  # consumed by task 3.4 PC bridge (shared tunnel secret)
+    "bridge_server_url",  # consumed by task 3.4 PC bridge (core WSS endpoint)
 )
 
 
@@ -77,9 +79,9 @@ class Settings(BaseSettings):
     obsidian_api_key: str | None = None
     google_oauth_client_json: str = "./config/google_oauth_client.json"
     google_calendar_id: str = "primary"
-    bridge_token: str | None = None
-    bridge_server_url: str | None = None
-    bridge_bind_port: int = 8443
+    bridge_token: SecretStr  # BRIDGE_TOKEN (shared core<->bridge secret, sprint-3 3.4)
+    bridge_server_url: str  # BRIDGE_SERVER_URL (core WSS endpoint the daemon dials)
+    bridge_lan_port: int = 8000  # BRIDGE_LAN_PORT (daemon loopback/LAN health surface)
     target_pc_mac_address: str | None = None
     target_pc_ip: str | None = None
     target_pc_wol_port: int = 9
