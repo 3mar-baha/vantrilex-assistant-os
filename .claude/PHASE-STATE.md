@@ -103,11 +103,9 @@ social agent -> v2.0.
 - [x] Phase 2 — Architect & Guide COMPLETE + COMMITTED (`6fa22f7`, 7 files / 1439 insertions):
       docs/specs/sprint-{1..4}.md with every Guide finding integrated; ADR-13 recorded.
       **Guide sign-off: GRANTED** (conditional-on-commit condition satisfied).
-- [ ] Phase 3 — Implement & Verify  ← **current** — GOVERNED BY the ⚙️ CLOSED-LOOP EXECUTION
-      PROTOCOL below (binding, owner-approved). Entry gate: OmniRoute VERIFIED · bot token
-      getMe-verified · ffmpeg installed. Worktree `core-foundation` EXISTS (created once,
-      keep using it). DONE: task 1.1 skeleton — commit `221c650` MERGED to main (owner-directed
-      2026-08-28); gate green (13 tests, AC1-AC6), live `--health` proof ok vs OmniRoute.
+- [x] Phase 3 — Implement & Verify COMPLETE (2026-08-31): Sprints 1-4 all delivered
+      (records: `docs/10-CHECKPOINT.md` + `docs/PROJECT-JOURNEY.md` §11-13; full sprint-4
+      closure in the Phase-4 line below).
       DONE 1.2: client + SSE-error hardening (`3e44f1c`); live-wired 2026-08-29 — Gemini
       pools blocked upstream by Google (403 "project denied access" — OWNER fixes in
       Google: enable Generative Language API / unflag the key's project). DONE 1.3
@@ -404,7 +402,24 @@ social agent -> v2.0.
       `docs/10-CHECKPOINT.md` (Sprint 3). **NEXT: sprint-level HALT — owner decides
       Sprint 4 start (syllabus parser 4.1, dynamic capability expansion 4.2, polymath
       tutor 4.3, hardening + v1.0.0 release 4.4).**
-- [ ] Phase 4 — Harden & Release: guards, full gate, tag v1.0.0, release report
+- [x] Phase 4 — Harden & Release COMPLETE (2026-08-31) — **v1.0.0 TAGGED + PUSHED**
+      **SPRINT 4 CLOSED (2026-08-31)** — tasks 4.1-4.4 all delivered directly on `main`
+      (closed loop, red-tests-first per task): 4.1 syllabus->DAG parser (`src/syllabus.py`)
+      · 4.2 dynamic capability expansion (`src/expansion.py`, M4) · 4.3 polymath tutor
+      (`src/tutor.py`, M9) · 4.4a quality-gate hardening (85% branch LIVE, secret scan in
+      gate, pragma-reason policy) · 4.4b HF Spaces packaging (Dockerfile + single-tree
+      supervisor, $PORT health+WSS, keep-alive cron, deploy smoke w/ secret masker,
+      durable-state audit) · 4.4c release (`src.__version__` single source, CHANGELOG
+      drained to `## [1.0.0] — 2026-08-31` w/ Security + Deferred-to-v1.1, scope-lock
+      test, `scripts/make_release.py` verifications + --tag-only, NO --force).
+      Teardown executed (`.claude/skills/*` wiped; post-teardown sacred floor 16 passed).
+      Full gate green: 285 passed / 1 skipped / 85.62% branch. Release sequence executed:
+      dry-run green -> annotated tag `v1.0.0` on validated HEAD -> tag pushed to origin.
+      **OWNER STEPS REMAIN**: publish the GitHub Release with the printed
+      `gh release create v1.0.0 --verify-tag ...` command; post-tag container-from-tag
+      rebuild + deploy_smoke re-run (AC8, manual); then v1.1 decisions. Sprint record:
+      `docs/10-CHECKPOINT.md` (Sprint 4) + `docs/PROJECT-JOURNEY.md` §13.
+      ← **current: v1.0.0 shipped — sprint-level HALT, awaiting owner**
 
 ## Open items / blockers
 

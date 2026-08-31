@@ -85,9 +85,42 @@ Upstream toolkit inventory: `worldflowai/everything-claude-code` · `mattpocock/
 - **Outcome**: 228 tests green; 5/5 tasks delivered; sprint-level HALT — owner decides
   Sprint 4 start (syllabus parser, dynamic expansion, tutor, hardening & v1.0.0 release).
 
-## Sprint 4 — Syllabus parser, expansion, tutor, hardening & release — QUEUED
+## Sprint 4 — Syllabus parser, expansion, tutor, hardening & release — COMPLETE (2026-08-31) · v1.0.0
 
-- **Skills to ingest**: `guard-skills/docs-guard` · `guard-skills/test-guard` ·
+- **Skills ingested**: `guard-skills/docs-guard` · `guard-skills/test-guard` ·
   `universal-agentic-os/skills/github-release-packager.md` ·
-  `universal-agentic-os/skills/circuit-breaker-guard.md`
-- **Teardown**: final production release packaging (v1.0.0) — recorded here at release.
+  `universal-agentic-os/skills/circuit-breaker-guard.md` (SKILL.md files read in full at
+  sprint entry; docs-guard + test-guard governed every task slice; release-packager shaped
+  `scripts/make_release.py` — verify-then-tag with NO force flag; circuit-breaker-guard
+  informed the loud-disable failure semantics of 4.2's scheduler)
+- **Deliverables** (all directly on `main`, closed loop, red-tests-first per task):
+  task 4.1 `src/syllabus.py` syllabus->DAG (`d9a5076` red, `16173eb` green; 9 tests) ·
+  task 4.2 `src/expansion.py` dynamic capability expansion M4 (`c0fc115` red,
+  `36f2b54` green; 10 tests) ·
+  task 4.3 `src/tutor.py` polymath tutor M9 (`dade4bc` red, `71964d1` green; 6 tests) ·
+  task 4.4a gate hardening: coverage LIVE 85% branch, `scripts/secret_scan.py` in gate,
+  CI unified on `scripts/security_gate.py`, pragma-reason policy (7 tests; `6206cd4`) ·
+  task 4.4b HF Spaces packaging: `Dockerfile` + `scripts/supervise.py` single-tree
+  supervisor, `$PORT` health+WSS (`start_public_port`), `.dockerignore` runtime
+  negations, keep-alive cron workflow, `scripts/deploy_smoke.py` (5 checks + secret
+  masker), durable-state audit test, README Space metadata, RUNBOOK §4 rewrite
+  (18 tests; `49399e2` red, `ef9e695` green, `52dc37b` docs) ·
+  task 4.4c release: `src/__version__='1.0.0'`, CHANGELOG drained to
+  `## [1.0.0] — 2026-08-31` (Added/Changed/Security/Deferred-to-v1.1), scope-lock test
+  (complete exclusion set: pytgcalls/telethon/pyrogram/mem0/firestore),
+  `scripts/make_release.py` (consistency/clean-tree/gate verifications, --tag-only,
+  tag-collision policy = bump 1.0.1; `ac37ca0` red, `2f8d800` green, `266b2c8` docs;
+  7 tests, 285 total)
+- **Teardown (executed 2026-08-31)**: `.claude/skills/*` wiped (all four sprint-4
+  skills removed; code/tests untouched); post-teardown sacred floor green —
+  `test_owner_middleware.py` + `test_whitelist_guardrail.py` + `test_guest_lockdown.py`
+  = 16 passed. Full gate green after teardown: 285 passed / 1 skipped (docker build —
+  dev machine lacks docker + OmniRoute clone), coverage 85.62% branch.
+- **Release sequence executed**: dry-run verifications green -> `--tag` created
+  annotated tag `v1.0.0` on the validated HEAD -> `git push origin v1.0.0` -> owner
+  publishes the GitHub Release with the script-printed `gh release create v1.0.0
+  --verify-tag ...` command. Publishing + post-tag container-from-tag smoke (AC8)
+  are owner steps.
+- **Outcome**: 285 tests green; **v1.0.0 shipped — the sprint-level HALT lands with the
+  owner** (Release publish, AC8 post-tag smoke, then v1.1 decisions: PyTgCalls live
+  calls, tech-hardware-scout + career-project-incubator, Mem0/Firestore evaluation).

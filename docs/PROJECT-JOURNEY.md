@@ -358,3 +358,97 @@ chat layer. Payload carries no secrets (no token/hostname/paths — exact-schema
 - **Outcome**: 228 tests green; sprint-level HALT — owner decides Sprint 4 (4.1 syllabus
   parser, 4.2 dynamic capability expansion, 4.3 polymath tutor, 4.4 hardening + v1.0.0
   release on HF Spaces).
+
+## 13. Addendum — 2026-08-31: Sprint 4 complete (syllabus → expansion → tutor → hardening) · **v1.0.0 released**
+
+### 13.1 Outcome snapshot
+
+| Measure | Value |
+|---|---|
+| Tasks delivered | 4.1 · 4.2 · 4.3 · 4.4a · 4.4b · 4.4c — all green, TDD (red→green→refactor), all directly on `main` |
+| Test suite | **285 passed, 1 skipped** (was 228 at sprint-3 close) · coverage **85.62% branch** (85% gate LIVE) · Security Gate OK · Docs Guard 16/16 |
+| Sacred floor | `test_owner_middleware.py` + `test_whitelist_guardrail.py` + `test_guest_lockdown.py` = 16 passed post-teardown |
+| Branch | every commit direct to `main` + immediate push (binding directive; `core-foundation` reference-only) |
+| Release | **tag `v1.0.0` created on the validated HEAD and pushed to origin**; GitHub Release publish = owner step (`gh release create v1.0.0 --verify-tag ...` printed by the script) |
+| Teardown | executed 2026-08-31 — `.claude/skills/*` wiped, code/tests kept; ledgered in `docs/10-CHECKPOINT.md` (Sprint 4) |
+
+### 13.2 Task-by-task record
+
+**4.1 — syllabus-to-DAG parser** (`d9a5076` red, `16173eb` green, `8faf485` docs)
+`src/syllabus.py`: threaded pypdf extraction (length-capped untrusted input) → ONE TIER3
+HEAVY strict-JSON parse (one retry, then loud `SyllabusError`; temperature 0) → nx-free DAG
+validation (cycles/orphan prereqs named) → weighted capped review schedule (60-min sessions
+backward from deadlines, `[sara:syllabus:...]` idempotency tags on Calendar/Tasks) → plan
+filed to `Studies/<course>/` with YAML frontmatter. PDF text is DATA never instructions —
+AST-scanned zero PC surface. New dep `pypdf>=5` (BSD-3).
+
+**4.2 — dynamic capability expansion (M4)** (`c0fc115` red, `36f2b54` green, `3363fe6` docs)
+`src/expansion.py`: owner hands a credential env NAME in chat; `parse_nl_cron` maps
+Arabic/English phrasing («كل صباح 7», «كل اثنين 9», «كل ساعة») to `ScheduleSpec` with tz
+pinned to `settings.tz`; `CapabilityScheduler` probes presence/format (errors/log carry the
+NAME only), registers background asyncio jobs (reserved-name refusal, max-8, single lock),
+persists to `State/capabilities.json` with `restore(pipelines)` re-derivation after restart
+(ADR-15). Any failure/timeout DISABLES the task loudly (ERROR + one owner notify; re-enable
+is explicit owner action). ctx carries `name`/`credential_env`/`vault` — never the value.
+
+**4.3 — polymath tutor (M9)** (`dade4bc` red, `71964d1` green, `bdf97cc`/`f8ec0f9`/`66f0f32` polish+docs)
+`src/tutor.py`: no new engine — `study_artifact` drives ONE `Tier.HEAVY` call under
+`TUTOR_SYSTEM_PROMPT` (first-principles deconstruction, graded path, 5 drills, bilingual
+terms, requested language verbatim); artifacts file to `Studies/<topic>/Study Guide.md`
+with complete YAML frontmatter; vault failure raises `StudyFilingError` carrying the FULL
+guide (Arabic apology — never lost); zero provider/PC surface (AST-scanned); generated
+content is DATA.
+
+**4.4a — quality-gate hardening** (`6206cd4`)
+85% branch coverage LIVE in pytest addopts (85.86% at activation); vendored secret scanner
+in `make gate` (`scripts/secret_scan.py` — pattern battery + placeholder allowlist;
+committed-`.env` detection); CI unified on `scripts/security_gate.py`; pragma policy
+enforced — every `pragma: no cover`/`# nosec` carries `-- <reason>`; fail-closed threshold
+proven via subprocess mini-project.
+
+**4.4b — HF Spaces packaging (ADR-15)** (`49399e2` red, `ef9e695` green, `52dc37b` docs)
+`Dockerfile` (python:3.12-slim, ffmpeg, non-root `sara`, TZ=Asia/Amman) whose CMD is the
+new single-tree supervisor `scripts/supervise.py` (OmniRoute child + core child; first exit
+tears down the tree → container exit → Space restarts whole). Core reads `$PORT` and serves
+`GET /health` + authenticated bridge WSS on the single public port (`start_public_port`).
+`.dockerignore` keeps secrets/sessions/OAuth client out while re-including the two runtime
+needs. `.github/workflows/keepalive.yml` pings `/health` every 10 min, fails loudly on
+non-200. `scripts/deploy_smoke.py`: five checks (gateway/telegram/vault/google_token_cache/
+space_health), per-check timeouts, all run even after one fails, Settings-aware masker
+screens every failure detail (httpx errors embed full URLs carrying the bot token —
+nothing secret reaches logs). Durable-state audit test locks every runtime disk write to
+ADR-15-justified stores. README Space metadata; RUNBOOK §4/§4b/§4c rewritten with
+troubleshooting + dated validation checklist.
+
+**4.4c — release v1.0.0** (`ac37ca0` red, `2f8d800` green, `266b2c8` docs)
+`src/__version__='1.0.0'` single source; CHANGELOG `[Unreleased]` drained into
+`## [1.0.0] — 2026-08-31` (complete Added across Sprints 1-4, Changed, new **Security**
+section, **Deferred-to-v1.1**); scope-lock test freezes the complete exclusion set
+(pytgcalls/telethon/pyrogram absent from artifacts AND all runtime imports; mem0/firestore
+likewise). `scripts/make_release.py`: verify_consistency (version == newest CHANGELOG
+heading, both named on mismatch) → verify_clean_tree (porcelain) → verify_gate (subprocess)
+→ annotated tag ONLY with `--tag` (no `--force` exists, by design; collision policy =
+bump 1.0.1); publishing stays owner-run with the exact `gh` command printed. Release
+sequence executed: dry-run green → `--tag` → tag pushed to origin. RUNBOOK gains the
+"production deploys pin `git checkout v1.0.0`" line; README version badge; BACKLOG 4.4
+ticked; ARCHITECTURE §8 verified accurate for the shipped build.
+
+### 13.3 Carry-over to owner
+
+- **Publish the GitHub Release**: `gh release create v1.0.0 --verify-tag --title
+  "Vantrilex Assistant OS v1.0.0" --notes-file <(sed -n '/^## \[1.0.0\]/,$p' CHANGELOG.md)`
+  (Git Bash; PowerShell users: extract the section to a temp file first).
+- **AC8 post-tag smoke (manual)**: rebuild the Space container from the tag, re-run
+  `python scripts/deploy_smoke.py` → exit 0 (closes the tagged-vs-running loop).
+- Still open from earlier sprints: Google 403 fix blocking the dispatcher live smoke
+  (AC10, task 1.2); live syllabus/tutor smokes (AC10s, tasks 4.1/4.3) need a live brain.
+
+### 13.4 Outcome
+
+**v1.0.0 shipped** — Sara is feature-complete for the v1.0 scope: 3-tier brain behind the
+front-door dispatcher, Jordanian voice in/out with biometric Guest lockdown, git-backed
+vault with PARA/Zettelkasten capture, Gmail triage + daily brief, PC control plane with
+fail-closed whitelist guardrail, telemetry narration, syllabus/tutor/expansion skills, all
+packaged as ONE free HF Space container. 285 tests green, 85.62% branch coverage, gate
+green end-to-end. Sprint-level HALT: owner publishes the Release and decides the v1.1
+agenda (PyTgCalls live calls, hardware-scout/career-incubator, Mem0/Firestore evaluation).
