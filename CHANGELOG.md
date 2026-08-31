@@ -9,6 +9,16 @@ product release tags start independently at v1.0.0.)
 ## [Unreleased]
 
 ### Added
+- **Sprint 3 / task 3.5 — skill-desktop-telemetry-protocol**: one psutil snapshot
+  (`bridge/telemetry.live_state()` — cpu, ram, C:/D: disks, uptime, top-CPU process,
+  <2 s) that degrades unmeasurable metrics to None instead of crashing; served two
+  ways: `GET /telemetry/live-state` on the LAN surface (Bearer BRIDGE_TOKEN — 401
+  without it, 404 when unwired) and the tunnel cmd `telemetry.state` executed by the
+  daemon. Core-side `TelemetryClient` (`src/telemetry.py`): pydantic-validated fetch,
+  ONE Tier-1 FAST Arabic narration with the state numbers as verbatim DATA
+  («شو وضع الجهاز؟»), deterministic numeric fallback when the brain is unreachable,
+  honest «الجسر مو متصل هسا» when the bridge is offline. Payload carries no secrets.
+  12 new tests (228 total), gate green.
 - **Sprint 3 / task 3.4 — skill-pc-whitelist-safety-guardrail (M5)**:
   the PC control plane. `common/protocol.py` — v1 wire (JSON-per-frame, Hello/HelloAck
   token handshake: bad token closed 4401, second session 4400, token never logged);

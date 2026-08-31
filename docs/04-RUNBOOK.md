@@ -104,6 +104,12 @@ The bridge daemon's `BRIDGE_SERVER_URL` simply points at the Cloud Run WSS URL i
    LAN-authenticated port 8000 (telemetry `GET /telemetry/live-state` + executor surface);
    zero public-facing ports. Verify: `netstat -ab | findstr :8000` shows it bound to the
    LAN address, and no other LISTENING entry for the daemon.
+   Telemetry smoke — with the daemon up, ask Sara «شو وضع الجهاز؟» on Telegram: she
+   answers one Jordanian line with real cpu/ram/disk/uptime numbers (psutil, BSD dep);
+   with the bridge down she says «الجسر مو متصل هسا» instead of inventing numbers.
+   Direct LAN check: `curl -H "Authorization: Bearer $BRIDGE_TOKEN"
+   http://localhost:8000/telemetry/live-state` returns the LiveState JSON (401 without
+   the Bearer header).
 4. Enable Wake-on-LAN in the NIC's advanced properties + BIOS ("Wake on Magic Packet"),
    on Ethernet.
 5. Whitelist editing (owner, `config/whitelist.json`): the guard RE-READS the file on

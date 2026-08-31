@@ -137,10 +137,14 @@ test-guard · `everything-claude-code` systems-architect. Teardown → `docs/10-
       `src/bridge_server.py` (single session, silence watchdog); 13 new tests (216
       total); `docs/06-API-SPECIFICATION.md` formalized (force semantics DROPPED,
       confirmation_id + audit_code documented).
-- [ ] **3.5 `skill-desktop-telemetry-protocol`**: `GET /telemetry/live-state` over the
-      authenticated bridge — foreground window, whitelisted processes, daily categorized
-      screen time.
-      *AC*: endpoint returns all three datasets; served only over the authed channel.
+- [x] **3.5 `skill-desktop-telemetry-protocol`**: `GET /telemetry/live-state` over the
+      authenticated bridge + tunnel cmd — one psutil LiveState snapshot (cpu/ram/disks/
+      uptime/top process), Tier-1 FAST Arabic narration with real numbers, honest offline
+      degradation.
+      *AC*: `tests/test_desktop_telemetry.py` per spec §3.5.
+      Done 2026-08-31: `bridge/telemetry.py` (degraded-on-failure snapshot) + LAN Bearer
+      route + `src/telemetry.py` (TelemetryClient: fetch/narrate/report); 12 new tests
+      (228 total), gate green.
 
 ## Sprint 4 — Dynamic Expansion + Harden + Release (HF Spaces)
 

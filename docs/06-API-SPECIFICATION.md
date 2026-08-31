@@ -48,7 +48,7 @@ Envelopes (both directions after auth):
 | `exec.open` | `path`, `confirmation_id?`, `audit_code?` | blocked suffix → refuse; UNC / relative traversal → `outside_allowed_roots` | ExecResult |
 | `power` | `action`, `confirmation_id` (MANDATORY), `audit_code?` | action in whitelist AND id present — ALWAYS, regardless of any whitelist flag | ExecResult |
 | `wol` | `mac`, `ip?=255.255.255.255`, `port?=9` | stateless UDP, one sendto, SO_BROADCAST | ExecResult |
-| `telemetry.state` | — | (sprint-3 §3.5) | LiveState |
+| `telemetry.state` | — | none — read-only snapshot | `LiveState` (`bridge/telemetry.py`); unmeasurable metrics arrive `null`, never a crash |
 
 **Force semantics: DROPPED** — no force flag exists on any surface. Anything outside
 `config/whitelist.json` — and EVERY power action — needs an owner confirmation on
@@ -96,7 +96,17 @@ ExecResult (`bridge/executor.py`): `{status: ok|error, detail: str, audit_code: 
 `LanServer` binds loopback/LAN — NEVER 0.0.0.0. Routes:
 
 - `GET /health` → 200 `{"status":"ok"}`.
-- `GET /telemetry/live-state` → Bearer-gated, arrives with sprint-3 §3.5.
+- `GET /telemetry/live-state` → Bearer `BRIDGE_TOKEN` (401 without/wrong header;
+  404 when no provider is wired) → 200 `LiveState` JSON (`psutil` snapshot: cpu,
+  ram, C:/D: disks, uptime, top-CPU process; degraded fields `null`).
+
+Telemetry narration contract (core side): `TelemetryClient` (`src/telemetry.py`) —
+`fetch_state` rides the tunnel cmd and pydantic-validates; `narrate` makes ONE Tier-1
+FAST call with the state JSON as DATA (numbers verbatim, display-only output,
+temperature 0) and falls back to a deterministic numeric Arabic line on brain failure;
+`report` catches `BridgeOffline`/`TimeoutError`/`ValidationError` →
+«الجسر مو متصل هسا» — never raises to the chat layer. The payload carries no secrets
+(no token, no hostname, no file paths).
 
 ## 6. Owner-intent tool surface (what Sara's tool calls map to)
 

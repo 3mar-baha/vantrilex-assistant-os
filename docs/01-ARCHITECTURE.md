@@ -52,7 +52,8 @@ graph TD
     WSS <-->|outbound-only link| Bridge[Windows PC Bridge Daemon]
     subgraph PC [Windows PC - may sleep]
         Bridge --> MCP[Windows-MCP executor]
-        Bridge --> LAN[LanServer :8000 loopback/LAN - /health]
+        Bridge --> LAN[LanServer :8000 loopback/LAN - /health + /telemetry/live-state Bearer]
+        Bridge --> Tele[Telemetry snapshot - psutil LiveState]
         Bridge --> WoL[Wake-on-LAN sender UDP:9]
         Bridge --> Idle[Idle monitor 20 min]
         MCP --> Apps[Whitelisted apps / files C:, D:]
@@ -137,10 +138,15 @@ of any whitelist flag. Idle >20 min => Sara offers sleep/shutdown once per idle 
 (real activity re-arms); the owner's choice rides the same confirmation flow.
 
 The same bridge channel (LAN port 8000, token-authenticated, loopback/LAN-bound — never
-0.0.0.0) serves the **desktop telemetry protocol**: `GET /telemetry/live-state` returns
-the active foreground window, running whitelisted processes, and daily categorized screen
-time — consumed by Tier 2 (ADR-16) for briefs and check-ins. Wire contract + audit-code
-lifecycle: `docs/06-API-SPECIFICATION.md`.
+0.0.0.0) serves the **desktop telemetry protocol** (sprint-3 3.5): one psutil snapshot
+(`bridge/telemetry.live_state()`) — cpu, ram, C:/D: disks, uptime, top-CPU process —
+degrades unmeasurable metrics to None instead of crashing, and reaches Sara two ways:
+`GET /telemetry/live-state` (Bearer BRIDGE_TOKEN) for direct LAN diagnostics, and the
+tunnel cmd `telemetry.state` for the core-side `TelemetryClient`, which narrates ONE
+Jordanian line at Tier 1 FAST («شو وضع الجهاز؟») — numbers verbatim from the state,
+deterministic numeric fallback when the brain is unreachable, honest
+«الجسر مو متصل هسا» when the bridge is offline. Payload carries no secrets (no token,
+no hostname, no paths). Wire contract: `docs/06-API-SPECIFICATION.md`.
 
 ## 6. Knowledge Vault Layout (PARA + Zettelkasten)
 
