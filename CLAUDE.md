@@ -37,7 +37,8 @@ strictly-zero-cost executive AI assistant named **Sara (سارة)**.
   sync the universal-agentic-os framework FROM ITS LOCAL STATE FIRST (that repo often holds
   uncommitted owner upgrades — NEVER discard them; details in protocol step 2), clear the
   preflight gate, then resume the phase marked **current** in that file. Never act on stale or
-  assumed context. Authoritative mission record: `docs/01-ARCHITECTURE.md` §1.
+  assumed context. Working model in full (checkouts, closed loop, folder map, next-session
+  bootstrap): `.claude/WORKFLOW.md`. Authoritative mission record: `docs/01-ARCHITECTURE.md` §1.
 
 ## 2. Hard Architectural Rules & Invariants
 
