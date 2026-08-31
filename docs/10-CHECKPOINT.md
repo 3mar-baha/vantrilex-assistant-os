@@ -56,11 +56,34 @@ Upstream toolkit inventory: `worldflowai/everything-claude-code` · `mattpocock/
 - **Outcome**: core-foundation merged to `main` mid-sprint (`e7e0f2f`) and re-merged at
   sprint close per owner directive; 150 tests green; sprint-level HALT.
 
-## Sprint 3 — Vault, PC bridge, whitelist — QUEUED
+## Sprint 3 — Vault, PC bridge, whitelist — COMPLETE (2026-08-31)
 
-- **Skills to ingest**: `mattpocock-skills/skills/tdd` · `mattpocock-skills/skills/git-guardrails` ·
-  `guard-skills/test-guard` · `everything-claude-code/agents/systems-architect`
-- **Teardown**: clean session skills, update checkpoint.
+- **Skills ingested**: `mattpocock-skills/skills/tdd` · `mattpocock-skills/skills/git-guardrails` ·
+  `guard-skills/test-guard` · `everything-claude-code/agents/systems-architect` ·
+  `ponytail/*` (session aids, never committed; TDD + guardrail discipline governed the
+  whole sprint — red suite first on every task)
+- **Deliverables** (all directly on `main`, per the 2026-08-31 branch directive): task 3.1
+  vault client + social graph + first-boot bootstrap (`38f1e4c`..) · task 3.2 VaultExpander
+  (`fe2493d` red, `e1c9714` green, docs `de916d4`/`1e87463`/`82d87cd`) · task 3.3 verbal
+  action-summary protocol + shared consent grammar (`b0a50ee`, `c19119d`, docs
+  `81e95cb`/`3d9f09e`) · task 3.4 PC control plane — wire protocol (`dcfac95`), guardrail
+  executor + WoL + idle (`c6fdfd0`), owner-side coordinator (`9097c31`), tunnel acceptor +
+  outbound daemon + LAN surface (`ad29956`), bridge settings (`154d1fd`), API spec docs
+  (`db6c20b`) · task 3.5 desktop telemetry — red suite (`d49a05c`), LiveState + Bearer LAN
+  route + TelemetryClient narration (`ab81144`), docs (`5282baf`)
+- **Teardown (executed 2026-08-31)**: `.claude/skills/*` wiped (untracked session aids);
+  full suite green after teardown — **228 passed**; sacred floor green
+  (`test_owner_middleware.py` + `test_guest_lockdown.py` + `test_whitelist_guardrail.py`).
+- **Sprint-exit verification**: full gate green (lint + 228 tests + security gate +
+  docs guard 16 canonical files); AC→pytest contracts all mapped (spec §3.1-§3.5:
+  3.1 M6/ADR-21, 3.2 M5, 3.3 summary protocol, 3.4 AC1-AC12 + AST outbound-only scan,
+  3.5 AC1-AC8 + psutil degradation); docs synced per task (ARCHITECTURE, RUNBOOK,
+  06-API-SPECIFICATION, CHANGELOG, BACKLOG ticks).
+- **Carry-over to owner**: live smokes on a real PC bridge run (daemon auto-start task +
+  WoL external sender reality check — RUNBOOK §5); Google 403 owner-side fix still blocks
+  AC10 dispatcher live smoke.
+- **Outcome**: 228 tests green; 5/5 tasks delivered; sprint-level HALT — owner decides
+  Sprint 4 start (syllabus parser, dynamic expansion, tutor, hardening & v1.0.0 release).
 
 ## Sprint 4 — Syllabus parser, expansion, tutor, hardening & release — QUEUED
 

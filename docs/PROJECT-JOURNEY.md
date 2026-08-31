@@ -261,3 +261,100 @@ whitelist safety guardrail daemon (sacred floor `test_whitelist_guardrail.py`), 
 telemetry protocol. Skills to ingest at entry: mattpocock TDD + git-guardrails,
 guard-skills test-guard, everything-claude-code systems-architect. Opens on the owner's
 «التالي».
+
+## 12. Addendum — 2026-08-31: Sprint 3 complete (vault → PC bridge → telemetry)
+
+Full-sprint record per convention. All five tasks landed **directly on `main`** under the
+binding branch directive (owner, 2026-08-31) with immediate pushes; red→green→refactor on
+every task (the AC→pytest contracts in `docs/specs/sprint-3.md` were the test design, never
+re-invented).
+
+### 12.1 Task 3.1 — skill-obsidian-vault-architect (M6 / ADR-21)
+
+`src/vault.py`: `VaultClient` over the GitHub Contents API (Bearer + versioned headers,
+`?ref=VAULT_BRANCH`; upsert = sha lookup → 404 create / 200 update; one 409 GET→PUT retry
+then `VaultConflictError`; auth errors loud with zero retries; >1 MB payloads refused
+pre-flight), Git Data API `commit_files` (ONE-commit structural changes incl. the legacy
+`02_Areas/Studies/` → top-level `Studies/` migration), `append_section`, deterministic
+title sanitizer (Arabic verbatim), YAML frontmatter writer/splitter, PARA helpers +
+Zettelkasten wikilinks, `redact_secret` screening every log/exception path, idempotent
+first-boot `ensure_mandatory_dirs()` (mandatory dirs + contacts taxonomy + both profile
+files; re-run = zero writes). Plus **3.1b** `src/skills/social_graph.py` (`SocialGraph`:
+dossier / FAST-tier entity extraction (strict JSON, LLM output is DATA) / dated file_action
+into dossier AND daily log; ambiguous holds for owner confirmation; `Ignored/` never
+appends). Settings: VAULT_GITHUB_REPO/VAULT_GITHUB_TOKEN required, VAULT_BRANCH, PyYAML.
+31 new tests (181 total).
+
+### 12.2 Task 3.2 — skill-dynamic-vault-expander (M5)
+
+`src/vault_expand.py`: `VaultExpander.expand(domain, dirs, tags)` grows `01_Projects/<domain>`
+trees as domains emerge — sanitized sub-dirs, `_index.md` per directory (wikilinked), tag
+ontology `<domain>/_tags.yaml`; every expansion ONE auditable commit (`sara: expand vault —
+<domain>`) via the Git Data API; PARA backbone expansion-only (`BackboneImmutableError`
+pre-flight, zero API calls; no delete/move code path exists); idempotent (vault state IS
+the memory); token never in logs/exceptions. 10 new tests (191 total).
+
+### 12.3 Task 3.3 — skill-verbal-action-summary-protocol
+
+`src/summary.py` + `common/consent.py`: task-bearing turns close with the exact prompt
+«هل بتحب ألخص لك شو رح أعمل هسا؟»; `TaskExtractor` rides ONE TIER 2 MEDIUM call per turn
+(strict JSON, garbage collapses to `[]` loudly); one pending per turn (newer supersedes,
+casual turns capture nothing); consent grammar shared with 3.4 (`is_affirmative` first-token
+Jordanian match) with the structural binding rule — only an affirmative FOLLOWING the live
+prompt mints consent; approvals file `04_Archives/Conversations/YYYY-MM-DD-HHMMSS-summary.md`;
+arbitration defers to 3.4's confirmation consumer and re-asks once after; brain failure never
+breaks the reply. 10 new tests (201 total).
+
+### 12.4 Task 3.4 — skill-pc-whitelist-safety-guardrail (the PC control plane)
+
+- `common/protocol.py` — v1 wire (JSON-per-frame; PROTOCOL_VERSION/heartbeats/1 MiB cap;
+  Hello/HelloAck token handshake: bad token closed 4401 with token never logged, second
+  session 4400; results correlate by envelope id; unknown-id results WARN+drop).
+- `bridge/guard.py` — whitelist re-read per check, fail-CLOSED on corrupt file (CRITICAL),
+  power ALWAYS requires a confirmation id regardless of any whitelist flag.
+- `bridge/executor.py` — detached `shell=False` spawns, audit codes
+  `PC-YYYYMMDD-HHMMSS-4hex`, traversal/UNC refusal, missing exe «البرنامج مش موجود عالجهاز».
+- `bridge/wol.py` + `bridge/idle.py` — exact 102-byte magic packet (one UDP:9 sendto,
+  SO_BROADCAST) and the latched idle monitor (one offer per window «صرت مدة طويلة...»,
+  sustained-activity re-arm so a momentary blip never re-arms).
+- `src/pc_actions.py` — owner-origin gate (`RefusedOrigin`; untrusted content is DATA and
+  never mints PC intent), confirmations-note-BEFORE-command (approval without audit is
+  void), one audit code chaining note → cmd → ExecResult → Telegram «رمز التدقيق»,
+  append-only `04_Archives/Audit/pc-ledger.md`.
+- `src/bridge_server.py` + `bridge/daemon.py` + `bridge/server.py` + `bridge/__main__.py` —
+  single-session acceptor with silence watchdog and honest `BridgeOffline`; outbound-only
+  dialer (AST-scanned: never binds) with heartbeats + capped backoff; LAN HTTP surface
+  loopback-bound; settings wired (BRIDGE_TOKEN/BRIDGE_SERVER_URL/BRIDGE_LAN_PORT).
+- `docs/06-API-SPECIFICATION.md` formalizes wire + command catalog (force semantics
+  DROPPED) + confirmation/audit lifecycle + data models + LAN surface.
+13 new tests (216 total).
+
+### 12.5 Task 3.5 — skill-desktop-telemetry-protocol
+
+`bridge/telemetry.py`: one psutil snapshot `live_state()` (<2 s) — cpu, ram, C:/D: disks,
+uptime, top-CPU process (primed counters, single settle window) — degrades unmeasurable
+metrics to None/`"unknown"` instead of crashing (OSError-safe: psutil 7 removed
+`DiskNotFoundError`). Served two ways: `GET /telemetry/live-state` on the LAN surface
+(Bearer BRIDGE_TOKEN — 401 without it, 404 when no provider wired) and the tunnel cmd
+`telemetry.state` (daemon executes `live_state()`, returns `ok` + model dump).
+`src/telemetry.py`: `TelemetryClient` — pydantic-validated fetch; `narrate` makes ONE
+Tier-1 FAST call with the state JSON as DATA (numbers verbatim, display-only, temperature 0)
+with a deterministic numeric Arabic fallback on brain failure; `report` catches
+BridgeOffline/Timeout/ValidationError → honest «الجسر مو متصل هسا», never raises to the
+chat layer. Payload carries no secrets (no token/hostname/paths — exact-schema `extra=forbid`).
+12 new tests (228 total).
+
+### 12.6 Sprint exit + teardown
+
+- **Teardown (2026-08-31)**: `.claude/skills/*` wiped (untracked session aids); post-teardown
+  suite 228 passed; sacred floor green (`test_owner_middleware.py` + `test_guest_lockdown.py`
+  + `test_whitelist_guardrail.py`). Full record: `docs/10-CHECKPOINT.md` (Sprint 3).
+- **Verification**: full gate green (lint + 228 tests + security gate + docs guard 16
+  canonical files); AC→pytest coverage: spec §3.1-§3.5 complete; docs synced per task
+  (ARCHITECTURE §2/§5, RUNBOOK §5, 06-API-SPECIFICATION, CHANGELOG, BACKLOG ticks).
+- **Carry-over to owner**: Google 403 fix still blocks the AC10 dispatcher live smoke;
+  bridge live run needs the auto-start task + the WoL external-sender reality check
+  (RUNBOOK §5 wake reality check).
+- **Outcome**: 228 tests green; sprint-level HALT — owner decides Sprint 4 (4.1 syllabus
+  parser, 4.2 dynamic capability expansion, 4.3 polymath tutor, 4.4 hardening + v1.0.0
+  release on HF Spaces).

@@ -390,6 +390,20 @@ social agent -> v2.0.
       systems-architect) into `.claude/skills/`, pass the preflight gate, then task 3.1
       (`skill-obsidian-vault-architect`) red tests. Full sprint-2 record:
       `docs/PROJECT-JOURNEY.md` §11.
+      **SPRINT 3 CLOSED (2026-08-31)**: tasks 3.1-3.5 ALL delivered directly on `main`
+      (binding branch directive — worktree/merge pattern retired, `core-foundation` is a
+      reference checkout only): 3.1 vault client + social graph + first-boot bootstrap ·
+      3.2 VaultExpander (one-commit domain growth, PARA backbone immutable) · 3.3 verbal
+      action-summary protocol + shared consent grammar · 3.4 PC control plane (v1 wire
+      protocol, fail-closed whitelist guard, executor/WoL/idle, owner-side coordinator
+      with confirmations-before-command + audit ledger, WSS tunnel + outbound-only daemon,
+      LAN :8000 surface) · 3.5 desktop telemetry (psutil LiveState, Bearer LAN route +
+      tunnel cmd, Tier-1 FAST Arabic narration with real numbers, honest offline line).
+      Teardown executed (`.claude/skills/*` wiped; post-teardown suite 228 passed; sacred
+      floor green incl. `test_whitelist_guardrail.py`). Full gate green. Sprint record:
+      `docs/10-CHECKPOINT.md` (Sprint 3). **NEXT: sprint-level HALT — owner decides
+      Sprint 4 start (syllabus parser 4.1, dynamic capability expansion 4.2, polymath
+      tutor 4.3, hardening + v1.0.0 release 4.4).**
 - [ ] Phase 4 — Harden & Release: guards, full gate, tag v1.0.0, release report
 
 ## Open items / blockers
