@@ -12,9 +12,9 @@ from datetime import datetime
 import httpx
 import pytest
 import yaml
+from helpers_vault import FakeGitHub
 from loguru import logger
 
-from helpers_vault import FakeGitHub
 from src.vault import VaultClient, split_frontmatter
 from src.vault_expand import PARA_BACKBONE, BackboneImmutableError, VaultExpander
 
@@ -113,7 +113,9 @@ async def test_tag_ontology_yaml_roundtrip():
     doc = yaml.safe_load(gh.objects[f"{ROOT}/_tags.yaml"][1])
     assert doc["tags"] == TAGS
     assert doc["domain"] == DOMAIN
-    created = datetime.fromisoformat(doc["created"])
+    created = doc["created"]
+    if isinstance(created, str):  # YAML may parse the ISO stamp back into datetime
+        created = datetime.fromisoformat(created)
     assert created.tzinfo is not None and created.utcoffset().total_seconds() == 0
 
 
