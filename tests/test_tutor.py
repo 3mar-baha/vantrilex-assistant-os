@@ -87,8 +87,14 @@ async def test_artifact_filed_with_yaml():
     assert "Studies/Calculus I/Study Guide.md" in gh.objects
     stored = gh.objects["Studies/Calculus I/Study Guide.md"][1]
     assert stored.startswith("---\n")
-    for field in ("type: study-guide", "topic: Calculus I", "level: beginner",
-                  "language: ar", "links:", "tags:"):
+    for field in (
+        "type: study-guide",
+        "topic: Calculus I",
+        "level: beginner",
+        "language: ar",
+        "links:",
+        "tags:",
+    ):
         assert field in stored, field
     assert "أول المبادئ" in stored
     assert path.name == "Study Guide.md"
@@ -141,8 +147,11 @@ async def test_vault_failure_keeps_content_in_reply():
     try:
         with pytest.raises(StudyFilingError) as ei:
             await study_artifact(
-                "Calculus I", level="beginner", language="ar",
-                gateway=gateway, vault=vault,
+                "Calculus I",
+                level="beginner",
+                language="ar",
+                gateway=gateway,
+                vault=vault,
             )
     finally:
         logger.remove(hid)
@@ -160,8 +169,11 @@ async def test_oversized_topic_capped():
     vault, gh = _vault()
     gateway = _Gateway(GUIDE_REPLY)
     path = await study_artifact(
-        "ط" * (MAX_TOPIC_CHARS * 3), level="beginner", language="ar",
-        gateway=gateway, vault=vault,
+        "ط" * (MAX_TOPIC_CHARS * 3),
+        level="beginner",
+        language="ar",
+        gateway=gateway,
+        vault=vault,
     )
     assert max(len(part) for part in path.parts) <= MAX_TOPIC_CHARS + 20
     assert next(iter(gh.objects)).startswith("Studies/")
