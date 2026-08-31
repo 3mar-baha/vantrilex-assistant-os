@@ -9,6 +9,20 @@ product release tags start independently at v1.0.0.)
 ## [Unreleased]
 
 ### Added
+- **Sprint 4 / task 4.2 — skill-dynamic-capability-expansion (M4)**:
+  `src/expansion.py` — Sara gains capabilities at runtime, no redeploy (ADR-15 state
+  re-derivation): the owner hands a credential env NAME in chat; `CapabilityScheduler`
+  probes presence/format (>= 16 chars, no whitespace) with ONLY the NAME in errors and
+  logs (the value never leaves `.env`), parses Arabic/English natural-language
+  scheduling («كل صباح 7» → daily 07:00, «كل اثنين 9» → weekly, «كل ساعة» → hourly,
+  gibberish → `ExpansionError`) with the clock zone pinned to `settings.tz`, and
+  registers a background asyncio job (`register_capability` — reserved-name refusal,
+  max-8 cap, single-lock serialization). Any failure or `wait_for` timeout DISABLES the
+  task loudly (ERROR log with the task name + one owner notify, no silent retry loops);
+  re-enable is an explicit owner action. Registry persists to `State/capabilities.json`;
+  `restore(pipelines)` re-derives enabled tasks after a restart. Pipelines receive one
+  ctx dict (`name`/`credential_env`/`vault`) — the secret VALUE never travels.
+  10 new tests (247 total), gate green. Zero new deps (asyncio stdlib).
 - **Sprint 4 / task 4.1 — module-syllabus-to-dag-parser**: `src/syllabus.py` turns a
   course syllabus PDF into an executable study plan — threaded `pypdf` extraction
   (length-capped untrusted input), ONE TIER3 `HEAVY_MODEL` call with strict-JSON output

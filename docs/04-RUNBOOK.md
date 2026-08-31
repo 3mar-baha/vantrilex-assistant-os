@@ -82,6 +82,25 @@ Studies filing, and the untrusted-PDF boundary (injection text travels as DATA o
 Live (AC10, manual): a real PDF -> real Calendar sandbox — the review schedule appears
 in Calendar/Tasks with the tags.
 
+### Adding a capability (owner, task 4.2 — no redeploy)
+
+Sara accepts new scheduled background tasks at runtime (M4). The owner flow:
+
+1. Put the new service's key in `.env` under a NEW name (e.g. `WEATHER_API_KEY=...`)
+   and restart the core once so the env var is loaded — the KEY never goes into chat.
+2. In Telegram, tell Sara the task name, what to fetch, the env NAME, and the
+   schedule in natural language: «سجّلي مهمة weather-fetch تجيب الطقس من
+   WEATHER_API_KEY كل صباح 7». Arabic/English phrasing both parse («كل ساعة»,
+   «كل اثنين 9», "every morning at 7").
+3. She probes the credential (>= 16 chars, no whitespace), registers the asyncio job,
+   and persists it to `State/capabilities.json` — it re-derives after any restart.
+   Reserved names (`pc`, `bridge`, `triage`, ...) are refused; max 8 tasks.
+4. If a run fails or exceeds its time budget, the task is DISABLED loudly: she logs
+   ERROR with the task name and sends you one notification. Re-enable is explicit.
+5. Verify without waiting: read `{VAULT}/State/capabilities.json` — each entry carries
+   `schedule_text`, `credential_env` (the NAME, never the value), `enabled`,
+   `last_error`.
+
 ## 4. HF Space Deployment (production, free tier — ADR-15)
 
 Supersedes VPS deployment (ADR-05). One Docker Space co-locates OmniRoute +

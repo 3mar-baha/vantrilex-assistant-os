@@ -40,7 +40,7 @@
 | `test_whitelist_guardrail.py` | Non-whitelisted blocks; confirmation round-trip; audit confirmation IDs persisted (sacred floor) |
 | `test_wol_idle.py` | Magic-packet bytes match MAC; single idle offer per window |
 | `test_syllabus_parser.py` | Sprint 4.1: threaded pypdf extraction; TIER3 strict-JSON parse; DAG cycle/orphan rejection; weighted review schedule; Calendar/Tasks materialization; untrusted-PDF boundary |
-| `test_expansion.py` | M4: Arabic NL cron parses; task registers without redeploy; invalid credential rejected loudly; failure disables task |
+| `test_expansion.py` | Sprint 4.2/M4: Arabic+English NL cron parse (gibberish raises); runtime registration + settings.tz pin; credential probe rejects missing/short with env NAME only in logs (secret value absent); failure/timeout disables loudly + one owner notify + no-op until re-enable; pipeline output files to vault via ctx; `State/capabilities.json` restore re-derivation; reserved-name refusal; concurrent registration serializes on one lock; next-occurrence arithmetic |
 | `test_tutor.py` | Sprint 4.3: routing via gateway only; artifact filed to `Studies/` with YAML; study content never triggers actions |
 | `test_quality_gate.py` | Sprint 4.4a: coverage threshold config; pragma justification; gate order; fails closed; secret scan in gate |
 | `test_packaging.py` / `test_deploy_smoke.py` | Sprint 4.4b: Dockerfile/Space contract; dockerignore; supervision; durable-state audit; keep-alive cron; redacted smoke failures |

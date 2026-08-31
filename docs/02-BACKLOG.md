@@ -160,10 +160,17 @@ Final teardown → `docs/10-CHECKPOINT.md` (v1.0.0 entry).
       (one retry then loud), validated DAG (cycles/orphans named), weighted capped
       schedule with idempotency tags, Studies filing; 9 new tests (237 total), gate
       green. AC10 live smoke (real PDF -> real Calendar sandbox) is owner-side.
-- [ ] **4.2 `skill-dynamic-capability-expansion`** — M4: owner-supplied credentials -> new
+- [x] **4.2 `skill-dynamic-capability-expansion`** — M4: owner-supplied credentials -> new
       scheduled async tasks without redeploy; natural-language Arabic cron; loud failure
       disables a task; secrets enter via `.env` only, never chat logs.
       *AC*: `tests/test_expansion.py` per spec M4.
+      Done 2026-08-31: `src/expansion.py` — `parse_nl_cron` (Arabic/English phrasing ->
+      `ScheduleSpec`, tz pinned to `settings.tz`), `CapabilityScheduler`
+      (credential format probe — env NAME only in errors/logs, max-8 cap, reserved-name
+      refusal, single `asyncio.Lock`, per-task `wait_for` timeout), failure/timeout
+      disables loudly with one owner notify, state record `State/capabilities.json` +
+      `restore(pipelines)` re-derivation on restart (ADR-15); 10 new tests (247 total),
+      gate green. AC10 live smoke (owner registers a real task on Telegram) is owner-side.
 - [ ] **4.3 `skill-polymath-tutor`**: curriculum compiler — study guides + 10-language
       lessons with YAML frontmatter filed to `Studies/`; first-principles deconstruction;
       no new engine (chat + 3-tier brain + vault).
