@@ -103,29 +103,63 @@ Sara accepts new scheduled background tasks at runtime (M4). The owner flow:
 
 ## 4. HF Space Deployment (production, free tier — ADR-15)
 
-Supersedes VPS deployment (ADR-05). One Docker Space co-locates OmniRoute +
-core; the Space's single public port serves the WSS bridge endpoint + `/health`.
+Supersedes VPS deployment (ADR-05). One Docker Space co-locates OmniRoute + the core
+behind the supervised entrypoint (`scripts/supervise.py` — both children run as ONE
+process tree; the first child to exit tears the container down so the Space restarts it).
+The Space's single public port (`app_port: 7860`, README metadata) serves `GET /health`
+(keep-alive target) and the authenticated bridge WSS.
 
-1. Create a private HF Space (Docker, 2 vCPU / 16 GB tier) in the owner account.
-2. Space Dockerfile (Sprint-4 task 4.4b): single image supervising OmniRoute
-   (`localhost:20128`) + the core; `app_port` = the public WSS/health port.
-3. All secrets go to **HF Secrets** (bot token, owner ID, OAuth client, bridge
-   token) — never the repo; `.env` is local-only for development.
-4. Configure free provider pools (3-tier brain per ADR-16) in OmniRoute.
-5. **Keep-alive is mandatory**: cron ping `GET /health` every 10 min
-   (e.g., cron-job.org) — free Spaces idle-sleep after prolonged silence.
-6. **Disposable filesystem**: anything that must survive a restart lives in the
-   git-backed vault (ADR-15 invariant); the OAuth token cache is vault-persisted
-   (encrypted) or the owner re-consents after restarts.
-7. Verify: bot responds to the owner; `curl -m 5 <SPACE_URL>/health` returns ok.
+1. Create a private HF Space (Docker, free CPU tier) in the owner account; the repo
+   README carries the Space metadata (`sdk: docker`, `app_port: 7860`).
+2. Clone OmniRoute beside the supervisor BEFORE the image builds:
+   `git clone https://github.com/diegosouzapw/OmniRoute scripts/omniroute`
+   (`.dockerignore` re-includes `scripts/omniroute/` + `scripts/supervise.py`; everything
+   else — tests, docs, `.env`, OAuth client JSON, sessions — never enters the context).
+3. Space variables: `OMNIROUTE_CMD` (how the gateway starts inside the image) and
+   `CORE_CMD` (optional; defaults to `python -m src.main`). The core reads `$PORT`
+   and serves `/health` + the bridge WSS on it.
+4. All secrets go to **HF Secrets** (bot token, owner ID, VAULT_ENC_KEY, OAuth client,
+   vault PAT, bridge token) — never the repo; `.env` is local-only for development.
+5. Configure free provider pools (3-tier brain per ADR-16) in OmniRoute.
+6. **Disposable filesystem (ADR-15 invariant)**: anything that must survive a restart
+   lives in the git-backed vault; the OAuth token cache is vault-persisted (encrypted)
+   or the owner re-consents after restarts. The automated audit lives at
+   `tests/test_packaging.py::test_durable_state_only_in_vault`.
+7. Verify: bot responds to the owner; `curl -m 5 <SPACE_URL>/health` returns 200;
+   then run the smoke: `python scripts/deploy_smoke.py` — exit 0 = Sara is alive.
 
-### 4b. Cloud Run fallback (secondary host — documented alternative)
+### 4b. Keep-alive (shipped contract, not an ops footnote)
 
-If the Space is unavailable: build the SAME image (4.4b) and deploy to Google Cloud Run
-free tier — container reads `PORT`, min-instances=0 (cold starts noted; the keep-alive
-pinger keeps it warm), all secrets via Cloud Run environment variables. No committed
-terraform/CI for this path in v1.0.0 — activating it is an owner action documented here.
-The bridge daemon's `BRIDGE_SERVER_URL` simply points at the Cloud Run WSS URL instead.
+`.github/workflows/keepalive.yml` pings `GET <SPACE_URL>/health` every 10 minutes
+(`*/10 * * * *` cron; free GitHub Actions minutes) and fails the step loudly on any
+non-200 (`::error::` + exit 1). One prerequisite: the repository secret `SPACE_URL`
+(the Space's public root). Free Spaces idle-sleep after prolonged silence — this ping
+is what keeps Sara on 24/7 duty.
+
+### 4c. Cloud Run fallback (secondary host — documented alternative)
+
+If the Space is unavailable: build the SAME image (§4) and deploy to Google Cloud Run
+free tier — the container already reads `PORT` (the core's public-port entry is
+host-agnostic), min-instances=0 (cold starts noted; the keep-alive pinger keeps it
+warm), all secrets via Cloud Run environment variables. No committed terraform/CI for
+this path in v1.0.0 — activating it is an owner action documented here. The bridge
+daemon's `BRIDGE_SERVER_URL` simply points at the Cloud Run WSS URL instead, and
+`SPACE_URL` moves to the Cloud Run service URL.
+
+### 4-validation. Dated deploy validation (2026-08-31, sprint-4 task 4.4b AC10)
+
+Executed order on a fresh Space deploy; every box verified before ticking:
+
+- [ ] `docker build` of the repo root succeeds locally (or `test_docker_build_succeeds`
+      run on a docker-equipped machine) — image carries src/, common/, OmniRoute clone.
+- [ ] Space boots: container reaches RUNNING; logs show the supervisor starting both
+      children (`supervisor started omniroute…` / `supervisor started core…`).
+- [ ] `GET <SPACE_URL>/health` returns 200 `{"status":"ok"}`.
+- [ ] Keep-alive workflow enabled with `SPACE_URL` secret; first scheduled run green.
+- [ ] Owner messages the bot on Telegram; Sara answers in Jordanian Arabic.
+- [ ] Bridge daemon on the PC dials the Space WSS (`bridge session online` in core logs).
+- [ ] `python scripts/deploy_smoke.py` exits 0 (all five checks green) against the live
+      Space — the checklist ends when the smoke exits 0.
 
 ## 5. PC Bridge Daemon (Windows)
 
@@ -310,6 +344,10 @@ state (no local cache to invalidate).
 | `GatewayError: all models exhausted (<tier chain>)` | A whole tier's chain down/quota — pools drained or OmniRoute offline | Check OmniRoute dashboard pools + `curl -m 5 http://localhost:20128/v1/models`; the log line names the last cause per model in the chain |
 | `GatewayError: fatal HTTP 401/403 on <model>` | Bad/missing gateway key | Verify `OMNIROUTE_API_KEY` in `.env`; never appears in logs (only status + body snippet) |
 | `dispatcher ... -> default tier2` (warning) | Tier-1 router failed or replied non-JSON (ADR-18 degradation) | Service continues at Tier 2; inspect the logged router reply; persistent repeats -> probe the `google/gemini-3.5-flash-lite` pool |
+| Space container restart-looping / supervisor exits 2 | `OMNIROUTE_CMD` missing or a child fails to spawn | Set `OMNIROUTE_CMD` in Space variables; the log line names the failing child |
+| `GET /health` returns 404/426 on the Space | Hitting a non-public path, or core not up yet | Only `/health` answers HTTP (200); the WSS endpoint is auth-gated — wait for RUNNING then re-probe |
+| Keep-alive workflow failing (`::error::`) | `SPACE_URL` repo secret unset/wrong, or Space asleep | Set the `SPACE_URL` secret to the Space public root; a red run means the Space was NOT healthy at that minute |
+| `deploy_smoke` exits 1 — which check? | Any of the five probes red | The log names each check + a masked detail (secrets never appear); fix that surface and re-run |
 
 ## 8. Operational Safety
 

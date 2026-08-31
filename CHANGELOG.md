@@ -9,6 +9,26 @@ product release tags start independently at v1.0.0.)
 ## [Unreleased]
 
 ### Added
+- **Sprint 4 / task 4.4b — HF Spaces packaging (the ONE container, ADR-15)**:
+  `Dockerfile` (python:3.12-slim, ffmpeg, non-root `sara` user, TZ=Asia/Amman) whose
+  entrypoint is the new single-tree supervisor `scripts/supervise.py` — OmniRoute
+  gateway child + core child (commands via `OMNIROUTE_CMD`/`CORE_CMD`; first child to
+  exit tears down the tree and becomes the container exit, so the Space restarts whole,
+  never half-alive). The core reads `$PORT` and serves `GET /health` + the authenticated
+  bridge WSS on the single public port (`src.main.start_public_port`). `.dockerignore`
+  keeps secrets/tests/docs/OAuth client/sessions out of the build context while
+  re-including the two runtime needs. `.github/workflows/keepalive.yml` pings the Space
+  `/health` every 10 minutes and fails loudly on any non-200 (shipped contract, not an
+  ops footnote). `scripts/deploy_smoke.py` turns "is Sara alive?" into an exit code —
+  five checks (gateway/telegram/vault/google_token_cache/space_health), per-check
+  timeout bounds, all checks run even after one fails, and a Settings-aware masker
+  screens EVERY failure detail (httpx errors embed full URLs carrying the bot token —
+  nothing secret survives into logs; host + path class remain). Durable-state audit
+  test locks every disk write in runtime code to ADR-15-justified stores; README gains
+  Space metadata (sdk: docker, app_port) + HF Secrets policy; RUNBOOK §4 rewritten
+  (Space deploy / keep-alive / Cloud Run fallback) with troubleshooting rows and a
+  dated validation checklist ending in deploy_smoke exit 0. 18 new tests (278 total,
+  1 docker build skip), gate green at 85.62% branch coverage.
 - **Sprint 4 / task 4.4a — quality-gate hardening**: the >=85% branch coverage threshold
   is LIVE — `--cov=src --cov=bridge --cov=common --cov-branch --cov-fail-under=85` lives
   once in pytest `addopts` (85.86% measured at activation; Sprints 1-3 ran
