@@ -1,11 +1,952 @@
 {
   "allowed_apps": [
-    {"name": "calculator", "executable": "calc.exe", "auto_approve": true},
-    {"name": "obsidian", "executable": "Obsidian.exe", "auto_approve": true}
+    {
+      "name": "calculator",
+      "executable": "calc.exe",
+      "auto_approve": true
+    },
+    {
+      "name": "obsidian",
+      "executable": "Obsidian.exe",
+      "auto_approve": true
+    },
+    {
+      "name": "Access",
+      "executable": "C:\\Program Files\\Microsoft Office\\root\\Office16\\MSACCESS.EXE",
+      "auto_approve": true,
+      "category": "Productivity"
+    },
+    {
+      "name": "Windows Media Player Legacy",
+      "executable": "C:\\Program Files (x86)\\Windows Media Player\\wmplayer.exe",
+      "auto_approve": true,
+      "category": "Productivity"
+    },
+    {
+      "name": "VMCreate",
+      "executable": "C:\\Program Files\\Hyper-V\\VMCreate.exe",
+      "auto_approve": true,
+      "category": "Productivity"
+    },
+    {
+      "name": "Android Studio",
+      "executable": "C:\\Program Files\\Android\\Android Studio\\bin\\studio64.exe",
+      "auto_approve": true,
+      "category": "Coding"
+    },
+    {
+      "name": "Uninstall Attack on Titan 2",
+      "executable": "O:\\Games\\Attack on Titan 2\\unins000.exe",
+      "auto_approve": true,
+      "category": "Productivity"
+    },
+    {
+      "name": "BakkesMod",
+      "executable": "C:\\Program Files\\BakkesMod\\BakkesMod.exe",
+      "auto_approve": true,
+      "category": "Productivity"
+    },
+    {
+      "name": "BlueStacks 5",
+      "executable": "C:\\Program Files\\BlueStacks_nxt\\HD-Player.exe",
+      "auto_approve": true,
+      "category": "Productivity"
+    },
+    {
+      "name": "BlueStacks Multi-Instance Manager",
+      "executable": "C:\\Program Files\\BlueStacks_nxt\\HD-MultiInstanceManager.exe",
+      "auto_approve": true,
+      "category": "Productivity"
+    },
+    {
+      "name": "BlueStacks Store",
+      "executable": "D:\\BlueStacks X\\BlueStacks X.exe",
+      "auto_approve": true,
+      "category": "Productivity"
+    },
+    {
+      "name": "CCleaner 7",
+      "executable": "C:\\Program Files\\Piriform\\CCleaner 7\\CCleaner.exe",
+      "auto_approve": true,
+      "category": "Productivity"
+    },
+    {
+      "name": "Cheat Engine (32-bit)",
+      "executable": "C:\\Program Files\\Cheat Engine\\cheatengine-i386.exe",
+      "auto_approve": true,
+      "category": "Productivity"
+    },
+    {
+      "name": "Cheat Engine (64-bit SSE4-AVX2)",
+      "executable": "C:\\Program Files\\Cheat Engine\\cheatengine-x86_64-SSE4-AVX2.exe",
+      "auto_approve": true,
+      "category": "Productivity"
+    },
+    {
+      "name": "Cheat Engine (64-bit)",
+      "executable": "C:\\Program Files\\Cheat Engine\\cheatengine-x86_64.exe",
+      "auto_approve": true,
+      "category": "Productivity"
+    },
+    {
+      "name": "Cheat Engine help",
+      "executable": "C:\\Program Files\\Cheat Engine\\CheatEngine.chm",
+      "auto_approve": true,
+      "category": "Productivity"
+    },
+    {
+      "name": "Cheat Engine tutorial (64-bit)",
+      "executable": "C:\\Program Files\\Cheat Engine\\Tutorial-x86_64.exe",
+      "auto_approve": true,
+      "category": "Productivity"
+    },
+    {
+      "name": "Cheat Engine tutorial",
+      "executable": "C:\\Program Files\\Cheat Engine\\Tutorial-i386.exe",
+      "auto_approve": true,
+      "category": "Productivity"
+    },
+    {
+      "name": "Cheat Engine",
+      "executable": "C:\\Program Files\\Cheat Engine\\Cheat Engine.exe",
+      "auto_approve": true,
+      "category": "Productivity"
+    },
+    {
+      "name": "Unload kernel module",
+      "executable": "C:\\Program Files\\Cheat Engine\\Kernelmoduleunloader.exe",
+      "auto_approve": true,
+      "category": "Productivity"
+    },
+    {
+      "name": "Reset settings",
+      "executable": "C:\\Program Files\\Cheat Engine\\ceregreset.exe",
+      "auto_approve": true,
+      "category": "Productivity"
+    },
+    {
+      "name": "Uninstall Cheat Engine",
+      "executable": "C:\\Program Files\\Cheat Engine\\unins000.exe",
+      "auto_approve": true,
+      "category": "Productivity"
+    },
+    {
+      "name": "Cisco Packet Tracer Help",
+      "executable": "C:\\Program Files\\Cisco Packet Tracer 9.0.0\\help\\default\\index.htm",
+      "auto_approve": true,
+      "category": "Productivity"
+    },
+    {
+      "name": "Cisco Packet Tracer",
+      "executable": "C:\\Program Files\\Cisco Packet Tracer 9.0.0\\bin\\PacketTracer.exe",
+      "auto_approve": true,
+      "category": "Productivity"
+    },
+    {
+      "name": "Qt Linguist",
+      "executable": "C:\\Program Files\\Cisco Packet Tracer 9.0.0\\bin\\linguist.exe",
+      "auto_approve": true,
+      "category": "Productivity"
+    },
+    {
+      "name": "Saves",
+      "executable": "C:\\Program Files\\Cisco Packet Tracer 9.0.0\\saves",
+      "auto_approve": true,
+      "category": "Productivity"
+    },
+    {
+      "name": "Uninstall Cisco Packet Tracer",
+      "executable": "C:\\Program Files\\Cisco Packet Tracer 9.0.0\\unins000.exe",
+      "auto_approve": true,
+      "category": "Productivity"
+    },
+    {
+      "name": "Core Temp",
+      "executable": "C:\\Program Files\\Core Temp\\Core Temp.exe",
+      "auto_approve": true,
+      "category": "Productivity"
+    },
+    {
+      "name": "Uninstall Core Temp",
+      "executable": "C:\\Program Files\\Core Temp\\unins000.exe",
+      "auto_approve": true,
+      "category": "Productivity"
+    },
+    {
+      "name": "CPU-Z",
+      "executable": "C:\\Program Files\\CPUID\\CPU-Z\\cpuz.exe",
+      "auto_approve": true,
+      "category": "Productivity"
+    },
+    {
+      "name": "Edit CPU-Z Config File",
+      "executable": "C:\\Program Files\\CPUID\\CPU-Z\\cpuz.ini",
+      "auto_approve": true,
+      "category": "Productivity"
+    },
+    {
+      "name": "Uninstall CPU-Z",
+      "executable": "C:\\Program Files\\CPUID\\CPU-Z\\unins000.exe",
+      "auto_approve": true,
+      "category": "Productivity"
+    },
+    {
+      "name": "DFTPRO",
+      "executable": "C:\\DFTPRO\\DFT_Pro.exe",
+      "auto_approve": true,
+      "category": "Productivity"
+    },
+    {
+      "name": "Duet Night Abyss",
+      "executable": "D:\\Duet Night Abyss\\EMLauncher.exe",
+      "auto_approve": true,
+      "category": "Productivity"
+    },
+    {
+      "name": "Epic Games Launcher",
+      "executable": "C:\\Program Files (x86)\\Epic Games\\Launcher\\Portal\\Binaries\\Win32\\EpicGamesLauncher.exe",
+      "auto_approve": true,
+      "category": "Gaming"
+    },
+    {
+      "name": "Everything",
+      "executable": "C:\\Program Files\\Everything\\Everything.exe",
+      "auto_approve": true,
+      "category": "Productivity"
+    },
+    {
+      "name": "Excel",
+      "executable": "C:\\Program Files\\Microsoft Office\\root\\Office16\\EXCEL.EXE",
+      "auto_approve": true,
+      "category": "Study"
+    },
+    {
+      "name": "AIDA64 Extreme Documentation",
+      "executable": "C:\\Program Files\\FinalWire\\AIDA64 Extreme\\aida64help.url",
+      "auto_approve": true,
+      "category": "Productivity"
+    },
+    {
+      "name": "AIDA64 Extreme على الأنترنت",
+      "executable": "C:\\Program Files\\FinalWire\\AIDA64 Extreme\\aida64.url",
+      "auto_approve": true,
+      "category": "Productivity"
+    },
+    {
+      "name": "AIDA64 Extreme",
+      "executable": "C:\\Program Files\\FinalWire\\AIDA64 Extreme\\aida64.exe",
+      "auto_approve": true,
+      "category": "Productivity"
+    },
+    {
+      "name": "Firefox التصفح الخاص",
+      "executable": "C:\\Program Files\\Mozilla Firefox\\private_browsing.exe",
+      "auto_approve": true,
+      "category": "Productivity"
+    },
+    {
+      "name": "Firefox",
+      "executable": "C:\\Program Files\\Mozilla Firefox\\firefox.exe",
+      "auto_approve": true,
+      "category": "Productivity"
+    },
+    {
+      "name": "GameMaker",
+      "executable": "C:\\Program Files\\GameMaker\\GameMaker.exe",
+      "auto_approve": true,
+      "category": "Gaming"
+    },
+    {
+      "name": "Uninstall",
+      "executable": "C:\\Program Files\\GameMaker\\uninstall.exe",
+      "auto_approve": true,
+      "category": "Productivity"
+    },
+    {
+      "name": "GearUP",
+      "executable": "C:\\Program Files (x86)\\GearUP\\launcher.exe",
+      "auto_approve": true,
+      "category": "Productivity"
+    },
+    {
+      "name": "Git Bash",
+      "executable": "C:\\Program Files\\Git\\git-bash.exe",
+      "auto_approve": true,
+      "category": "Coding"
+    },
+    {
+      "name": "Git CMD",
+      "executable": "C:\\Program Files\\Git\\git-cmd.exe",
+      "auto_approve": true,
+      "category": "Coding"
+    },
+    {
+      "name": "Git GUI",
+      "executable": "C:\\Program Files\\Git\\cmd\\git-gui.exe",
+      "auto_approve": true,
+      "category": "Coding"
+    },
+    {
+      "name": "Git Release Notes",
+      "executable": "C:\\Program Files\\Git\\ReleaseNotes.html",
+      "auto_approve": true,
+      "category": "Coding"
+    },
+    {
+      "name": "Google Chrome",
+      "executable": "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
+      "auto_approve": true,
+      "category": "Productivity"
+    },
+    {
+      "name": "ألعاب Google Play",
+      "executable": "C:\\Program Files\\Google\\Play Games\\Bootstrapper.exe",
+      "auto_approve": true,
+      "category": "Productivity"
+    },
+    {
+      "name": "Changelog",
+      "executable": "C:\\Program Files\\HxD\\changelog.txt",
+      "auto_approve": true,
+      "category": "Productivity"
+    },
+    {
+      "name": "HxD",
+      "executable": "C:\\Program Files\\HxD\\HxD.exe",
+      "auto_approve": true,
+      "category": "Productivity"
+    },
+    {
+      "name": "License",
+      "executable": "C:\\Program Files\\HxD\\license.txt",
+      "auto_approve": true,
+      "category": "Productivity"
+    },
+    {
+      "name": "Readme",
+      "executable": "C:\\Program Files\\HxD\\readme.txt",
+      "auto_approve": true,
+      "category": "Productivity"
+    },
+    {
+      "name": "About Java",
+      "executable": "C:\\Program Files\\Java\\jre1.8.0_491\\bin\\javacpl.exe",
+      "auto_approve": true,
+      "category": "Productivity"
+    },
+    {
+      "name": "LetsView",
+      "executable": "C:\\Program Files (x86)\\LetsView\\LetsView\\Letsview.exe",
+      "auto_approve": true,
+      "category": "Productivity"
+    },
+    {
+      "name": "Uninstall LetsView",
+      "executable": "C:\\Program Files (x86)\\LetsView\\LetsView\\unins000.exe",
+      "auto_approve": true,
+      "category": "Productivity"
+    },
+    {
+      "name": "MediaHuman YouTube Downloader",
+      "executable": "C:\\Program Files\\MediaHuman\\YouTube Downloader\\YouTubeDownloader.exe",
+      "auto_approve": true,
+      "category": "Productivity"
+    },
+    {
+      "name": "Microsoft Edge",
+      "executable": "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe",
+      "auto_approve": true,
+      "category": "Productivity"
+    },
+    {
+      "name": "Office Language Preferences",
+      "executable": "C:\\Program Files\\Microsoft Office\\root\\Office16\\SETLANG.EXE",
+      "auto_approve": true,
+      "category": "Productivity"
+    },
+    {
+      "name": "Minimal ADB and Fastboot",
+      "executable": "C:\\Program Files (x86)\\Minimal ADB and Fastboot\\cmd-here.exe",
+      "auto_approve": true,
+      "category": "Productivity"
+    },
+    {
+      "name": "Uninstall Minimal ADB and Fastboot",
+      "executable": "C:\\Program Files (x86)\\Minimal ADB and Fastboot\\unins000.exe",
+      "auto_approve": true,
+      "category": "Productivity"
+    },
+    {
+      "name": "MiniTool Partition Wizard",
+      "executable": "C:\\Program Files\\MiniTool Partition Wizard 13\\partitionwizard.exe",
+      "auto_approve": true,
+      "category": "Productivity"
+    },
+    {
+      "name": "Uninstall MiniTool Partition Wizard",
+      "executable": "C:\\Program Files\\MiniTool Partition Wizard 13\\unins000.exe",
+      "auto_approve": true,
+      "category": "Productivity"
+    },
+    {
+      "name": "MiniTool ShadowMaker",
+      "executable": "C:\\Program Files\\MiniTool ShadowMaker\\system_backup_gui.exe",
+      "auto_approve": true,
+      "category": "Productivity"
+    },
+    {
+      "name": "Uninstall  MiniTool ShadowMaker",
+      "executable": "C:\\Program Files\\MiniTool ShadowMaker\\unins000.exe",
+      "auto_approve": true,
+      "category": "Productivity"
+    },
+    {
+      "name": "Node.js",
+      "executable": "C:\\Program Files\\nodejs\\node.exe",
+      "auto_approve": true,
+      "category": "Coding"
+    },
+    {
+      "name": "NVIDIA App",
+      "executable": "C:\\Program Files\\NVIDIA Corporation\\NVIDIA App\\CEF\\NVIDIA App.exe",
+      "auto_approve": true,
+      "category": "Productivity"
+    },
+    {
+      "name": "OBS Studio",
+      "executable": "C:\\Program Files\\obs-studio\\bin\\64bit\\obs64.exe",
+      "auto_approve": true,
+      "category": "Productivity"
+    },
+    {
+      "name": "OneNote",
+      "executable": "C:\\Program Files\\Microsoft Office\\root\\Office16\\ONENOTE.EXE",
+      "auto_approve": true,
+      "category": "Study"
+    },
+    {
+      "name": "License (English)",
+      "executable": "C:\\Program Files\\Oracle\\VirtualBox\\License_en_US.rtf",
+      "auto_approve": true,
+      "category": "Productivity"
+    },
+    {
+      "name": "Oracle VirtualBox",
+      "executable": "C:\\Program Files\\Oracle\\VirtualBox\\VirtualBox.exe",
+      "auto_approve": true,
+      "category": "Productivity"
+    },
+    {
+      "name": "User manual (PDF, English)",
+      "executable": "C:\\Program Files\\Oracle\\VirtualBox\\doc\\UserManual.pdf",
+      "auto_approve": true,
+      "category": "Study"
+    },
+    {
+      "name": "Outlook (classic)",
+      "executable": "C:\\Program Files\\Microsoft Office\\root\\Office16\\OUTLOOK.EXE",
+      "auto_approve": true,
+      "category": "Productivity"
+    },
+    {
+      "name": "Palworld",
+      "executable": "C:\\Games\\Palworld\\Palworld.exe",
+      "auto_approve": true,
+      "category": "Productivity"
+    },
+    {
+      "name": "Uninstall Palworld",
+      "executable": "C:\\Games\\Palworld\\unins000.exe",
+      "auto_approve": true,
+      "category": "Productivity"
+    },
+    {
+      "name": "PixARK Skyward",
+      "executable": "O:\\PixARK Skyward\\ShooterGame\\Binaries\\Win64\\PixARK.exe",
+      "auto_approve": true,
+      "category": "Productivity"
+    },
+    {
+      "name": "Uninstall PixARK Skyward",
+      "executable": "O:\\PixARK Skyward\\unins000.exe",
+      "auto_approve": true,
+      "category": "Productivity"
+    },
+    {
+      "name": "PlanetVPN",
+      "executable": "C:\\Program Files (x86)\\PlanetVPN\\PlanetVPN.exe",
+      "auto_approve": true,
+      "category": "Productivity"
+    },
+    {
+      "name": "PowerPoint",
+      "executable": "C:\\Program Files\\Microsoft Office\\root\\Office16\\POWERPNT.EXE",
+      "auto_approve": true,
+      "category": "Study"
+    },
+    {
+      "name": "Publisher",
+      "executable": "C:\\Program Files\\Microsoft Office\\root\\Office16\\MSPUB.EXE",
+      "auto_approve": true,
+      "category": "Productivity"
+    },
+    {
+      "name": "Radmin Viewer 3",
+      "executable": "C:\\Program Files (x86)\\Radmin VPN\\Radmin.exe",
+      "auto_approve": true,
+      "category": "Productivity"
+    },
+    {
+      "name": "Radmin VPN",
+      "executable": "C:\\Program Files (x86)\\Radmin VPN\\RvRvpnGui.exe",
+      "auto_approve": true,
+      "category": "Productivity"
+    },
+    {
+      "name": "Revo Uninstaller Help",
+      "executable": "C:\\Program Files\\VS Revo Group\\Revo Uninstaller\\Revo Uninstaller Help.pdf",
+      "auto_approve": true,
+      "category": "Productivity"
+    },
+    {
+      "name": "Revo Uninstaller إلغاء تثبيت",
+      "executable": "C:\\Program Files\\VS Revo Group\\Revo Uninstaller\\unins000.exe",
+      "auto_approve": true,
+      "category": "Productivity"
+    },
+    {
+      "name": "Revo Uninstaller",
+      "executable": "C:\\Program Files\\VS Revo Group\\Revo Uninstaller\\RevoUnin.exe",
+      "auto_approve": true,
+      "category": "Productivity"
+    },
+    {
+      "name": "Steam",
+      "executable": "C:\\Program Files (x86)\\Steam\\Steam.exe",
+      "auto_approve": true,
+      "category": "Gaming"
+    },
+    {
+      "name": "SteelSeries GG",
+      "executable": "C:\\Program Files\\SteelSeries\\GG\\SteelSeriesGGEZ.exe",
+      "auto_approve": true,
+      "category": "Productivity"
+    },
+    {
+      "name": "Add a new TAP virtual ethernet adapter",
+      "executable": "C:\\Program Files\\TAP-Windows\\bin\\addtap.bat",
+      "auto_approve": true,
+      "category": "Productivity"
+    },
+    {
+      "name": "Delete ALL TAP virtual ethernet adapters",
+      "executable": "C:\\Program Files\\TAP-Windows\\bin\\deltapall.bat",
+      "auto_approve": true,
+      "category": "Productivity"
+    },
+    {
+      "name": "TLauncher",
+      "executable": "C:\\Users\\omarb\\AppData\\Roaming\\.minecraft\\TLauncher.exe",
+      "auto_approve": true,
+      "category": "Productivity"
+    },
+    {
+      "name": "TRCC",
+      "executable": "C:\\Program Files (x86)\\TRCCCAPEN\\TRCC.exe",
+      "auto_approve": true,
+      "category": "Productivity"
+    },
+    {
+      "name": "Visual Studio Code",
+      "executable": "C:\\Program Files\\Microsoft VS Code\\Code.exe",
+      "auto_approve": true,
+      "category": "Coding"
+    },
+    {
+      "name": "Visual Studio Insiders",
+      "executable": "C:\\Program Files\\Microsoft Visual Studio\\18\\Insiders\\Common7\\IDE\\devenv.exe",
+      "auto_approve": true,
+      "category": "Coding"
+    },
+    {
+      "name": "Visual Studio Installer",
+      "executable": "C:\\Program Files (x86)\\Microsoft Visual Studio\\Installer\\setup.exe",
+      "auto_approve": true,
+      "category": "Coding"
+    },
+    {
+      "name": "Visual Studio",
+      "executable": "C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\Common7\\IDE\\devenv.exe",
+      "auto_approve": true,
+      "category": "Coding"
+    },
+    {
+      "name": "Windows App Cert Kit",
+      "executable": "C:\\Program Files (x86)\\Windows Kits\\10\\App Certification Kit\\appcertui.exe",
+      "auto_approve": true,
+      "category": "Productivity"
+    },
+    {
+      "name": "GPUView",
+      "executable": "C:\\Program Files (x86)\\Windows Kits\\10\\Windows Performance Toolkit\\gpuview\\GPUView.exe",
+      "auto_approve": true,
+      "category": "Productivity"
+    },
+    {
+      "name": "Windows Performance Analyzer",
+      "executable": "C:\\Program Files (x86)\\Windows Kits\\10\\Windows Performance Toolkit\\wpa.exe",
+      "auto_approve": true,
+      "category": "Productivity"
+    },
+    {
+      "name": "Windows Performance Recorder",
+      "executable": "C:\\Program Files (x86)\\Windows Kits\\10\\Windows Performance Toolkit\\WPRUI.exe",
+      "auto_approve": true,
+      "category": "Productivity"
+    },
+    {
+      "name": "Documentation for Desktop Apps",
+      "executable": "C:\\Program Files (x86)\\Windows Kits\\10\\Shortcuts\\DesktopAppsDocumentation.url",
+      "auto_approve": true,
+      "category": "Productivity"
+    },
+    {
+      "name": "Documentation for UWP Apps",
+      "executable": "C:\\Program Files (x86)\\Windows Kits\\10\\Shortcuts\\UWPAppsDocumentation.url",
+      "auto_approve": true,
+      "category": "Productivity"
+    },
+    {
+      "name": "Sample Desktop Apps",
+      "executable": "C:\\Program Files (x86)\\Windows Kits\\10\\Shortcuts\\DesktopAppsSamples.url",
+      "auto_approve": true,
+      "category": "Productivity"
+    },
+    {
+      "name": "Sample UWP Apps",
+      "executable": "C:\\Program Files (x86)\\Windows Kits\\10\\Shortcuts\\UWPAppsSamples.url",
+      "auto_approve": true,
+      "category": "Productivity"
+    },
+    {
+      "name": "Tools for Desktop Apps",
+      "executable": "C:\\Program Files (x86)\\Windows Kits\\10\\Shortcuts\\DesktopAppsToolsDocumentation.url",
+      "auto_approve": true,
+      "category": "Productivity"
+    },
+    {
+      "name": "Tools for UWP Apps",
+      "executable": "C:\\Program Files (x86)\\Windows Kits\\10\\Shortcuts\\UWPAppsToolsDocumentation.url",
+      "auto_approve": true,
+      "category": "Productivity"
+    },
+    {
+      "name": "WinRAR",
+      "executable": "C:\\Program Files\\WinRAR\\WinRAR.exe",
+      "auto_approve": true,
+      "category": "Productivity"
+    },
+    {
+      "name": "تعليمات WinRAR",
+      "executable": "C:\\Program Files\\WinRAR\\WinRAR.chm",
+      "auto_approve": true,
+      "category": "Productivity"
+    },
+    {
+      "name": "دليل لوحة RAR الطرفية",
+      "executable": "C:\\Program Files\\WinRAR\\Rar.txt",
+      "auto_approve": true,
+      "category": "Productivity"
+    },
+    {
+      "name": "ما هو الجديد في النسخة الأخيرة",
+      "executable": "C:\\Program Files\\WinRAR\\WhatsNew.txt",
+      "auto_approve": true,
+      "category": "Productivity"
+    },
+    {
+      "name": "Uninstall WizTree",
+      "executable": "C:\\Program Files\\WizTree\\unins000.exe",
+      "auto_approve": true,
+      "category": "Productivity"
+    },
+    {
+      "name": "WizTree",
+      "executable": "C:\\Program Files\\WizTree\\WizTree64.exe",
+      "auto_approve": true,
+      "category": "Productivity"
+    },
+    {
+      "name": "Word",
+      "executable": "C:\\Program Files\\Microsoft Office\\root\\Office16\\WINWORD.EXE",
+      "auto_approve": true,
+      "category": "Study"
+    },
+    {
+      "name": "AB Download Manager",
+      "executable": "C:\\Users\\omarb\\AppData\\Local\\ABDownloadManager\\ABDownloadManager.exe",
+      "auto_approve": true,
+      "category": "Productivity"
+    },
+    {
+      "name": "AMX Mod X",
+      "executable": "C:\\Program Files (x86)\\AMX Mod X\\Installer.exe",
+      "auto_approve": true,
+      "category": "Productivity"
+    },
+    {
+      "name": "AMXx Studio",
+      "executable": "C:\\Program Files (x86)\\AMX Mod X\\amxxstudio\\AMXX_Studio.exe",
+      "auto_approve": true,
+      "category": "Productivity"
+    },
+    {
+      "name": "Website",
+      "executable": "C:\\Program Files (x86)\\AMX Mod X\\AMX Mod X Installer.url",
+      "auto_approve": true,
+      "category": "Productivity"
+    },
+    {
+      "name": "Antigravity IDE",
+      "executable": "C:\\Users\\omarb\\AppData\\Local\\Programs\\Antigravity IDE\\Antigravity IDE.exe",
+      "auto_approve": true,
+      "category": "Productivity"
+    },
+    {
+      "name": "Antigravity",
+      "executable": "C:\\Users\\omarb\\AppData\\Local\\Programs\\Antigravity\\Antigravity.exe",
+      "auto_approve": true,
+      "category": "Productivity"
+    },
+    {
+      "name": "Atheer Sovereign",
+      "executable": "C:\\Users\\omarb\\AppData\\Local\\AtheerBrowser\\chrome.exe",
+      "auto_approve": true,
+      "category": "Productivity"
+    },
+    {
+      "name": "Blood Strike MENA",
+      "executable": "C:\\Program Files (x86)\\bloodstrike\\launcher.exe",
+      "auto_approve": true,
+      "category": "Gaming"
+    },
+    {
+      "name": "Blood Strike",
+      "executable": "D:\\bloodstrike\\launcher.exe",
+      "auto_approve": true,
+      "category": "Gaming"
+    },
+    {
+      "name": "CARL2",
+      "executable": "C:\\Users\\omarb\\AppData\\Local\\Programs\\carl2\\CARL2.exe",
+      "auto_approve": true,
+      "category": "Productivity"
+    },
+    {
+      "name": "سطح المكتب البعيد من Chrome",
+      "executable": "C:\\Program Files\\Google\\Chrome\\Application\\chrome_proxy.exe",
+      "auto_approve": true,
+      "category": "Productivity"
+    },
+    {
+      "name": "Comet",
+      "executable": "C:\\Users\\omarb\\AppData\\Local\\Perplexity\\Comet\\Application\\comet.exe",
+      "auto_approve": true,
+      "category": "Productivity"
+    },
+    {
+      "name": "Discord",
+      "executable": "C:\\Users\\omarb\\AppData\\Local\\Discord\\Update.exe",
+      "auto_approve": true,
+      "category": "Productivity"
+    },
+    {
+      "name": "Docker Desktop",
+      "executable": "C:\\Program Files\\Docker\\Docker\\frontend\\Docker Desktop.exe",
+      "auto_approve": true,
+      "category": "Coding"
+    },
+    {
+      "name": "Antigravity Manager",
+      "executable": "C:\\Users\\omarb\\AppData\\Local\\antigravity_manager\\antigravity-manager.exe",
+      "auto_approve": true,
+      "category": "Productivity"
+    },
+    {
+      "name": "eDEX-UI",
+      "executable": "C:\\Users\\omarb\\AppData\\Local\\Programs\\eDEX-UI\\eDEX-UI.exe",
+      "auto_approve": true,
+      "category": "Productivity"
+    },
+    {
+      "name": "en-croissant",
+      "executable": "C:\\Users\\omarb\\AppData\\Local\\en-croissant\\en-croissant.exe",
+      "auto_approve": true,
+      "category": "Productivity"
+    },
+    {
+      "name": "GTarcade",
+      "executable": "C:\\Users\\omarb\\AppData\\Local\\Gtarcade\\app\\Gtarcade.exe",
+      "auto_approve": true,
+      "category": "Productivity"
+    },
+    {
+      "name": "HaramMute",
+      "executable": "C:\\Users\\omarb\\AppData\\Local\\HaramMute\\launcher.bat",
+      "auto_approve": true,
+      "category": "Productivity"
+    },
+    {
+      "name": "Inno Setup Compiler",
+      "executable": "C:\\Users\\omarb\\AppData\\Local\\Programs\\Inno Setup 6\\Compil32.exe",
+      "auto_approve": true,
+      "category": "Productivity"
+    },
+    {
+      "name": "Inno Setup Documentation (Dark)",
+      "executable": "C:\\Users\\omarb\\AppData\\Local\\Programs\\Inno Setup 6\\ISetup-dark.chm",
+      "auto_approve": true,
+      "category": "Productivity"
+    },
+    {
+      "name": "Inno Setup Documentation",
+      "executable": "C:\\Users\\omarb\\AppData\\Local\\Programs\\Inno Setup 6\\ISetup.chm",
+      "auto_approve": true,
+      "category": "Productivity"
+    },
+    {
+      "name": "Inno Setup Example Scripts",
+      "executable": "C:\\Users\\omarb\\AppData\\Local\\Programs\\Inno Setup 6\\Examples",
+      "auto_approve": true,
+      "category": "Productivity"
+    },
+    {
+      "name": "Inno Setup FAQ",
+      "executable": "C:\\Users\\omarb\\AppData\\Local\\Programs\\Inno Setup 6\\isfaq.url",
+      "auto_approve": true,
+      "category": "Productivity"
+    },
+    {
+      "name": "Inno Setup Revision History",
+      "executable": "C:\\Users\\omarb\\AppData\\Local\\Programs\\Inno Setup 6\\whatsnew.htm",
+      "auto_approve": true,
+      "category": "Productivity"
+    },
+    {
+      "name": "History",
+      "executable": "C:\\Program Files\\Mem Reduct\\History.txt",
+      "auto_approve": true,
+      "category": "Productivity"
+    },
+    {
+      "name": "Mem Reduct",
+      "executable": "C:\\Program Files\\Mem Reduct\\memreduct.exe",
+      "auto_approve": true,
+      "category": "Productivity"
+    },
+    {
+      "name": "NSIS",
+      "executable": "C:\\Program Files (x86)\\NSIS\\NSIS.exe",
+      "auto_approve": true,
+      "category": "Productivity"
+    },
+    {
+      "name": "Perplexity",
+      "executable": "C:\\Users\\omarb\\AppData\\Local\\Programs\\Perplexity\\Perplexity.exe",
+      "auto_approve": true,
+      "category": "Productivity"
+    },
+    {
+      "name": "IDLE (Python 3.12 64-bit)",
+      "executable": "C:\\Users\\omarb\\AppData\\Local\\Programs\\Python\\Python312\\pythonw.exe",
+      "auto_approve": true,
+      "category": "Coding"
+    },
+    {
+      "name": "Python 3.12 (64-bit)",
+      "executable": "C:\\Users\\omarb\\AppData\\Local\\Programs\\Python\\Python312\\python.exe",
+      "auto_approve": true,
+      "category": "Coding"
+    },
+    {
+      "name": "Python 3.12 Manuals (64-bit)",
+      "executable": "C:\\Users\\omarb\\AppData\\Local\\Programs\\Python\\Python312\\Doc\\html\\index.html",
+      "auto_approve": true,
+      "category": "Coding"
+    },
+    {
+      "name": "IDLE (Python 3.14 64-bit)",
+      "executable": "C:\\Users\\omarb\\AppData\\Local\\Programs\\Python\\Python314\\pythonw.exe",
+      "auto_approve": true,
+      "category": "Coding"
+    },
+    {
+      "name": "Python 3.14 (64-bit)",
+      "executable": "C:\\Users\\omarb\\AppData\\Local\\Programs\\Python\\Python314\\python.exe",
+      "auto_approve": true,
+      "category": "Coding"
+    },
+    {
+      "name": "Python 3.14 Manuals (64-bit)",
+      "executable": "C:\\Users\\omarb\\AppData\\Local\\Programs\\Python\\Python314\\Doc\\html\\index.html",
+      "auto_approve": true,
+      "category": "Coding"
+    },
+    {
+      "name": "Riot Client",
+      "executable": "C:\\Riot Games\\Riot Client\\RiotClientServices.exe",
+      "auto_approve": true,
+      "category": "Gaming"
+    },
+    {
+      "name": "7-Zip File Manager",
+      "executable": "C:\\Users\\omarb\\scoop\\apps\\7zip\\current\\7zFM.exe",
+      "auto_approve": true,
+      "category": "Productivity"
+    },
+    {
+      "name": "7-Zip Help",
+      "executable": "C:\\Users\\omarb\\scoop\\apps\\7zip\\current\\7-zip.chm",
+      "auto_approve": true,
+      "category": "Productivity"
+    },
+    {
+      "name": "Clash Verge",
+      "executable": "C:\\Program Files\\Clash Verge\\clash-verge.exe",
+      "auto_approve": true,
+      "category": "Productivity"
+    },
+    {
+      "name": "Ubisoft Connect",
+      "executable": "C:\\Program Files (x86)\\Ubisoft\\Ubisoft Game Launcher\\UbisoftConnect.exe",
+      "auto_approve": true,
+      "category": "Gaming"
+    },
+    {
+      "name": "Wand (WeMod)",
+      "executable": "C:\\Users\\omarb\\AppData\\Local\\Wand\\Wand.exe",
+      "auto_approve": true,
+      "category": "Productivity"
+    },
+    {
+      "name": "Where Winds Meet",
+      "executable": "D:\\wwm\\Win32\\deploy\\launcher.exe",
+      "auto_approve": true,
+      "category": "Productivity"
+    }
   ],
   "restricted_actions": [
-    {"action": "shutdown", "requires_confirmation": true},
-    {"action": "restart", "requires_confirmation": true},
-    {"action": "sleep", "requires_confirmation": true}
+    {
+      "action": "shutdown",
+      "requires_confirmation": true
+    },
+    {
+      "action": "restart",
+      "requires_confirmation": true
+    },
+    {
+      "action": "sleep",
+      "requires_confirmation": true
+    }
   ]
 }

@@ -200,10 +200,60 @@ verified before ticking:
 5. Whitelist editing (owner, `config/whitelist.json`): the guard RE-READS the file on
    every check — edits apply live, no daemon restart. A corrupt/unreadable file fails
    CLOSED (everything requires confirmation) and logs CRITICAL.
+   **Auto-populate (v1.0.2)**: `.venv/Scripts/python.exe -m src.app_indexer` scans the
+   two Start Menu shortcut roots (`C:\ProgramData\...` + `%APPDATA%\...`), resolves each
+   `.lnk` target (PowerShell WScript.Shell COM, batched EncodedCommand — no shell),
+   categorizes (Coding / Gaming / Study / Productivity) and merges into
+   `config/whitelist.json` idempotently — existing entries and `restricted_actions`
+   untouched, anything resolving under `C:\Windows` (System32 included) DROPPED.
+   Preview first: add `--dry-run`.
 6. Audit trail: every PC action appends one line to `04_Archives/Audit/pc-ledger.md`
    (`ts | audit_code | action | outcome | reason`); each confirmed command has a
    Confirmations note (`Confirmations/YYYY-MM-DD_<id8>.md`) persisted BEFORE the command
    leaves the core. Quote the «رمز التدقيق» from Sara's message when auditing.
+
+### 5b. Headless remote boot: Auto-Logon + daemon at startup (v1.0.2)
+
+Goal: Sara wakes the PC via Wake-on-LAN (UDP:9) → Windows boots **straight into the
+owner's desktop session** (no lock screen) → the bridge daemon is already up → Sara's
+PC commands work with nobody at the keyboard.
+
+**Step 1 — Windows Auto-Logon** (choose ONE):
+
+- *Preferred — Sysinternals Autologon* (stores the credential as an LSA secret, NOT
+  registry plaintext): download from
+  `https://learn.microsoft.com/sysinternals/downloads/autologon`, run `Autologon64.exe`
+  **as administrator**, enter domain\username + password → **Enable** → reboot verifies.
+  Disable any time with the same tool (**Disable**).
+- *Alternative — netplwiz*: `Win+R` → `netplwiz` → select the owner account → uncheck
+  «Users must enter a user name and password» → OK (stores the password in registry
+  LSA-protected). Windows 11 22H2+ first: Settings → Accounts → Sign-in options → turn
+  OFF «For improved security, only allow Windows Hello sign-in for Microsoft accounts»,
+  otherwise the checkbox is hidden.
+
+> Security note (honest): auto-logon means anyone physically at the PC lands on the
+> desktop. Accepted for the owner's private machine — the bridge's LAN surface is still
+> Bearer-token gated, PC actions stay whitelist/confirmation-guarded from Telegram, and
+> the audit ledger keeps working. Pair it with a BIOS power-on password if physical
+> access is a concern (that does not block WoL).
+
+**Step 2 — bridge daemon at startup** (choose ONE; the daemon module is
+`bridge.daemon` — `make run-bridge` = `python -m bridge.daemon` — with its LAN
+listener on port 8000):
+
+- *Preferred — at logon* (fires right after auto-logon, runs inside the user session,
+  no stored password in the scheduler):
+  `schtasks /Create /SC ONLOGON /TN VantrilexBridge /TR "pwsh -NoProfile -Command 'cd <repo>; make run-bridge'"`
+- *Alternative — at system startup* (runs pre-logon as the given account; requires the
+  account password):
+  `schtasks /Create /SC ONSTART /RU <DOMAIN\user> /RP <password> /TN VantrilexBridge /TR "pwsh -NoProfile -Command 'cd <repo>; make run-bridge'"`
+  Verify either with: `schtasks /Query /TN VantrilexBridge /V` and
+  `netstat -ab | findstr :8000` after the trigger fires.
+
+**Step 3 — end-to-end headless proof**: shut the PC down → send the magic packet from
+the LAN sender → Windows boots + auto-logs-on + the daemon dials the core
+(`bridge session established` in core logs) → Sara executes a whitelisted launch
+remotely, audit line lands in `pc-ledger.md`.
 
 > **Wake reality check**: the WoL *sender* runs on the PC itself, so a suspended or
 > powered-off PC cannot send a magic packet to its own NIC. Waking it requires an
