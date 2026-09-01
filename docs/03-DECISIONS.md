@@ -156,9 +156,15 @@ Supersedes draft preference for Google Cloud Run deployment.
   Tasks/PC-bridge intent executes through `src/tools.py` ToolRegistry (real backends,
   honest offline lines) and narrates at Tier 3; launch goes through PCActionCoordinator
   and notifies the owner directly without narration. `gpt-oss-20b` retired from all
-  chains. Dual-tier memory rides the conversation lane: 15-message rolling buffer +
+  chains. Dual-tier memory rides the conversation lane: 50-message rolling buffer +
   Obsidian long-term envelope (User_Info + Dialect_Notes + today's Daily_Logs), with
   background writers persisting every exchange (`src/memory.py`).
+- **Amendment (live-debug 2026-09-01 — memory on every chat path)**: the original
+  ADR-18 shortcut answered `direct` chat from the router's ack alone — one call with
+  NO history and NO persona envelope, so Sara denied her own memory on simple chat.
+  The router now classifies + acks only; EVERY chat path (direct → Tier.FAST,
+  tier2 → MEDIUM, tier3 → HEAVY) streams through `_plain_messages` with the full
+  envelope. Rolling buffer widened 15 → 50 messages (owner directive).
 - **Rejected on evidence**: gemma-4 (owner: «لغته ركيكة كعربية» — weak Arabic prose);
   nemotron-3-super + ling-3.0-flash (role inversion — addressed the owner as Sara);
   glm-5.2/gemma-26b/inkling (reasoning burned the whole budget → empty replies).

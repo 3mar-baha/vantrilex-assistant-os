@@ -10,7 +10,8 @@ product release tags start independently at v1.0.0.)
 
 ### Added
 - **Two-strong-model brain (owner directive 2026-09-01)**: conversation lane FAST `minimax-m2.7:free` (fb `gpt-oss-120b`) + MEDIUM `gpt-oss-120b`; tool lane HEAVY `nemotron-3-ultra-550b` as the exclusive Gmail/Calendar/Tasks/bridge executor.
-- **Dual-tier memory** (`src/memory.py`): 15-message rolling buffer per chat, Obsidian long-term envelope (User_Info + Dialect_Notes + today's Daily_Logs) injected every turn, background writers persist each exchange to Daily_Logs and learn durable facts into User_Info.
+- **Dual-tier memory** (`src/memory.py`): 50-message rolling buffer per chat (owner directive — widened from 15), Obsidian long-term envelope (User_Info + Dialect_Notes + today's Daily_Logs) injected every turn, background writers persist each exchange to Daily_Logs and learn durable facts into User_Info.
+- **Memory on every chat path (live-debug fix 2026-09-01)**: the ADR-18 `direct` route no longer answers from the history-less router call — simple chat acks at Tier 1 then streams the FAST conversation lane with the full envelope; the router only classifies.
 - **Real tool execution loop** (`src/tools.py` ToolRegistry): gmail/calendar/tasks/telemetry/launch/brief with honest offline lines; launch notifies the owner directly with its audit code (no narration).
 - **One-command local cycle** (`sara.bat`/`sara.ps1`): full stop->start — kills stale core/bridge processes, gateway preflight check, relaunches both windows (`-StopOnly` / `-Port` supported).
 - **Daily conversation summary** (`DailySummarizer`): at 23:50 local the day's last 150 chat turns + Obsidian owner context go to the conversation lane; the detailed Arabic summary lands as a separate `## ملخص محادثة اليوم` section in the day's Daily_Logs note (idempotent, tick-loop like the brief/journaler).

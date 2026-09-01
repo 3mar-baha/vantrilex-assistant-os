@@ -496,9 +496,21 @@ product.)
       src.main/bridge.daemon -> gateway :20128 preflight -> two launch windows,
       -StopOnly/-Port; RUNBOOK 5a + CHANGELOG). LIVE: two stale src.main PIDs found
       running (29300/23220) — the owner's next cycle run clears them.
-      ← **current: two-strong-model refactor CODE-COMPLETE + gate green — owner side =
-      restart core (kill stale PIDs first) and retest the Telegram checklist; Oracle deploy
-      (docs/09) when the card clears**
+      LIVE-DEBUG 2026-09-01 evening: owner's first cycle run — stop phase worked,
+      launch windows failed (inline `[Convert]::ToBase64String` in -ArgumentList bound
+      as string + leaked Byte[] positional) → `19aff81` precompute `$coreEnc`/`$bridgeEnc`
+      + real marker-file launch test. Owner re-ran, Sara answered on Telegram — but
+      DENIED her memory on simple chat. Root cause (code-read): the ADR-18 `direct`
+      route answered from the history-less router ack alone — envelope never reached
+      ANY model on the most common path. `4edad0a` red → `ab40440` green: direct
+      route now acks Tier 1 then streams the FAST lane via `_plain_messages` with the
+      full envelope (router classifies only); rolling buffer 15 → 50 messages (owner
+      directive; tests + CLAUDE/DECISIONS/TEST-PLAN/CHANGELOG synced, suite 345/85.71%).
+      Vault clarified to owner: GitHub repo `3mar-baha/vantrilex-vault` via API — no
+      local Obsidian install needed (token verified present in .env).
+      ← **current: direct-chat memory fix shipped — owner side = re-run `sara.bat` and
+      retest memory on Telegram; watch minimax output quality (one corrupted ack seen);
+      Oracle deploy (docs/09) when the card clears**
 
 ## Open items / blockers
 
