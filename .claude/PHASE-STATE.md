@@ -459,8 +459,33 @@ product.)
       `v1.0.2` pushed → GitHub Release published. Owner pivoted to LOCAL testing
       first (health probe green: ffmpeg/gateway/telegram all ok; OmniRoute :20128
       live; local `.env` `BRIDGE_SERVER_URL=ws://localhost:8443/bridge`).
-      ← **current: v1.0.2 shipped — sprint-level HALT; owner side = local two-terminal
-      test + Telegram checklist, then Oracle deploy (docs/09) when the card clears**
+      ### POST-RELEASE ARC — two-strong-model refactor + live-testing fixes (2026-09-01, owner directive)
+      Live Telegram testing exposed: no vault memory, no rolling buffer, tool refusals +
+      hallucinated «تم فتح الآلة الحاسبة», «كفيك» misheard, voice acked but never answered.
+      Owner revised the architecture mid-task: TWO strong models only — (1) conversation &
+      memory lane `openrouter/minimax/minimax-m2.7:free` (fb `groq/openai/gpt-oss-120b`) is
+      Sara's EXCLUSIVE speaker (remembers 15 messages, reads/updates User_Info.md, spontaneous
+      Jordanian); (2) tool master `openrouter/nvidia/nemotron-3-ultra-550b-a55b:free` executes
+      ALL tool calls exclusively. Closed loop on `main`: `10a1924` model pins (env + defaults +
+      conftest mirror, suite 294/85.78%) → `b7309e2`+`dcc7f5e` dual-tier memory `src/memory.py`
+      (ConversationMemory 15-msg deque; envelope persona+vault excerpt+history+current;
+      VaultMemoryWriter Daily_Logs ledger + FAST-tier fact learner → User_Info; 13 tests,
+      suite 307/85.96%) → `439aa35`+`3cd26c1` dispatcher tool lane (router verdict gains
+      `tool`+`arg`; ToolRegistry executes real backend; narration streams Tier.HEAVY
+      exclusively; launch -> ack-only coordinator notify; registry crash / no-registry ->
+      plain tier2; tier asserted via scripted model slugs; suite 312/86.10%) →
+      `7755454` ToolRegistry `src/tools.py` (gmail digest/calendar 24h/tasks due-today/
+      telemetry honest offline/launch origin owner_chat/brief plain-text; 18 tests,
+      suite 330/86.40%) → `44a38a3`+`f22283d` bot.py wiring (envelope every turn, memory
+      remember both turns, background _persist_exchange writer, on_text pending-launch
+      intercept, voice_origin -> SendVoice reply, run_bot(bridge) full production wiring +
+      main.py passes bridge; HELP_AR refreshed; suite 334/85.82%) → docs sync (CLAUDE §1,
+      01-ARCHITECTURE mermaid, 03-DECISIONS ADR-16 amendment, 07-HANDOFF pins,
+      08-OWNER-NEXT-STEPS env, 04-RUNBOOK probe line, 05-TEST-PLAN rows, CHANGELOG
+      [Unreleased]).
+      ← **current: two-strong-model refactor CODE-COMPLETE + gate green — owner side =
+      restart core (kill stale PIDs first) and retest the Telegram checklist; Oracle deploy
+      (docs/09) when the card clears**
 
 ## Open items / blockers
 

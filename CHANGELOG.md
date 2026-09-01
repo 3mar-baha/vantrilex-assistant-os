@@ -8,6 +8,12 @@ product release tags start independently at v1.0.0.)
 
 ## [Unreleased]
 
+### Added
+- **Two-strong-model brain (owner directive 2026-09-01)**: conversation lane FAST `minimax-m2.7:free` (fb `gpt-oss-120b`) + MEDIUM `gpt-oss-120b`; tool lane HEAVY `nemotron-3-ultra-550b` as the exclusive Gmail/Calendar/Tasks/bridge executor.
+- **Dual-tier memory** (`src/memory.py`): 15-message rolling buffer per chat, Obsidian long-term envelope (User_Info + Dialect_Notes + today's Daily_Logs) injected every turn, background writers persist each exchange to Daily_Logs and learn durable facts into User_Info.
+- **Real tool execution loop** (`src/tools.py` ToolRegistry): gmail/calendar/tasks/telemetry/launch/brief with honest offline lines; launch notifies the owner directly with its audit code (no narration).
+- **Voice-out replies**: owner voice notes now get an ar-JO Ogg Opus voice note of Sara's streamed reply; pending PC-launch confirmations are consumed by the coordinator before the brain sees them.
+
 ## [1.0.2] — 2026-09-01
 
 Owner-directed runtime enhancements ahead of the first cloud deploy (local test phase).

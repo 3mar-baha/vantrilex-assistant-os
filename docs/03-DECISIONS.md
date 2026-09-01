@@ -147,6 +147,18 @@ Supersedes draft preference for Google Cloud Run deployment.
   - **MEDIUM** (worker — Obsidian librarian + task executor; never user-facing prose):
     `groq/openai/gpt-oss-20b` → fb minimax → `groq/openai/gpt-oss-120b`
   - **HEAVY** (deep tasks): `openrouter/nvidia/nemotron-3-ultra-550b-a55b:free` → fb `groq/openai/gpt-oss-120b`
+- **Amendment (owner directive 2026-09-01 — two strong models)**: the brain collapses
+  to a conversation lane and a tool lane. FAST = `openrouter/minimax/minimax-m2.7:free`
+  (fb `groq/openai/gpt-oss-120b`) — Sara's EXCLUSIVE speaker: router, acks, direct chat,
+  memory narration, fact extraction. MEDIUM = `groq/openai/gpt-oss-120b` (fb minimax) —
+  conversation depth. HEAVY = `openrouter/nvidia/nemotron-3-ultra-550b-a55b:free`
+  (fb `groq/openai/gpt-oss-120b`) — the EXCLUSIVE tool master: every Gmail/Calendar/
+  Tasks/PC-bridge intent executes through `src/tools.py` ToolRegistry (real backends,
+  honest offline lines) and narrates at Tier 3; launch goes through PCActionCoordinator
+  and notifies the owner directly without narration. `gpt-oss-20b` retired from all
+  chains. Dual-tier memory rides the conversation lane: 15-message rolling buffer +
+  Obsidian long-term envelope (User_Info + Dialect_Notes + today's Daily_Logs), with
+  background writers persisting every exchange (`src/memory.py`).
 - **Rejected on evidence**: gemma-4 (owner: «لغته ركيكة كعربية» — weak Arabic prose);
   nemotron-3-super + ling-3.0-flash (role inversion — addressed the owner as Sara);
   glm-5.2/gemma-26b/inkling (reasoning burned the whole budget → empty replies).

@@ -9,17 +9,21 @@ strictly-zero-cost executive AI assistant named **Sara (سارة)**.
 - **Core Agent**: Sara (سارة) — Executive Chief of Staff, polymath tutor (10 languages & sciences),
   tech scout, and PC automation companion speaking in a warm, authentic Jordanian Arabic accent (`ar-JO`).
 - **Primary Transport**: Telegram (Aiogram 3.x chat + Ogg Opus voice notes; live PyTgCalls calls land in v1.1).
-- **Brain Engine (3-tier, ADR-16)**: OmniRoute Gateway (`http://localhost:20128/v1`,
-  co-located with the core) routes through three tiers behind the **Fast Front-Door
-  Dispatcher** (ADR-18): TIER 1 `FAST_MODEL=google/gemini-3.5-flash-lite` (fallback
-  `meta-llama/llama-3.3-70b-instruct` / `nemotron-3.5-lightning`; TTFT <250 ms — instant
-  Jordanian reflex + ack «من عيوني هسا ببدأ...» while dispatching); TIER 2
-  `MEDIUM_MODEL=google/gemini-3.7-flash` (fallback `z-ai/glm-5.3-flash` — tool executor:
-  WoL, whitelist, Obsidian CRUD, Gmail triage L1-3, telemetry); TIER 3
-  `HEAVY_MODEL=nvidia/nemotron-3-ultra-550b` (fallbacks `google/gemini-3.7-flash`
-  extended thinking / `google/gemini-3.1-pro` — chained DAG planning, 10-language
-  tutoring, syllabus PDF-to-DAG, deep coding). Dispatcher: single/dual-tool -> Tier 2;
-  complex DAG -> Tier 3; Tier 1 always answers first.
+- **Brain Engine (3-tier, ADR-16 amended 2026-09-01 — two strong models)**: OmniRoute
+  Gateway (`http://localhost:20128/v1`, co-located with the core) routes through three
+  tiers behind the **Fast Front-Door Dispatcher** (ADR-18). CONVERSATION LANE (Sara's
+  exclusive speaker): TIER 1 `FAST_MODEL=openrouter/minimax/minimax-m2.7:free`
+  (fallback `groq/openai/gpt-oss-120b`) — router, instant Jordanian ack «من عيوني هسا
+  ببدأ...», direct chat, memory narration, fact extraction; TIER 2
+  `MEDIUM_MODEL=groq/openai/gpt-oss-120b` (fallback minimax) — conversation depth /
+  tier2 chat. TOOL LANE (exclusive executor): TIER 3
+  `HEAVY_MODEL=openrouter/nvidia/nemotron-3-ultra-550b-a55b:free` (fallback
+  `groq/openai/gpt-oss-120b`) — every Gmail/Calendar/Tasks/bridge narration streams
+  here after the ToolRegistry executes the real backend; launch notifies the owner
+  directly (audit code, no narration). Dual-tier memory: 15-message rolling buffer +
+  Obsidian long-term envelope; background writers persist Daily_Logs + User_Info.
+  Dispatcher: tool verdict -> real registry call then Tier 3 narration; complex DAG ->
+  Tier 3; Tier 1 always answers first.
   Distinct layers: the dev harness runs GLM-only — never conflated with Sara's brain.
 - **Runtime Host (ADR-15, amended 2026-08-31)**: Oracle Cloud Always-Free VM — ONE Docker
   container co-locating OmniRoute + core; single public port behind Caddy TLS serves WSS

@@ -411,7 +411,7 @@ state (no local cache to invalidate).
 | Voice note fails to send | ffmpeg missing/mispath | Re-run preflight; check `ffmpeg -version` inside the venv shell |
 | `GatewayError: all models exhausted (<tier chain>)` | A whole tier's chain down/quota — pools drained or OmniRoute offline | Check OmniRoute dashboard pools + `curl -m 5 http://localhost:20128/v1/models`; the log line names the last cause per model in the chain |
 | `GatewayError: fatal HTTP 401/403 on <model>` | Bad/missing gateway key | Verify `OMNIROUTE_API_KEY` in `.env`; never appears in logs (only status + body snippet) |
-| `dispatcher ... -> default tier2` (warning) | Tier-1 router failed or replied non-JSON (ADR-18 degradation) | Service continues at Tier 2; inspect the logged router reply; persistent repeats -> probe the `google/gemini-3.5-flash-lite` pool |
+| `dispatcher ... -> default tier2` (warning) | Tier-1 router failed or replied non-JSON (ADR-18 degradation) | Service continues at Tier 2; inspect the logged router reply; persistent repeats -> probe the `openrouter/minimax/minimax-m2.7:free` pool |
 | Container restart-looping / supervisor exits 2 | `OMNIROUTE_CMD` missing or a child fails to spawn | The image ships `ENV OMNIROUTE_CMD="omniroute run"`; if the build ran before cloning `scripts/omniroute`, rebuild — the log line names the failing child |
 | `GET /health` returns 404/426 | Hitting a non-public path, or core not up yet | Only `/health` answers HTTP (200); the WSS endpoint is auth-gated — wait for the supervisor's two start lines then re-probe |
 | Caddy serves no TLS / no cert | DuckDNS record stale or port 80 blocked in the VNIC security list | Update the DuckDNS record to the VM's Public IP; re-check Ingress Rules (guide §2.5) |
