@@ -517,3 +517,24 @@ for 2026-08-31 and will contact the bank on 2026-09-01; the recovery checklist i
 documented in `docs/09-ORACLE-DEPLOY.md` §1. All machine-side work is complete and
 pushed; only the owner-side Oracle deploy (docs/09) waits on the card. PHASE-STATE
 marker: **v1.0.1 shipped — HALT pending Oracle card resolution**.
+
+### 14.5 v1.0.2 — app indexer + headless boot (2026-09-01)
+
+With the Oracle card blocked, the owner pivoted the day to local testing and issued a
+release directive (labeled v1.0.0; since v1.0.0/v1.0.1 were already published tags it
+shipped as **v1.0.2** — stated to the owner up front). Two owner-directed items landed
+closed-loop on `main`: the **Start Menu app indexer** (`src/app_indexer.py` — scans both
+Windows shortcut roots, resolves `.lnk` targets through PowerShell WScript.Shell COM in
+batched EncodedCommand processes, categorizes Coding/Gaming/Study/Productivity, and
+idempotently merges into `config/whitelist.json`, dropping everything under `C:\Windows`
+so System32 binaries never enter the guard) — first live run on the owner's machine:
+223 shortcuts discovered, 154 apps merged, 63 system binaries skipped, whitelist now
+156 entries; and **RUNBOOK §5b** documenting Windows Auto-Logon (Sysinternals Autologon
+LSA secret preferred, netplwiz alternative, Windows Hello sign-in caveat) plus the
+bridge daemon auto-start via Task Scheduler (ONLOGON preferred) so a WoL magic packet
+boots straight into a working bridge. Gate green throughout (294 passed / 85.73%).
+Release `82afb03`: version 1.0.2 + CHANGELOG + HANDOFF row + README badge → dry-run
+green → tag `v1.0.2` pushed → GitHub Release published. The owner then began LOCAL
+testing of the full stack (health probe all green, OmniRoute :20128 live, bridge URL
+pointed at `ws://localhost:8443/bridge` for the two-terminal run) while waiting on the
+bank for the Oracle card.

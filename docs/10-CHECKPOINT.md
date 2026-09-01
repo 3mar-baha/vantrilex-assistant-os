@@ -136,3 +136,22 @@ Arabic owner guide; RUNBOOK/HANDOFF/OWNER-NEXT-STEPS re-anchored) · `7e49f85` r
 `v1.0.1` pushed; GitHub Release published. Full gate green throughout (285 passed).
 Owner deploy blocked at Oracle card verification — bank contact 2026-09-01, recovery
 checklist in `docs/09-ORACLE-DEPLOY.md` §1. Record: `docs/PROJECT-JOURNEY.md` §14.
+
+## Post-release addendum — 2026-09-01: v1.0.2 (owner-directed runtime enhancements)
+
+Skill rotation: **none ingested** (closed-loop patch + docs only). Commits directly on
+`main`: `3cfdc43` red (tests/test_app_indexer.py — 9 tests: clean name extraction from
+`.lnk` stems, .lnk-only recursive discovery, cross-root casefold dedupe, System32 filter,
+preserve-restricted_actions merge, idempotency, Guard end-to-end acceptance, dry-run
+writes nothing) · `1203cde` green (`src/app_indexer.py`: both Start Menu roots scanned;
+targets resolved via PowerShell WScript.Shell COM in 80-path `-EncodedCommand` batches —
+no shell, no quoting hazards; `C:\Windows` targets incl. System32 dropped; categorized
+Coding/Gaming/Study/Productivity; idempotent casefold merge; durable-state audit
+allowlist justified) · `ee70660` docs+live (RUNBOOK §5b headless remote boot — Sysinternals
+Autologon LSA secret preferred / netplwiz alt + Windows Hello caveat; bridge daemon
+Task Scheduler ONLOGON preferred with ONSTART alt; end-to-end headless proof; LIVE
+whitelist merge on owner machine: 223 discovered / 154 added / 63 system-skipped /
+156 total) · `82afb03` release (version 1.0.2 single-source + CHANGELOG [1.0.2] +
+HANDOFF component row + README badge). Release sequence: full gate green (294 passed /
+1 skipped / 85.73% branch) → dry-run green → annotated tag `v1.0.2` pushed → GitHub
+Release published (temp-file notes pattern). Record: `docs/PROJECT-JOURNEY.md` §14.

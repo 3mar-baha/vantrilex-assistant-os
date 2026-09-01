@@ -69,7 +69,7 @@ Updated at every phase exit and every significant turn end.
 
 ## Mission (confirmed 2026-08-26; host updated 2026-08-31)
 
-Vantrilex Assistant OS — **Sara (سارة)** — product v1.0.1. Owner-only, strictly
+Vantrilex Assistant OS — **Sara (سارة)** — product v1.0.2. Owner-only, strictly
 $0.00/month, **Oracle Cloud Always-Free VM** host (ADR-15 amendment; supersedes VPS-primary
 and the HF-Space interim) + OmniRoute brain (`http://localhost:20128/v1`), Telegram
 chat/Ogg Opus voice notes in Jordanian Arabic (`ar-JO-SanaNeural`), Google suite +
@@ -441,7 +441,26 @@ product.)
       GitHub Release published. **OWNER NEXT (physical)**: Oracle account + VM +
       DuckDNS + `sara.env` per `docs/09-ORACLE-DEPLOY.md`; then /enroll-voice +
       Google consent (works on the VM) + PC bridge `BRIDGE_SERVER_URL=wss://<domain>/bridge`.
-      ← **current: v1.0.1 shipped — sprint-level HALT, awaiting owner (Oracle deploy is owner-side)**
+
+      ### POST-RELEASE ARC — v1.0.2 + local test phase (2026-09-01, owner directive)
+      Owner directive: integrate the Start Menu app indexer + headless auto-logon
+      runbook into the release (owner label said v1.0.0; v1.0.0/v1.0.1 were already
+      published tags → executed as **v1.0.2**, stated to owner). Closed loop on
+      `main`: `3cfdc43` red (9 tests: name extraction, .lnk-only discovery, dedupe,
+      system-filter, safe merge, idempotency, Guard end-to-end, dry-run) →
+      `1203cde` green (`src/app_indexer.py` — PowerShell WScript.Shell COM via
+      batched `-EncodedCommand`; `C:\Windows` targets dropped; idempotent casefold
+      merge preserving `restricted_actions`; audit allowlist justified) →
+      `ee70660` docs+live (RUNBOOK §5b Auto-Logon + Task Scheduler; §5
+      auto-populate note; LIVE whitelist merge on the owner machine: 223
+      discovered / 154 added / 63 system-skipped / 156 total) → `82afb03` release
+      (version 1.0.2 + CHANGELOG [1.0.2] + HANDOFF component row + README badge).
+      Release sequence: gate green (294 passed / 85.73%) → dry-run green → tag
+      `v1.0.2` pushed → GitHub Release published. Owner pivoted to LOCAL testing
+      first (health probe green: ffmpeg/gateway/telegram all ok; OmniRoute :20128
+      live; local `.env` `BRIDGE_SERVER_URL=ws://localhost:8443/bridge`).
+      ← **current: v1.0.2 shipped — sprint-level HALT; owner side = local two-terminal
+      test + Telegram checklist, then Oracle deploy (docs/09) when the card clears**
 
 ## Open items / blockers
 
@@ -453,6 +472,10 @@ product.)
   real card — $1 hold only, never charged). NOTHING on the dev side is blocked — the
   machine-side work (v1.0.1, docs, guides) is COMPLETE; only the owner-side Oracle deploy
   waits on the card.
+  UPDATE (2026-09-01): owner pivoted to LOCAL testing while the card clears — v1.0.2
+  shipped (app indexer + headless-boot docs, whitelist live-merged 156 apps), health
+  probe green, two-terminal run instructions given (terminal 1: `$env:PORT="8443";
+  make run-core` — silence after «core starting» = LIVE; terminal 2: `make run-bridge`).
 - **Google 403 (upstream, from sprint 1)**: project `vantrilex-assistant-2008` blocked by
   Google ("project denied access") — owner must unblock in Google Cloud console before
   Gmail/Calendar anywhere (Gemini itself retired from the brain; OAuth client shares the project).
