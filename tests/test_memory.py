@@ -1,0 +1,195 @@
+"""Dual-tier memory (owner directive 2026-09-01): short-term rolling buffer + Obsidian
+long-term context injection + background vault writers (Daily_Logs + User_Info)."""
+
+import asyncio
+import json
+from datetime import UTC, datetime
+from zoneinfo import ZoneInfo
+
+import pytest
+
+from src.memory import (
+    SECTION_CHAR_CAP,
+    ConversationMemory,
+    VaultMemoryWriter,
+    build_messages,
+    load_long_term,
+)
+from src.vault import PROFILE_USER_INFO
+
+TZ = ZoneInfo("Asia/Amman")
+NOW = datetime(2026, 9, 1, 15, 30, tzinfo=UTC)  # 18:30 Amman
+
+
+class FakeVault:
+    def __init__(self, reads: dict[str, str] | None = None) -> None:
+        self.reads = dict(reads or {})
+        self.appends: list[tuple] = []
+
+    async def read(self, path: str) -> str:
+        if path not in self.reads:
+            raise FileNotFoundError(path)
+        return self.reads[path]
+
+    async def append_section(self, path, heading, lines, *, commit_prefix):
+        self.appends.append((path, heading, tuple(lines), commit_prefix))
+        return f"written:{path}"
+
+
+class FakeBrain:
+    def __init__(self, reply: str = "") -> None:
+        self.reply = reply
+        self.calls: list[list[dict]] = []
+
+    async def chat(self, messages, **kwargs):
+        self.calls.append(messages)
+        return self.reply
+
+
+# --- short-term rolling buffer -------------------------------------------------
+
+
+def test_buffer_keeps_last_15_messages_and_drops_oldest():
+    memory = ConversationMemory()
+    for i in range(20):
+        memory.remember(1, "user" if i % 2 == 0 else "assistant", f"msg{i}")
+    history = memory.history(1)
+    assert len(history) == 15  # deque(maxlen=15) of {role, content} dicts
+    assert history[0]["content"] == "msg5"
+    assert history[-1]["content"] == "msg19"
+    assert all(set(m) == {"role", "content"} for m in history)
+
+
+def test_buffer_isolated_per_chat_and_history_is_a_copy():
+    memory = ConversationMemory()
+    memory.remember(1, "user", "أ")
+    memory.remember(2, "user", "ب")
+    history = memory.history(1)
+    history.append({"role": "user", "content": "تلاعب"})
+    assert memory.history(1) == [{"role": "user", "content": "أ"}]
+    assert memory.history(2) == [{"role": "user", "content": "ب"}]
+    assert memory.history(3) == []
+
+
+# --- context envelope ----------------------------------------------------------
+
+
+def test_envelope_personas_history_and_current_message_in_order():
+    persona = "أنت سارة"
+    history = [
+        {"role": "user", "content": "س1"},
+        {"role": "assistant", "content": "ج1"},
+    ]
+    messages = build_messages(persona, None, history, "س2")
+    assert [m["role"] for m in messages] == ["system", "user", "assistant", "user"]
+    assert messages[0]["content"] == persona
+    assert messages[-1]["content"] == "س2"
+
+
+def test_envelope_injects_long_term_into_system_block():
+    messages = build_messages("أنت سارة", "المالك عمر، مهندس", [], "مرحبا")
+    system = messages[0]["content"]
+    assert system.startswith("أنت سارة")
+    assert "المالك عمر، مهندس" in system
+    assert "بيانات" in system  # data-not-instructions boundary marker
+
+
+# --- long-term vault context ----------------------------------------------------
+
+
+async def test_load_long_term_joins_profile_dialect_and_today_log():
+    vault = FakeVault(
+        {
+            "02_Areas/Profile/User_Info.md": "---\ntype: profile\n---\nاسمي عمر.",
+            "02_Areas/Profile/Dialect_Notes.md": "---\n---\nيقول «هسا» كثيراً.",
+            "Daily_Logs/2026-09-01.md": "---\n---\n## دردشة 10:00\n\n**المالك:** صباح",
+        }
+    )
+    context = await load_long_term(vault, today=NOW.date())
+    assert "اسمي عمر." in context
+    assert "يقول «هسا»" in context
+    assert "صباح" in context
+
+
+async def test_load_long_term_skips_missing_notes_and_survives_vault_failure():
+    vault = FakeVault({"02_Areas/Profile/User_Info.md": "---\n---\nعمر فقط."})
+
+    class ExplodingVault(FakeVault):
+        async def read(self, path):
+            if path == "02_Areas/Profile/User_Info.md":
+                return await super().read(path)
+            raise RuntimeError("github down")
+
+    context = await load_long_term(ExplodingVault(), today=NOW.date())
+    assert context == "عمر فقط."  # degraded gracefully — chat never breaks
+
+
+async def test_load_long_term_caps_each_section():
+    vault = FakeVault({"02_Areas/Profile/User_Info.md": "---\n---\n" + "ط" * (SECTION_CHAR_CAP + 500)})
+    context = await load_long_term(vault, today=NOW.date())
+    assert len(context) == SECTION_CHAR_CAP
+
+
+# --- background memory writer ----------------------------------------------------
+
+
+def _writer(vault, brain) -> VaultMemoryWriter:
+    return VaultMemoryWriter(vault, brain, tz=TZ)
+
+
+async def test_log_exchange_appends_dated_chat_section():
+    vault, brain = FakeVault(), FakeBrain()
+    result = await _writer(vault, brain).log_exchange("شو الأخبار؟", "كل شي تمام", now=NOW)
+    assert result == "written:Daily_Logs/2026-09-01.md"
+    path, heading, lines, prefix = vault.appends[0]
+    assert path == "Daily_Logs/2026-09-01.md"
+    assert "18:30" in heading
+    assert "**المالك:** شو الأخبار؟" in lines
+    assert "**سارة:** كل شي تمام" in lines
+    assert prefix.startswith("sara:")
+
+
+async def test_log_exchange_caps_long_turns():
+    vault, brain = FakeVault(), FakeBrain()
+    await _writer(vault, brain).log_exchange("ك" * 900, "س" * 900, now=NOW)
+    lines = vault.appends[0][2]
+    assert all(len(line) < 900 for line in lines)
+
+
+async def test_maybe_learn_persists_new_fact_to_user_info():
+    vault = FakeVault()
+    brain = FakeBrain(json.dumps({"learn": True, "fact": "المالك يحب القهوة التركية"}, ensure_ascii=False))
+    fact = await _writer(vault, brain).maybe_learn("خليني احكيلك اني بحب القهوة التركية", now=NOW)
+    assert fact == "المالك يحب القهوة التركية"
+    path, heading, lines, _ = vault.appends[0]
+    assert path == PROFILE_USER_INFO
+    assert "2026-09-01" in heading
+    assert lines == ("المالك يحب القهوة التركية",)
+    # the extraction call went to the conversation lane (FAST tier)
+    assert brain.calls[0][0]["role"] == "user"
+
+
+async def test_maybe_learn_ignores_transient_chat():
+    vault, brain = FakeVault(), FakeBrain(json.dumps({"learn": False, "fact": ""}, ensure_ascii=False))
+    assert await _writer(vault, brain).maybe_learn("شو الأخبار؟", now=NOW) is None
+    assert vault.appends == []
+
+
+async def test_maybe_learn_survives_bad_json_and_brain_failure():
+    vault = FakeVault()
+    writer = _writer(vault, FakeBrain("مش JSON أبداً"))
+    assert await writer.maybe_learn("شي", now=NOW) is None
+    writer2 = _writer(vault, FailingBrain())
+    assert await writer2.maybe_learn("شي", now=NOW) is None
+    assert vault.appends == []
+
+
+class FailingBrain:
+    async def chat(self, messages, **kwargs):
+        raise RuntimeError("gateway down")
+
+
+async def test_maybe_learn_never_writes_empty_fact():
+    vault, brain = FakeVault(), FakeBrain(json.dumps({"learn": True, "fact": "  "}, ensure_ascii=False))
+    assert await _writer(vault, brain).maybe_learn("شي", now=NOW) is None
+    assert vault.appends == []
