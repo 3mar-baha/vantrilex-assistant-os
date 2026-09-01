@@ -483,6 +483,15 @@ product.)
       01-ARCHITECTURE mermaid, 03-DECISIONS ADR-16 amendment, 07-HANDOFF pins,
       08-OWNER-NEXT-STEPS env, 04-RUNBOOK probe line, 05-TEST-PLAN rows, CHANGELOG
       [Unreleased]).
+      Owner follow-up (same day): daily conversation summary — `e812ee1` red (11
+      tests: day_chat_lines extract/ignore-prose/cap-150, summarize_day append section
+      with turns+context in prompt / cap enforced in the TURNS block / skips no-note,
+      prose-only, already-summarized / survives brain failure / due() at 23:50 /
+      multi-paragraph verbatim) → `535aa72` green (`DailySummarizer` in src/memory.py:
+      reads the day's ledger, extracts **المالك:**/**سارة:** lines capped to last 150,
+      one MEDIUM call with Obsidian context, appends separate `## ملخص محادثة اليوم
+      YYYY-MM-DD` section, idempotent via heading; run_forever tick loop launched in
+      run_bot + cancelled on shutdown; suite 345/85.64%).
       ← **current: two-strong-model refactor CODE-COMPLETE + gate green — owner side =
       restart core (kill stale PIDs first) and retest the Telegram checklist; Oracle deploy
       (docs/09) when the card clears**

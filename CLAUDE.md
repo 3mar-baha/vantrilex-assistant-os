@@ -21,7 +21,10 @@ strictly-zero-cost executive AI assistant named **Sara (سارة)**.
   `groq/openai/gpt-oss-120b`) — every Gmail/Calendar/Tasks/bridge narration streams
   here after the ToolRegistry executes the real backend; launch notifies the owner
   directly (audit code, no narration). Dual-tier memory: 15-message rolling buffer +
-  Obsidian long-term envelope; background writers persist Daily_Logs + User_Info.
+  Obsidian long-term envelope; background writers persist Daily_Logs + User_Info; a
+  23:50 local DailySummarizer (`src/memory.py`) appends a SEPARATE end-of-day
+  conversation summary (last 150 turns + Obsidian context -> one MEDIUM call) to the
+  day's ledger note.
   Dispatcher: tool verdict -> real registry call then Tier 3 narration; complex DAG ->
   Tier 3; Tier 1 always answers first.
   Distinct layers: the dev harness runs GLM-only — never conflated with Sara's brain.
