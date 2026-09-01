@@ -508,9 +508,18 @@ product.)
       directive; tests + CLAUDE/DECISIONS/TEST-PLAN/CHANGELOG synced, suite 345/85.71%).
       Vault clarified to owner: GitHub repo `3mar-baha/vantrilex-vault` via API — no
       local Obsidian install needed (token verified present in .env).
-      ← **current: direct-chat memory fix shipped — owner side = re-run `sara.bat` and
-      retest memory on Telegram; watch minimax output quality (one corrupted ack seen);
-      Oracle deploy (docs/09) when the card clears**
+      Second live-debug wave (same evening): (a) router mini-answer acks — minimax
+      wrote a wrong conversational answer INTO the ack, so the owner saw a bad reply
+      then the real one in one bubble → `a4ccf1b` red → `ca1b065` green: MAX_ACK_CHARS=30
+      guard discards drifted acks for the default placeholder + router prompt forbids
+      answering inside the ack; (b) silent 6s voice note (22:03, "(empty)") left the
+      owner with two static acks and no voice → `EMPTY_VOICE_AR` + `_voice_fail_reply`:
+      empty transcript or transcription failure answers with honest text + ar-JO voice
+      note, memo still filed. Suite 347/85.71%, docs synced.
+      ← **current: both live fixes shipped — owner side = run `/enroll-voice` then send
+      a voice note (kills the static pre-ack; no State/owner_voiceprint.enc yet), check
+      the mic (22:03 note was silence), re-run `sara.bat`; dormant skills + Oracle deploy
+      (docs/09) deferred until owner says**
 
 ## Open items / blockers
 

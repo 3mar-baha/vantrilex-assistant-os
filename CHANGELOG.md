@@ -16,6 +16,8 @@ product release tags start independently at v1.0.0.)
 - **One-command local cycle** (`sara.bat`/`sara.ps1`): full stop->start — kills stale core/bridge processes, gateway preflight check, relaunches both windows (`-StopOnly` / `-Port` supported).
 - **Daily conversation summary** (`DailySummarizer`): at 23:50 local the day's last 150 chat turns + Obsidian owner context go to the conversation lane; the detailed Arabic summary lands as a separate `## ملخص محادثة اليوم` section in the day's Daily_Logs note (idempotent, tick-loop like the brief/journaler).
 - **Voice-out replies**: owner voice notes now get an ar-JO Ogg Opus voice note of Sara's streamed reply; pending PC-launch confirmations are consumed by the coordinator before the brain sees them.
+- **Overlong router ack guard (live-debug fix 2026-09-01)**: minimax sometimes writes a mini-ANSWER into the router's `ack` field, so the owner saw a wrong reply followed seconds later by the real one in the same bubble. Acks over 30 chars are now discarded for the default «من عيوني هسا ببدأ...», and the router prompt forbids answering inside the ack.
+- **Honest voice reply on silent/failed transcription (live-debug fix 2026-09-01)**: a 6-second silent voice note transcribed empty and left the owner with two static acks. Empty transcript or transcription failure now answers with the honest line «ما سمعت شي واضح بالملاحظة...» as text AND an ar-JO voice note; the memo is still filed.
 
 ## [1.0.2] — 2026-09-01
 
