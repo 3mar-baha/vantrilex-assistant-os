@@ -4,8 +4,6 @@ tool lane — gmail/calendar/tasks/telemetry/launch/brief, honest offline lines.
 from datetime import UTC, datetime, timedelta
 from zoneinfo import ZoneInfo
 
-import pytest
-
 from src.daily_brief import BriefData
 from src.gmail import EmailMessage
 from src.google_suite import CalendarEvent, TaskItem
@@ -79,15 +77,21 @@ class FakeComposer:
 
 def _email(subject="فاتورة", sender="billing@corp.com", name="Corporate"):
     return EmailMessage(
-        id="1", thread_id="1", subject=subject, from_email=sender, from_name=name,
+        id="1",
+        thread_id="1",
+        subject=subject,
+        from_email=sender,
+        from_name=name,
         received_at=NOW,
     )
 
 
 def _event(summary="اجتماع الفريق", offset_h=2.0):
     return CalendarEvent(
-        id="e1", summary=summary,
-        start=NOW + timedelta(hours=offset_h), end=NOW + timedelta(hours=offset_h + 1),
+        id="e1",
+        summary=summary,
+        start=NOW + timedelta(hours=offset_h),
+        end=NOW + timedelta(hours=offset_h + 1),
     )
 
 
@@ -99,11 +103,13 @@ def _task(title="تسليم التقرير", due=NOW + timedelta(hours=3)):
 
 
 async def test_gmail_digest_lists_messages_with_count():
-    registry = ToolRegistry(inbox=FakeInbox([_email(), _email("شحن الطلب", "shop@x.com", "Shop")]), tz=TZ)
+    registry = ToolRegistry(
+        inbox=FakeInbox([_email(), _email("شحن الطلب", "shop@x.com", "Shop")]), tz=TZ
+    )
     out = await registry.call("gmail", "")
     assert "2" in out
-    assert "فاتورة" in out and "billing@corp.com" in out
-    assert "شحن الطلب" in out
+    assert "فاتورة" in out and "Corporate" in out
+    assert "شحن الطلب" in out and "Shop" in out
 
 
 async def test_gmail_empty_inbox_is_explicit():
