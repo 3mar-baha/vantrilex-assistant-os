@@ -17,6 +17,7 @@ from src.bot import (
     _ENROLL_PENDING,
     _STREAMS,
     APOLOGY_AR,
+    EMPTY_VOICE_AR,
     ENROLL_DONE_AR,
     ENROLL_PROMPT_AR,
     HELP_AR,
@@ -119,6 +120,31 @@ async def test_voice_note_acknowledged_without_brain_call(fake_bot, make_shell):
     await shell.dp.feed_update(bot, make_update(1, OWNER_ID, voice=True))
     assert bot.session.sent("SendMessage")[0].method.text == VOICE_ACK_AR
     assert shell.gateway.router_calls == []
+    assert shell.gateway.stream_calls == []
+
+
+class _EmptyTranscriber:
+    def __init__(self) -> None:
+        self.notes: list[dict] = []
+
+    async def transcribe(self, ogg: bytes) -> str:
+        return ""
+
+    async def file_note(self, text, *, received_at, duration_s) -> None:
+        self.notes.append({"text": text, "duration_s": duration_s})
+
+
+async def test_silent_voice_note_gets_honest_voice_reply(fake_bot, make_shell):
+    """Live 2026-09-01 22:03: a 6-second silent note transcribed empty and the owner
+    was left hanging on a static ack. Sara must answer with an honest VOICE note."""
+    empty = _EmptyTranscriber()
+    shell, bot = make_shell(transcriber=empty), fake_bot()
+    await shell.dp.feed_update(bot, make_update(1, OWNER_ID, voice=True))
+    assert empty.notes and empty.notes[0]["text"] == ""  # memo still filed
+    texts = [c.method.text for c in bot.session.sent("SendMessage")]
+    assert EMPTY_VOICE_AR in texts
+    voices = bot.session.sent("SendVoice")
+    assert len(voices) == 1 and len(voices[0].method.voice.data) > 0
     assert shell.gateway.stream_calls == []
 
 

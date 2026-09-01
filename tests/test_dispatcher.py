@@ -126,6 +126,28 @@ async def test_simple_chat_stays_tier1(make_settings):
     assert messages[-1]["content"] == "شو أول رقم أرسلته؟"
 
 
+async def test_overlong_router_ack_discarded_for_default_placeholder(make_settings):
+    """Live 2026-09-01: the router wrote mini-answers into "ack" -> the owner saw two
+    contradicting answers in one bubble. An ack over MAX_ACK_CHARS is router drift —
+    discard it for the standard placeholder; only the stream answer speaks."""
+    script = _Scripted(
+        httpx.Response(
+            200,
+            content=_sse(
+                _router_json(
+                    "direct",
+                    "أهلاً! تمكنت من فهم طلبك، هذا تعريف بصوتي بنفسي وسأشرح لك الآن بالتفصيل الممل",
+                )
+            ),
+        ),
+        httpx.Response(200, content=_sse(_chunk("الجواب"), _chunk(" الحقيقي"))),
+    )
+    async with _gateway(script) as client:
+        out = await _collect(FrontDoorDispatcher(client, make_settings()).handle("ابعثلي فويس"))
+    assert out == [DEFAULT_ACK_AR, "الجواب", " الحقيقي"]
+    assert script.models() == [FAST_PIN, FAST_PIN]
+
+
 async def test_tool_intent_routes_tier2(make_settings):
     """AC5: single/dual-tool intent acks at Tier 1 then streams Tier 2."""
     script = _Scripted(
