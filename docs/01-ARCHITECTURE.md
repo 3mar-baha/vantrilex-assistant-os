@@ -321,15 +321,81 @@ ambiguous `category_inferred: null` holds for owner confirmation before filing;
 }
 ```
 
-## 8. Staged Components (not in v1.0)
+## 8. Future Roadmap (owner-finalized 2026-09-01 — authoritative, not yet built)
 
-| Component | Release | Rationale |
-|---|---|---|
-| PyTgCalls live calls + post-call verbal summary protocol | v1.1 | Most fragile dependency isolated per Q4 |
-| tech-hardware-scout, career-project-incubator | v1.1 | Excluded from Q4 v1.0 enumeration |
-| Mem0 context engine over Firebase Firestore | v1.1 (evaluation) | Vault loop must prove out first |
-| Virtual cloud SIP telephony | v1.5 | Roadmap |
-| Social media agent (GitHub/LinkedIn/Instagram) | v2.0 | Roadmap |
+The authoritative expanded roadmap (supersedes the previous staging table; mirrored in
+BACKLOG "Deferred Backlog" and HANDOFF §10). Every item enters implementation through the
+standard spec pipeline (acceptance criteria first, TDD) and inherits the hard invariants:
+$0.00/month, owner-only, untrusted-content boundary, whitelist guardrail.
+
+### Milestone v1.1 — Live Voice Calling & Advanced Acoustic Intelligence
+
+- **Universal Multi-Speaker Diarization & Separation** (`skill-universal-speaker-diarization`):
+  universal multi-voice separation across any audio context (Discord, single-microphone room
+  speakerphone, multi-party group calls, ambient voice notes). Chain: audio source separation
+  via `SpeechBrain SepFormer` / `PyAnnote.audio 3.1` -> speaker identification via `ECAPA-TDNN`
+  biometrics against `Contacts/` -> parallel `faster-whisper` transcripts with precise
+  timestamps and speaker tags.
+- **Universal Context-Aware Affect & Emotion Engine** (`skill-affective-context-engine`):
+  universal emotional intelligence analyzing prosody, pitch, energy, semantics and the
+  `User_Info.md` baseline across all interactions; distinguishes banter, sarcasm and playful
+  mock-frustration from genuine anger, sadness, fatigue, excitement and deep focus.
+  **Strict invariant**: 100% preservation of Sara's authentic female Jordanian persona and
+  warm tone across all emotional adaptations.
+- **Human Conversational Paralinguistics & Self-Repair in Live Calls**
+  (`skill-human-paralinguistics-and-self-repair`): natural conversational disfluencies and
+  self-corrections during live calls (e.g. «رح أفتح البرنامـ... قصدي اللعبة»,
+  «الموعد بكره... لا استنى، بعد بكره»); contextual micro-breaths, sighs of relief after hard
+  tasks, light laughs before jokes, Jordanian hesitation fillers («اممم شوف...», «يعني هسا...»).
+- **Engaged Life Conversational Partner**: active listening, empathetic curiosity and natural
+  follow-up questions when the owner shares daily personal situations, university encounters
+  or reflections.
+- **PyTgCalls WebRTC Live Calling Engine**: bidirectional live voice streaming over Telegram
+  with VAD + barge-in interruption detection (M8) and emergency call escalation for critical
+  VIP emails. (v1.0 ships ZERO live-call code — scope-locked by test.)
+- Carried v1.1 items (unchanged): `tech-hardware-scout`, `career-project-incubator`,
+  Mem0/Firestore context engine (evaluation only — the vault loop must prove out first).
+
+### Milestone 1-Month Post-Stabilization — Automation & Content Engine
+
+- **Personal Weekly Audio Story / Podcast** (`skill-weekly-audio-digest`): every Saturday
+  evening, an entertaining motivating 2-3 minute narrative voice note synthesizing the
+  week's 7 `Daily_Logs/` in Sara's Jordanian voice.
+- **Shared History & Inside Jokes Graph** (`skill-shared-history-graph`): persistent tracking
+  of shared milestones, development struggles, inside jokes and personal journey narratives
+  in Obsidian.
+- **Clipping Bounty Automation & Anti-Shadowban Pipeline** (`sub-agent-clip-farming-and-warmup`):
+  autonomous sub-worker pipeline under Sara's supervisory control for revenue generation:
+  1. *Ingestion*: auto-fetch approved campaign clips from bounty platforms (Whop / Drive).
+  2. *Anti-duplicate mutation*: FFmpeg micro-zoom (1%), 1.01x subtle speed shift, AI dynamic
+     hook/caption generation — to defeat duplicate content detection.
+  3. *Human-behavior warm-up* (Playwright Stealth): random FYP browsing (5-25s watch times),
+     probabilistic interactions (15% likes, 5% follows), niche-specific search warming to
+     build account trust.
+  4. *Staggered multi-account publishing* (TikTok, Reels, Shorts).
+  5. *Bounty submission* + daily earnings tracking reported to Sara's `Daily_Logs/`.
+  **Risk note (implementer-recorded, owner-decided)**: steps 2-4 (duplicate-detection
+  evasion + simulated-engagement warm-up across multiple accounts) contradict TikTok/
+  Reels/Shorts platform ToS — account bans and campaign clawbacks are a real operating
+  risk; the pipeline stays owner-gated at every publish step.
+- **Private VoIP / Softphone (SIP over Wi-Fi)**: inbound/outbound calling to virtual
+  internal extensions via Wi-Fi (Linphone / Zoiper) without cellular SIM (v1.5).
+
+### Milestone v2.0 & Beyond — Gaming, Persona & Multi-Agent Squad
+
+- **Distributed Civilization VI LAN Gaming Module**: multiplayer LAN integration with Discord
+  voice, secret in-game alliance coordination via Telegram, and post-match tactical learning
+  filed to `Studies/Gaming/Civ6/`.
+- **Autonomous Social Media Virtual Persona (AI Influencer)**: autonomous Instagram/TikTok
+  persona with consistent LoRA face generation and Jordanian captions.
+- **Multi-Agent Squad (post-v2.0)**: six specialized autonomous agents — Sara (Chief of
+  Staff), Captain Sakhr (Fitness), Prof. Nour (Academic), Tarek (Dev), Rami (Gaming),
+  Karim (Finance) — in a shared Telegram group with private Obsidian memory silos.
+
+### Formally Excluded / Deferred Scope (owner decision 2026-09-01)
+
+- Complex PC-based ambient situational awareness — deferred to avoid inference errors.
+- Cognitive load / burnout guard — deferred.
 
 Owner-parked **Future Scope** (no version assigned, each enters via the standard spec pipeline
 when prioritized): PC Health Monitor · Voice Read-It-Later · Emotional Context Memory ·

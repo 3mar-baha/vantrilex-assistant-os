@@ -213,18 +213,62 @@ Final teardown → `docs/10-CHECKPOINT.md` (v1.0.0 entry).
 
 ## Deferred Backlog
 
-### v1.1
+Authoritative expanded roadmap (owner-finalized 2026-09-01; mirrored in ARCHITECTURE §8 and
+HANDOFF §10). Items carry skill-pipeline names where assigned; each enters via the standard
+spec pipeline (acceptance criteria first, TDD).
+
+### Milestone v1.1 — Live Voice Calling & Advanced Acoustic Intelligence
 - [ ] PyTgCalls WebRTC live bidirectional calling engine + private-session group.
 - [ ] VAD + barge-in on calls (M8): owner speech cancels Sara's playback mid-stream.
-- [ ] Critical-triage escalation to immediate outbound voice call.
+- [ ] Critical-triage escalation to immediate outbound voice call (critical VIP emails).
 - [ ] Post-call transcript persistence + selective verbal action-summary protocol.
+- [ ] Universal multi-speaker diarization & separation (`skill-universal-speaker-diarization`):
+      multi-voice separation across any audio context (Discord, single-mic room speakerphone,
+      multi-party group calls, ambient voice notes) — `SpeechBrain SepFormer` /
+      `PyAnnote.audio 3.1` separation -> `ECAPA-TDNN` speaker ID against `Contacts/` ->
+      parallel `faster-whisper` transcripts with timestamps + speaker tags.
+- [ ] Universal context-aware affect & emotion engine (`skill-affective-context-engine`):
+      prosody/pitch/energy/semantics + `User_Info.md` baseline; banter/sarcasm/mock-frustration
+      distinguished from genuine anger, sadness, fatigue, excitement, deep focus. STRICT
+      invariant: Sara's authentic female Jordanian persona and warm tone preserved 100%.
+- [ ] Human conversational paralinguistics & self-repair in live calls
+      (`skill-human-paralinguistics-and-self-repair`): disfluencies and self-corrections
+      («رح أفتح البرنامـ... قصدي اللعبة»), micro-breaths, relief sighs, light laughs before
+      jokes, Jordanian fillers («اممم شوف...», «يعني هسا...»).
+- [ ] Engaged life conversational partner: active listening, empathetic curiosity, natural
+      follow-up questions on the owner's daily situations and reflections.
 - [ ] tech-hardware-scout (GPU/CPU pricing, AI news, tracked sites, voice summaries).
 - [ ] career-project-incubator (micro-SaaS ideas, CV-boosting portfolio projects).
 - [ ] Mem0/Firestore persistent memory layer evaluation.
 
-### v1.5 / v2.0
-- [ ] Virtual cloud SIP telephony (landline calling).
-- [ ] Social media agent (GitHub, LinkedIn, Instagram).
+### Milestone 1-Month Post-Stabilization — Automation & Content Engine
+- [ ] Personal weekly audio story/podcast (`skill-weekly-audio-digest`): Saturday evening
+      2-3 minute motivating narrative voice note over the week's 7 `Daily_Logs/`, Sara's voice.
+- [ ] Shared history & inside-jokes graph (`skill-shared-history-graph`): milestones,
+      development struggles, inside jokes, journey narratives persisted in Obsidian.
+- [ ] Clipping bounty automation & anti-shadowban pipeline (`sub-agent-clip-farming-and-warmup`):
+      Whop/Drive clip ingestion -> FFmpeg anti-duplicate mutation (1% micro-zoom, 1.01x speed,
+      AI hook/caption generation) -> Playwright-Stealth human-behavior warm-up (random FYP
+      5-25s watches, 15% likes, 5% follows, niche search warming) -> staggered multi-account
+      publishing (TikTok/Reels/Shorts) -> bounty submission + daily earnings to `Daily_Logs/`;
+      Sara supervises the sub-workers. Owner-gated at every publish step; platform-ToS/ban
+      risk recorded in ARCHITECTURE §8.
+- [ ] Private VoIP / softphone — SIP over Wi-Fi (v1.5): inbound/outbound calls to virtual
+      internal extensions via Linphone / Zoiper, no cellular SIM.
+
+### Milestone v2.0 & Beyond — Gaming, Persona & Multi-Agent Squad
+- [ ] Distributed Civilization VI LAN gaming module: Discord voice integration, secret
+      in-game alliance coordination via Telegram, post-match tactical learning in
+      `Studies/Gaming/Civ6/`.
+- [ ] Autonomous social media virtual persona (AI influencer): Instagram/TikTok persona with
+      consistent LoRA face generation and Jordanian captions.
+- [ ] Multi-agent squad (post-v2.0): six specialized agents — Sara (Chief of Staff),
+      Captain Sakhr (Fitness), Prof. Nour (Academic), Tarek (Dev), Rami (Gaming),
+      Karim (Finance) — in a shared Telegram group with private Obsidian memory silos.
+
+### Formally Excluded / Deferred (owner decision 2026-09-01)
+- [x] Complex PC-based ambient situational awareness — deferred (inference-error risk).
+- [x] Cognitive load / burnout guard — deferred.
 
 Reference contracts for tool surfaces: draft `docs/06-API-SPECIFICATION.md.docx`
 (`launch_desktop_app`, `save_obsidian_note`, `initiate_telegram_call`) — formalized during Phase 2.

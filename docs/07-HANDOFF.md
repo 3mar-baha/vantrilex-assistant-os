@@ -224,17 +224,56 @@ make run-bridge   # PC bridge daemon
    `~/sara/config/` on the server — Gmail/Calendar/consent run fully on the VM. The
    encrypted token CACHE remains vault-persisted and survives restarts.
 
-## 10. Roadmap (decided, not yet built)
+## 10. Roadmap (owner-finalized 2026-09-01, decided, not yet built)
 
-**v1.1 (Deferred-to-v1.1 in CHANGELOG + BACKLOG)**:
+Authoritative expanded roadmap — mirrored in ARCHITECTURE §8 and BACKLOG "Deferred Backlog".
+Every item enters via the standard spec pipeline (acceptance criteria first, TDD) and
+inherits the hard invariants ($0.00/month, owner-only, untrusted-content boundary,
+whitelist guardrail).
+
+**Milestone v1.1 — Live Voice Calling & Advanced Acoustic Intelligence**:
 - PyTgCalls WebRTC live bidirectional calling + private-session group (v1.0 ships ZERO
-  live-call code — scope-locked by test; `TELEGRAM_API_ID/HASH` already provisioned).
-- VAD + barge-in on calls (M8): owner speech cancels Sara's playback mid-stream.
-- Critical-triage escalation to immediate outbound voice call.
-- Post-call transcript persistence + selective verbal action-summary on calls.
-- `tech-hardware-scout` (GPU/CPU pricing, AI news, tracked sites, voice summaries).
-- `career-project-incubator` (micro-SaaS ideas, CV-boosting portfolio projects).
-- Mem0/Firestore persistent memory layer (evaluation only — vault loop must prove out).
+  live-call code — scope-locked by test; `TELEGRAM_API_ID/HASH` already provisioned);
+  VAD + barge-in (M8); emergency call escalation for critical VIP emails.
+- Universal multi-speaker diarization & separation (`skill-universal-speaker-diarization`):
+  SepFormer / PyAnnote.audio 3.1 source separation -> ECAPA-TDNN speaker ID against
+  `Contacts/` -> parallel faster-whisper transcripts with timestamps + speaker tags —
+  across Discord, single-mic speakerphone, group calls, ambient voice notes.
+- Universal context-aware affect & emotion engine (`skill-affective-context-engine`):
+  prosody/energy/semantics + `User_Info.md` baseline; banter and sarcasm distinguished from
+  genuine emotion. STRICT invariant: Sara's female Jordanian persona and warm tone 100%
+  preserved across all adaptations.
+- Human conversational paralinguistics & self-repair in live calls
+  (`skill-human-paralinguistics-and-self-repair`): self-corrections, micro-breaths, relief
+  sighs, light laughs, Jordanian fillers («اممم شوف...», «يعني هسا...»).
+- Engaged life conversational partner: active listening + natural follow-up questions.
+- Carried v1.1 items: `tech-hardware-scout`, `career-project-incubator`,
+  Mem0/Firestore (evaluation only — vault loop must prove out).
+
+**Milestone 1-Month Post-Stabilization — Automation & Content Engine**:
+- Personal weekly audio story/podcast (`skill-weekly-audio-digest`): Saturday evening
+  2-3 minute motivating narrative over the week's 7 `Daily_Logs/` in Sara's voice.
+- Shared history & inside-jokes graph (`skill-shared-history-graph`) persisted in Obsidian.
+- Clipping bounty automation & anti-shadowban pipeline (`sub-agent-clip-farming-and-warmup`):
+  Whop/Drive ingestion -> FFmpeg anti-duplicate mutation (1% zoom, 1.01x speed, AI hooks) ->
+  Playwright-Stealth human-behavior warm-up (5-25s watches, 15% likes, 5% follows) ->
+  staggered multi-account publishing (TikTok/Reels/Shorts) -> bounty submission + daily
+  earnings to `Daily_Logs/`. Sara supervises; owner-gated publishing. ToS/ban risk recorded
+  in ARCHITECTURE §8.
+- Private VoIP / softphone — SIP over Wi-Fi (v1.5): virtual extensions via Linphone /
+  Zoiper, no cellular SIM.
+
+**Milestone v2.0 & Beyond — Gaming, Persona & Multi-Agent Squad**:
+- Distributed Civilization VI LAN gaming module: Discord voice, secret Telegram alliance
+  coordination, post-match learning in `Studies/Gaming/Civ6/`.
+- Autonomous social media virtual persona (AI influencer): consistent LoRA face generation,
+  Jordanian captions (Instagram/TikTok).
+- Multi-agent squad (post-v2.0): six agents — Sara (Chief of Staff), Captain Sakhr (Fitness),
+  Prof. Nour (Academic), Tarek (Dev), Rami (Gaming), Karim (Finance) — shared Telegram group,
+  private Obsidian memory silos.
+
+**Formally excluded / deferred (owner decision 2026-09-01)**: complex PC-based ambient
+situational awareness (inference-error risk) · cognitive load / burnout guard.
 
 **Parked Future Scope (no version, enters via standard spec pipeline when prioritized)**:
 PC Health Monitor · Voice Read-It-Later · Emotional Context Memory · Silent Vault Backup ·
