@@ -1,12 +1,9 @@
 """Dual-tier memory (owner directive 2026-09-01): short-term rolling buffer + Obsidian
 long-term context injection + background vault writers (Daily_Logs + User_Info)."""
 
-import asyncio
 import json
 from datetime import UTC, datetime
 from zoneinfo import ZoneInfo
-
-import pytest
 
 from src.memory import (
     SECTION_CHAR_CAP,
@@ -112,20 +109,23 @@ async def test_load_long_term_joins_profile_dialect_and_today_log():
 
 
 async def test_load_long_term_skips_missing_notes_and_survives_vault_failure():
-    vault = FakeVault({"02_Areas/Profile/User_Info.md": "---\n---\nعمر فقط."})
-
     class ExplodingVault(FakeVault):
         async def read(self, path):
             if path == "02_Areas/Profile/User_Info.md":
                 return await super().read(path)
             raise RuntimeError("github down")
 
-    context = await load_long_term(ExplodingVault(), today=NOW.date())
+    context = await load_long_term(
+        ExplodingVault({"02_Areas/Profile/User_Info.md": "---\ntype: profile\n---\nعمر فقط."}),
+        today=NOW.date(),
+    )
     assert context == "عمر فقط."  # degraded gracefully — chat never breaks
 
 
 async def test_load_long_term_caps_each_section():
-    vault = FakeVault({"02_Areas/Profile/User_Info.md": "---\n---\n" + "ط" * (SECTION_CHAR_CAP + 500)})
+    vault = FakeVault(
+        {"02_Areas/Profile/User_Info.md": "---\n---\n" + "ط" * (SECTION_CHAR_CAP + 500)}
+    )
     context = await load_long_term(vault, today=NOW.date())
     assert len(context) == SECTION_CHAR_CAP
 
@@ -158,7 +158,9 @@ async def test_log_exchange_caps_long_turns():
 
 async def test_maybe_learn_persists_new_fact_to_user_info():
     vault = FakeVault()
-    brain = FakeBrain(json.dumps({"learn": True, "fact": "المالك يحب القهوة التركية"}, ensure_ascii=False))
+    brain = FakeBrain(
+        json.dumps({"learn": True, "fact": "المالك يحب القهوة التركية"}, ensure_ascii=False)
+    )
     fact = await _writer(vault, brain).maybe_learn("خليني احكيلك اني بحب القهوة التركية", now=NOW)
     assert fact == "المالك يحب القهوة التركية"
     path, heading, lines, _ = vault.appends[0]
@@ -170,7 +172,10 @@ async def test_maybe_learn_persists_new_fact_to_user_info():
 
 
 async def test_maybe_learn_ignores_transient_chat():
-    vault, brain = FakeVault(), FakeBrain(json.dumps({"learn": False, "fact": ""}, ensure_ascii=False))
+    vault, brain = (
+        FakeVault(),
+        FakeBrain(json.dumps({"learn": False, "fact": ""}, ensure_ascii=False)),
+    )
     assert await _writer(vault, brain).maybe_learn("شو الأخبار؟", now=NOW) is None
     assert vault.appends == []
 
@@ -190,6 +195,9 @@ class FailingBrain:
 
 
 async def test_maybe_learn_never_writes_empty_fact():
-    vault, brain = FakeVault(), FakeBrain(json.dumps({"learn": True, "fact": "  "}, ensure_ascii=False))
+    vault, brain = (
+        FakeVault(),
+        FakeBrain(json.dumps({"learn": True, "fact": "  "}, ensure_ascii=False)),
+    )
     assert await _writer(vault, brain).maybe_learn("شي", now=NOW) is None
     assert vault.appends == []
