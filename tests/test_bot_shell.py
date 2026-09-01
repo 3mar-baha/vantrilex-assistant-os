@@ -134,11 +134,16 @@ class _EmptyTranscriber:
         self.notes.append({"text": text, "duration_s": duration_s})
 
 
-async def test_silent_voice_note_gets_honest_voice_reply(fake_bot, make_shell):
+async def test_silent_voice_note_gets_honest_voice_reply(fake_bot, make_shell, monkeypatch):
     """Live 2026-09-01 22:03: a 6-second silent note transcribed empty and the owner
     was left hanging on a static ack. Sara must answer with an honest VOICE note."""
     empty = _EmptyTranscriber()
     shell, bot = make_shell(transcriber=empty), fake_bot()
+
+    async def fake_download(file, destination=None, **kwargs):
+        destination.write(b"FAKE-OGG")
+
+    monkeypatch.setattr(bot, "download", fake_download)
     await shell.dp.feed_update(bot, make_update(1, OWNER_ID, voice=True))
     assert empty.notes and empty.notes[0]["text"] == ""  # memo still filed
     texts = [c.method.text for c in bot.session.sent("SendMessage")]
@@ -169,7 +174,8 @@ async def test_enroll_voice_flow_and_biometric_gate(fake_bot, make_shell, monkey
         assert (tmp_path / "vault" / "State" / "owner_voiceprint.enc").exists()
 
         await _run(shell, bot, make_update(3, OWNER_ID, voice=True))
-        assert bot.session.sent("SendMessage")[-1].method.text == VOICE_ACK_AR
+        # Real Whisper rejects FAKE-OGG -> honest empty-voice line (2026-09-01 fix).
+        assert bot.session.sent("SendMessage")[-1].method.text == EMPTY_VOICE_AR
 
         monkeypatch.setattr(VoiceBiometrics, "_embed_sync", lambda self, ogg: [0.8, -0.6, 0.0])
         await _run(shell, bot, make_update(4, OWNER_ID, voice=True))

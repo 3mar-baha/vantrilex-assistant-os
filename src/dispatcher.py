@@ -22,14 +22,17 @@ from src.config import Settings
 from src.gateway import GatewayError, OmniRouteClient, Tier
 
 DEFAULT_ACK_AR: Final[str] = "من عيوني هسا ببدأ..."
+MAX_ACK_CHARS: Final[int] = 30
 
 _ROUTER_PROMPT_AR: Final[str] = (
     "أنت بوابة سارة الأمامية. صنّف طلب المالك وأجب بسطر JSON واحد فقط:\n"
     '{"route": "direct"|"tier2"|"tier3", "tool": "none"|"gmail"|"calendar"|"tasks"'
     '|"telemetry"|"launch"|"brief", "arg": "...", "ack": "..."}\n'
-    '- direct: دردشة أو سؤال بسيط — إقرار فوري قصير في "ack"، والرد الكامل يُبث بعد التصنيف.\n'
-    '- tier2: مهمة بأداة أو أداتين (تقويم، مهام، بريد، ملفات) — إقرار فوري قصير في "ack".\n'
-    '- tier3: تخطيط متعدد الخطوات، تعليم عميق، تحليل ملفات — إقرار فوري في "ack".\n'
+    '- "ack" إقرار من كلمتين إلى خمس كلمات فقط (مثل «من عيوني هسا» أو «لحظة بفحصلك») '
+    "— ممنوع تجيب على السؤال داخله، الرد الكامل يُبث بعد التصنيف.\n"
+    "- direct: دردشة أو سؤال بسيط.\n"
+    "- tier2: مهمة بأداة أو أداتين (تقويم، مهام، بريد، ملفات).\n"
+    "- tier3: تخطيط متعدد الخطوات، تعليم عميق، تحليل ملفات.\n"
     '- tool: "none" للدردشة الصرفة؛ وإلا الأداة المطلوبة حصراً:\n'
     "  gmail=فحص البريد، calendar=مواعيد التقويم، tasks=المهام المستحقة، "
     'telemetry=حالة الجهاز والجسر، launch=فتح برنامج على PC مع اسم البرنامج في "arg"، '
@@ -63,6 +66,8 @@ def _parse_router(reply: str) -> tuple[str, str, str, str] | None:
     tool = str(verdict.get("tool") or "none").strip().lower()
     if tool not in _VALID_TOOLS:
         tool = "none"
+    if len(ack) > MAX_ACK_CHARS:  # router drift: a mini-answer, not an acknowledgment
+        ack = DEFAULT_ACK_AR
     return route, ack or DEFAULT_ACK_AR, tool, str(verdict.get("arg") or "").strip()
 
 

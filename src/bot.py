@@ -57,6 +57,7 @@ HELP_AR: Final[str] = (
     "عالكمبيوتر (بتأكيدك). ابعتلي رسالة صوتية وبجاوبك صوت."
 )
 VOICE_ACK_AR: Final[str] = "سمعت الملاحظة الصوتية، لسأ أعالجها وأرجعلك."
+EMPTY_VOICE_AR: Final[str] = "ما سمعت شي واضح بالملاحظة، جرب ابعتها مرة ثانية وهسا القريب من الميك."
 APOLOGY_AR: Final[str] = "سامحني، صار خلل تقني بسيط. جرب مرة ثانية."
 EMPTY_REPLY_AR: Final[str] = "وصلتني رسالتك بس ما قدرت أجيب رد مناسب. جرب صياغة ثانية."
 ENROLL_PROMPT_AR: Final[str] = "تمام، ابعتلي هسا ملاحظة صوتية قصيرة وأسجل بصمتك."
@@ -149,9 +150,9 @@ def build_dispatcher(
             return
         try:
             text = await transcriber.transcribe(ogg)  # LOCAL Whisper only (§2.5)
-        except Exception:  # noqa: BLE001 — transcription failure degrades to the static ack
+        except Exception:  # noqa: BLE001 — transcription failure gets the honest voice line
             logger.exception("voice transcription failed")
-            await message.answer(VOICE_ACK_AR)
+            await _voice_fail_reply(message, bot, voice)
             return
         await transcriber.file_note(
             text,
@@ -159,7 +160,11 @@ def build_dispatcher(
             duration_s=float(message.voice.duration or 0),
         )  # contract: retried once, never raises into the reply pipeline
         if not text.strip():
-            await message.answer(VOICE_ACK_AR)  # empty memo filed with (empty) body
+            logger.warning(
+                "voice transcription empty (silent mic?) duration_s={}",
+                float(message.voice.duration or 0),
+            )
+            await _voice_fail_reply(message, bot, voice)
             return
         _spawn_stream(message, bot, text, voice_origin=True)
 
@@ -211,6 +216,19 @@ async def _download_voice(bot: Bot, message: Message) -> bytes:
     buffer = io.BytesIO()
     await bot.download(message.voice, destination=buffer)
     return buffer.getvalue()
+
+
+async def _voice_fail_reply(message: Message, bot: Bot, voice) -> None:
+    """Silent/failed transcription: an honest voice note back — the owner is never
+    left hanging on a static ack (live 2026-09-01: a 6s silent note got two acks)."""
+    await message.answer(EMPTY_VOICE_AR)
+    if voice is None:
+        return
+    try:
+        ogg = await voice.synthesize(EMPTY_VOICE_AR)
+        await bot.send_voice(message.chat.id, BufferedInputFile(ogg, filename="sara.ogg"))
+    except Exception:  # noqa: BLE001 — the text line already landed
+        logger.warning("voice fail-note synthesis failed; text reply already delivered")
 
 
 async def _stream_answer(
