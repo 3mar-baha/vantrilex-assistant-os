@@ -201,3 +201,115 @@ async def test_maybe_learn_never_writes_empty_fact():
     )
     assert await _writer(vault, brain).maybe_learn("شي", now=NOW) is None
     assert vault.appends == []
+
+
+# --- daily conversation summary (owner directive 2026-09-01, 23:50 job) -------------
+
+from datetime import timedelta
+
+from src.memory import SUMMARY_MAX_MESSAGES, DailySummarizer, day_chat_lines
+
+NOTE = (
+    "---\ntype: daily\n---\n"
+    "## دردشة 10:00\n\n**المالك:** صباح الخير\n**سارة:** صباح النور\n\n"
+    "## دردشة 12:30\n\n**المالك:** ذكرني بالموعد\n**سارة:** سجلته\n"
+)
+
+
+def test_day_chat_lines_extracts_chat_turns_in_order():
+    lines = day_chat_lines(NOTE)
+    assert lines == [
+        "**المالك:** صباح الخير",
+        "**سارة:** صباح النور",
+        "**المالك:** ذكرني بالموعد",
+        "**سارة:** سجلته",
+    ]
+
+
+def test_day_chat_lines_ignores_prose_and_other_speakers():
+    note = "ملاحظة يومية\n**عمر:** نص\n**المالك:** رسالة حقيقية\n**سارة:** رد"
+    assert day_chat_lines(note) == ["**المالك:** رسالة حقيقية", "**سارة:** رد"]
+
+
+def test_day_chat_lines_caps_to_last_150():
+    body = "".join(f"**المالك:** رسالة{i}\n" for i in range(SUMMARY_MAX_MESSAGES + 50))
+    lines = day_chat_lines(body)
+    assert len(lines) == SUMMARY_MAX_MESSAGES
+    assert lines[0] == "**المالك:** رسالة50"  # oldest dropped
+    assert lines[-1] == "**المالك:** رسالة199"
+
+
+def _summarizer(vault, brain) -> DailySummarizer:
+    return DailySummarizer(vault, brain, tz=TZ)
+
+
+async def test_summarize_day_appends_detailed_summary_section():
+    vault = FakeVault(
+        {
+            "Daily_Logs/2026-09-01.md": NOTE,
+            "02_Areas/Profile/User_Info.md": "---\ntype: profile\n---\nالمالك عمر مهندس.",
+        }
+    )
+    brain = FakeBrain("ملخص اليوم: تحدثا عن الموعد والقهوة.")
+    out = await _summarizer(vault, brain).summarize_day(NOW.date(), now=NOW)
+    assert out == "ملخص اليوم: تحدثا عن الموعد والقهوة."
+    path, heading, lines, prefix = vault.appends[0]
+    assert path == "Daily_Logs/2026-09-01.md"
+    assert "ملخص محادثة" in heading and "2026-09-01" in heading
+    assert lines == ("ملخص اليوم: تحدثا عن الموعد والقهوة.",)
+    assert prefix.startswith("sara:")
+    # the model call carried the day's turns AND the Obsidian context
+    prompt = brain.calls[0][0]["content"]
+    assert "صباح الخير" in prompt and "سجلته" in prompt
+    assert "المالك عمر مهندس." in prompt
+
+
+async def test_summarize_day_caps_sent_messages_to_last_150():
+    body = "---\n---\n" + "".join(f"**المالك:** رسالة{i}\n" for i in range(200))
+    vault = FakeVault({"Daily_Logs/2026-09-01.md": body})
+    brain = FakeBrain("ملخص")
+    await _summarizer(vault, brain).summarize_day(NOW.date(), now=NOW)
+    prompt = brain.calls[0][0]["content"]
+    assert "رسالة199" in prompt and "رسالة0\n" not in prompt  # only the last 150 sent
+
+
+async def test_summarize_day_skips_days_without_chat():
+    vault, brain = FakeVault(), FakeBrain("ملخص")
+    assert await _summarizer(vault, brain).summarize_day(NOW.date(), now=NOW) is None
+    assert brain.calls == [] and vault.appends == []
+
+
+async def test_summarize_day_skips_prose_only_note():
+    vault = FakeVault({"Daily_Logs/2026-09-01.md": "---\n---\nملاحظات بدون دردشة"})
+    brain = FakeBrain("ملخص")
+    assert await _summarizer(vault, brain).summarize_day(NOW.date(), now=NOW) is None
+    assert brain.calls == [] and vault.appends == []
+
+
+async def test_summarize_day_is_idempotent_already_summarized():
+    vault = FakeVault({"Daily_Logs/2026-09-01.md": NOTE + "\n## ملخص محادثة اليوم 2026-09-01\n\nتم"})
+    brain = FakeBrain("ملخص جديد")
+    assert await _summarizer(vault, brain).summarize_day(NOW.date(), now=NOW) is None
+    assert brain.calls == [] and vault.appends == []
+
+
+async def test_summarize_day_survives_brain_failure():
+    vault = FakeVault({"Daily_Logs/2026-09-01.md": NOTE})
+    assert await _summarizer(vault, FailingBrain()).summarize_day(NOW.date(), now=NOW) is None
+    assert vault.appends == []
+
+
+def test_summary_due_predicate_at_2350_local():
+    summarizer = _summarizer(FakeVault(), FakeBrain())
+    before = datetime(2026, 9, 1, 20, 49, tzinfo=UTC)  # 23:49 Amman
+    at = datetime(2026, 9, 1, 20, 50, tzinfo=UTC)  # 23:50 Amman
+    assert summarizer.due(before) is False
+    assert summarizer.due(at) is True
+
+
+async def test_summarize_day_multi_paragraph_summary_kept_verbatim():
+    vault = FakeVault({"Daily_Logs/2026-09-01.md": NOTE})
+    summary = "الفقرة الأولى.\n\nالفقرة الثانية."
+    vault2 = vault
+    await _summarizer(vault2, FakeBrain(summary)).summarize_day(NOW.date(), now=NOW)
+    assert vault2.appends[0][2] == ("الفقرة الأولى.", "", "الفقرة الثانية.")
