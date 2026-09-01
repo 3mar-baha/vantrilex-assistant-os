@@ -43,12 +43,14 @@ if ($gateway) {
 
 Write-Host '=== SARA: launching windows ===' -ForegroundColor Cyan
 $core = "Set-Location -LiteralPath '$Root'; `$env:PORT='$Port'; make run-core"
+$coreEnc = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($core))
 Start-Process powershell -ArgumentList '-NoExit', '-ExecutionPolicy', 'Bypass', `
-    '-EncodedCommand', [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($core))
+    '-EncodedCommand', $coreEnc
 
 $bridge = "Set-Location -LiteralPath '$Root'; make run-bridge"
+$bridgeEnc = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($bridge))
 Start-Process powershell -ArgumentList '-NoExit', '-ExecutionPolicy', 'Bypass', `
-    '-EncodedCommand', [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($bridge))
+    '-EncodedCommand', $bridgeEnc
 
 Write-Host ("  core window  (PORT={0}) launched" -f $Port)
 Write-Host '  bridge window launched'
