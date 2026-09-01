@@ -46,14 +46,14 @@ class FakeBrain:
 # --- short-term rolling buffer -------------------------------------------------
 
 
-def test_buffer_keeps_last_15_messages_and_drops_oldest():
+def test_buffer_keeps_last_50_messages_and_drops_oldest():
     memory = ConversationMemory()
-    for i in range(20):
+    for i in range(55):
         memory.remember(1, "user" if i % 2 == 0 else "assistant", f"msg{i}")
     history = memory.history(1)
-    assert len(history) == 15  # deque(maxlen=15) of {role, content} dicts
+    assert len(history) == 50  # deque(maxlen=50) of {role, content} dicts
     assert history[0]["content"] == "msg5"
-    assert history[-1]["content"] == "msg19"
+    assert history[-1]["content"] == "msg54"
     assert all(set(m) == {"role", "content"} for m in history)
 
 

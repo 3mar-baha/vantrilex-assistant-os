@@ -101,14 +101,29 @@ async def test_tier_fallback_chain_ordering():
 
 
 async def test_simple_chat_stays_tier1(make_settings):
-    """AC4: simple chat is answered entirely at Tier 1; Tier 2/3 never contacted."""
+    """AC4 (amended 2026-09-01 live-debug): simple chat acks at Tier 1 then streams the
+    FAST conversation lane WITH the full memory envelope (system + history). The
+    history-less router never speaks alone — Tier 2/3 remain untouched."""
     script = _Scripted(
-        httpx.Response(200, content=_sse(_router_json("direct", "أهلا عمر، كل شي منيح")))
+        httpx.Response(200, content=_sse(_router_json("direct", DEFAULT_ACK_AR))),
+        httpx.Response(200, content=_sse(_chunk("أول رقم"), _chunk(" كان 1"))),
     )
+    history = [
+        {"role": "user", "content": "الرسالة الأولى"},
+        {"role": "assistant", "content": "رد أول"},
+    ]
     async with _gateway(script) as client:
-        out = await _collect(FrontDoorDispatcher(client, make_settings()).handle("شو الأخبار؟"))
-    assert out == ["أهلا عمر، كل شي منيح"]
-    assert script.models() == [FAST_PIN]
+        out = await _collect(
+            FrontDoorDispatcher(client, make_settings()).handle(
+                "شو أول رقم أرسلته؟", system="أنت سارة", history=history
+            )
+        )
+    assert out == [DEFAULT_ACK_AR, "أول رقم", " كان 1"]
+    assert script.models() == [FAST_PIN, FAST_PIN]  # router AND answer both on the FAST chain
+    messages = json.loads(script.requests[-1].content)["messages"]
+    assert [m["role"] for m in messages] == ["system", "user", "assistant", "user"]
+    assert messages[0]["content"] == "أنت سارة"
+    assert messages[-1]["content"] == "شو أول رقم أرسلته؟"
 
 
 async def test_tool_intent_routes_tier2(make_settings):

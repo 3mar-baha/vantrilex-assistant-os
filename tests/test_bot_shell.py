@@ -218,8 +218,11 @@ async def test_new_owner_message_cancels_inflight_stream(fake_bot, make_shell):
     """Interjection: a newer owner message cancels the in-flight stream; partial kept."""
     gate = asyncio.Event()
     shell = make_shell(
-        router_replies=[_router("tier2", "تم"), _router("direct", "جواب ثاني")],
-        stream_programs=[StreamProgram(deltas=("أول", "تالٍ"), gate=gate)],
+        router_replies=[_router("tier2", "تم"), _router("tier2", "جواب ثاني")],
+        stream_programs=[
+            StreamProgram(deltas=("أول", "تالٍ"), gate=gate),
+            StreamProgram(deltas=("ثاني",)),
+        ],
     )
     bot = fake_bot()
     await shell.dp.feed_update(bot, make_update(1, OWNER_ID, "سؤال أول"))
