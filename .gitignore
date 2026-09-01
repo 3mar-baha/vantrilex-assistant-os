@@ -34,3 +34,6 @@ desktop.ini
 
 # Runtime data dumps (state lives in the vault, per ADR-15)
 data/
+
+# Local working copy of the git-backed Obsidian vault (owner data — never commit)
+vault/
