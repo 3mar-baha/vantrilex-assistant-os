@@ -214,7 +214,9 @@ class FakeRegistry:
 
 
 def _tool_router(tool: str, ack: str, arg: str = "") -> str:
-    return _chunk(json.dumps({"route": "tier2", "tool": tool, "arg": arg, "ack": ack}, ensure_ascii=False))
+    return _chunk(
+        json.dumps({"route": "tier2", "tool": tool, "arg": arg, "ack": ack}, ensure_ascii=False)
+    )
 
 
 async def test_tool_verdict_executes_real_registry_and_narrates_at_heavy(make_settings):
@@ -228,8 +230,9 @@ async def test_tool_verdict_executes_real_registry_and_narrates_at_heavy(make_se
     )
     async with _gateway(script) as client:
         out = await _collect(
-            FrontDoorDispatcher(client, make_settings())
-            .handle("افحصي اخر رسائل الجيميل", tools=registry)
+            FrontDoorDispatcher(client, make_settings()).handle(
+                "افحصي اخر رسائل الجيميل", tools=registry
+            )
         )
     assert registry.calls == [("gmail", "")]
     assert out == ["بعطيك الإيميلات", "عندك", " 3 رسائل"]
@@ -248,8 +251,9 @@ async def test_launch_tool_notifies_directly_without_narration_stream(make_setti
     )
     async with _gateway(script) as client:
         out = await _collect(
-            FrontDoorDispatcher(client, make_settings())
-            .handle("افتحي الآلة الحاسبة", tools=registry)
+            FrontDoorDispatcher(client, make_settings()).handle(
+                "افتحي الآلة الحاسبة", tools=registry
+            )
         )
     assert registry.calls == [("launch", "الآلة الحاسبة")]
     assert out == ["لحظة"]
@@ -284,8 +288,9 @@ async def test_history_flows_into_narration_stream(make_settings):
     )
     async with _gateway(script) as client:
         await _collect(
-            FrontDoorDispatcher(client, make_settings())
-            .handle("شو وضع الجهاز؟", history=history, tools=registry)
+            FrontDoorDispatcher(client, make_settings()).handle(
+                "شو وضع الجهاز؟", history=history, tools=registry
+            )
         )
     messages = json.loads(script.requests[-1].content)["messages"]
     assert [m["role"] for m in messages] == ["user", "assistant", "user"]
@@ -303,4 +308,3 @@ async def test_tool_verdict_without_registry_falls_back_to_plain_stream(make_set
         out = await _collect(FrontDoorDispatcher(client, make_settings()).handle("افحصي الجيميل"))
     assert out == ["لحظة", "رد عادي"]
     assert script.models() == [FAST_PIN, MEDIUM_PIN]
-
