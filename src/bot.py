@@ -2,7 +2,11 @@
 
 The owner text path streams through the front-door dispatcher: placeholder ->
 first edit on the ack (<250 ms TTFT) -> coalesced edits -> final verbatim edit.
-A newer owner message cancels the in-flight stream. Every handler exception is
+Owner directive (2026-09-01): every turn carries the dual-tier memory envelope
+(15-message rolling history + Obsidian long-term excerpt), background writers
+persist exchanges to the vault, tool intents execute real backends, and voice
+messages get a voice note back. A pending PC-launch confirmation is answered by
+the coordinator before the brain ever sees it. Every handler exception is
 mapped to a Jordanian apology — the owner is never left hanging.
 """
 
@@ -22,11 +26,16 @@ from loguru import logger
 from src.config import Settings
 from src.dispatcher import FrontDoorDispatcher
 from src.gateway import GatewayError, OmniRouteClient, Tier
+from src.memory import LONG_TERM_HEADER_AR, ConversationMemory, VaultMemoryWriter, load_long_term
 from src.middleware import OwnerOnlyMiddleware
+from src.pc_actions import PCActionCoordinator
 from src.skills.social_enrollment import VoiceprintRegistry
 from src.skills.telegram_chat_streamer import ChatStreamer
 from src.skills.voice_biometric_auth import VoiceBiometrics, verify_or_lockdown
 from src.skills.voice_to_vault_transcriber import VoiceToVault
+from src.telemetry import TelemetryClient
+from src.tools import ToolRegistry
+from src.vault import VaultClient
 from src.voice import VoicePipeline
 
 SYSTEM_PROMPT_AR: Final[str] = (
@@ -37,9 +46,9 @@ SYSTEM_PROMPT_AR: Final[str] = (
 WELCOME_AR: Final[str] = "يا هلا! أنا سارة، جاهزة أوامر. كيف فيني ساعدك اليوم؟"
 GREETING_AR: Final[str] = "أهلا فيك، أنا سارة، جاهزة أوامر."
 HELP_AR: Final[str] = (
-    "أنا سارة — مساعدتك التنفيذية. هسا بعرف: دردشة وأجوبة عبر الدماغ، وملاحظات صوتية "
-    "بصرافة فورية. جاي قريب: البريد والتقويم والمهام (سبرنت 2)، الخزنة وملفات العقل "
-    "والتحكم بالكمبيوتر (سبرنت 3)."
+    "أنا سارة — مساعدتك التنفيذية وهسا بذاكر محادثاتنا. بقدر: دردشة بأي موضوع، "
+    "أفحص بريدك وتقويمك ومهامك، أطلعلك حالة جهازك من الجسر، وأفتحلك أي برنامج "
+    "عالكمبيوتر (بتأكيدك). ابعتلي رسالة صوتية وبجاوبك صوت."
 )
 VOICE_ACK_AR: Final[str] = "سمعت الملاحظة الصوتية، لسأ أعالجها وأرجعلك."
 APOLOGY_AR: Final[str] = "سامحني، صار خلل تقني بسيط. جرب مرة ثانية."
@@ -49,11 +58,25 @@ ENROLL_DONE_AR: Final[str] = "انسمعت بصمتك وسجلتها. من هس�
 
 _STREAMS: Final[dict[int, tuple[asyncio.Task, asyncio.Event]]] = {}
 _ENROLL_PENDING: Final[set[int]] = set()
+_PERSIST_TASKS: Final[set[asyncio.Task]] = set()
 
 
-def build_dispatcher(gateway, voice, settings: Settings, transcriber=None) -> Dispatcher:
+def build_dispatcher(
+    gateway,
+    voice,
+    settings: Settings,
+    transcriber=None,
+    *,
+    vault=None,
+    memory=None,
+    writer=None,
+    tools=None,
+    coordinator=None,
+) -> Dispatcher:
     """gateway: the OmniRouteClient; wrapped here in the ADR-18 front door.
-    transcriber: injectable for tests; production builds the local Whisper one."""
+    transcriber: injectable for tests; production builds the local Whisper one.
+    vault/memory/writer/tools/coordinator: dual-tier memory + tool-lane wiring;
+    None keeps the legacy bare-chat behavior (tests, degraded boots)."""
     dp = Dispatcher()
     dp.update.outer_middleware(OwnerOnlyMiddleware(settings.authorized_user_id))
     front = FrontDoorDispatcher(gateway, settings)
@@ -132,18 +155,37 @@ def build_dispatcher(gateway, voice, settings: Settings, transcriber=None) -> Di
         if not text.strip():
             await message.answer(VOICE_ACK_AR)  # empty memo filed with (empty) body
             return
-        _spawn_stream(message, bot, text)
+        _spawn_stream(message, bot, text, voice_origin=True)
 
     @dp.message(F.text)
     async def on_text(message: Message, bot: Bot) -> None:
+        if coordinator is not None and coordinator.pending_active():
+            target = await coordinator.handle_owner_reply(message.text)
+            if target is not None:
+                return  # consumed as the launch confirmation/rejection
         _spawn_stream(message, bot, message.text)
 
-    def _spawn_stream(message: Message, bot: Bot, text: str) -> None:
+    def _spawn_stream(message: Message, bot: Bot, text: str, *, voice_origin: bool = False) -> None:
         previous = _STREAMS.get(message.chat.id)
         if previous is not None:
             previous[1].set()  # owner interjection: cancel the in-flight stream
         cancel = asyncio.Event()
-        task = asyncio.create_task(_stream_answer(bot, front, message, settings, cancel, text))
+        task = asyncio.create_task(
+            _stream_answer(
+                bot,
+                front,
+                message,
+                settings,
+                cancel,
+                text,
+                voice=voice,
+                vault=vault,
+                memory=memory,
+                writer=writer,
+                tools=tools,
+                voice_origin=voice_origin,
+            )
+        )
         _STREAMS[message.chat.id] = (task, cancel)
 
     @dp.errors()
@@ -172,11 +214,33 @@ async def _stream_answer(
     settings: Settings,
     cancel: asyncio.Event,
     text: str,
+    *,
+    voice=None,
+    vault=None,
+    memory=None,
+    writer=None,
+    tools=None,
+    voice_origin: bool = False,
 ) -> None:
-    streamer = ChatStreamer(bot, message.chat.id, edit_interval_ms=settings.stream_edit_interval_ms)
+    chat_id = message.chat.id
+    streamer = ChatStreamer(bot, chat_id, edit_interval_ms=settings.stream_edit_interval_ms)
     try:
-        await bot.send_chat_action(message.chat.id, "typing")
-        text = await streamer.stream_reply(front.handle(text, system=SYSTEM_PROMPT_AR), cancel)
+        await bot.send_chat_action(chat_id, "typing")
+        system = SYSTEM_PROMPT_AR
+        if vault is not None:
+            try:
+                long_term = await load_long_term(
+                    vault, today=datetime.now(ZoneInfo(settings.tz)).date()
+                )
+            except Exception:  # noqa: BLE001 — context is best-effort, the reply is not
+                logger.warning("long-term context load failed; continuing without it")
+                long_term = ""
+            if long_term:
+                system = f"{system}\n\n{LONG_TERM_HEADER_AR}\n{long_term}"
+        history = memory.history(chat_id) if memory is not None else None
+        reply = await streamer.stream_reply(
+            front.handle(text, system=system, history=history, tools=tools), cancel
+        )
     except GatewayError as error:
         logger.error("brain stream failed: {}", error)
         await message.answer(APOLOGY_AR)
@@ -185,11 +249,51 @@ async def _stream_answer(
         logger.exception("unexpected brain stream failure")
         await message.answer(APOLOGY_AR)
         return
-    if not text.strip():
+    if not reply.strip():
         await message.answer(EMPTY_REPLY_AR)
+        return
+    if memory is not None:
+        memory.remember(chat_id, "user", text)
+        memory.remember(chat_id, "assistant", reply)
+    if writer is not None:
+        _persist_exchange(writer, text, reply)
+    if voice_origin and voice is not None:
+        try:
+            ogg = await voice.synthesize(reply)
+            await bot.send_voice(chat_id, BufferedInputFile(ogg, filename="sara.ogg"))
+        except Exception:  # noqa: BLE001 — voice-out is a bonus; the text reply already landed
+            logger.warning("voice reply synthesis failed; text reply already delivered")
 
 
-async def run_bot(settings: Settings) -> None:
+def _persist_exchange(writer, user_text: str, reply_text: str) -> None:
+    async def _job() -> None:
+        now = datetime.now(UTC)
+        try:
+            await writer.log_exchange(user_text, reply_text, now=now)
+        except Exception:  # noqa: BLE001 — the ledger is best-effort
+            logger.warning("daily chat log write failed")
+        try:
+            await writer.maybe_learn(user_text, now=now)
+        except Exception:  # noqa: BLE001 — learning is best-effort
+            logger.warning("fact learning failed")
+
+    task = asyncio.create_task(_job())
+    _PERSIST_TASKS.add(task)
+    task.add_done_callback(_PERSIST_TASKS.discard)
+
+
+class _BotNotifier:
+    """Delivers PCActionCoordinator outcomes/prompts to the owner's chat."""
+
+    def __init__(self, bot: Bot, chat_id: int) -> None:
+        self._bot = bot
+        self._chat_id = chat_id
+
+    async def notify(self, text: str) -> None:
+        await self._bot.send_message(self._chat_id, text)
+
+
+async def run_bot(settings: Settings, bridge=None) -> None:
     gateway = OmniRouteClient(
         settings.omniroute_base_url,
         settings.omniroute_api_key,
@@ -202,9 +306,62 @@ async def run_bot(settings: Settings) -> None:
     voice = VoicePipeline(
         voice=settings.voice_name, rate=settings.voice_rate, pitch=settings.voice_pitch
     )
-    dp = build_dispatcher(gateway, voice, settings)
+    vault = VaultClient(
+        settings.vault_github_repo,
+        settings.vault_github_token.get_secret_value(),
+        branch=settings.vault_branch,
+    )
+    memory = ConversationMemory()
+    writer = VaultMemoryWriter(vault, gateway, tz=ZoneInfo(settings.tz))
     bot = Bot(token=settings.telegram_bot_token)
+    inbox = suite = None
+    try:
+        from src.daily_brief import BriefComposer
+        from src.email_triage import TriageClassifier
+        from src.gmail import GmailInbox
+        from src.google_auth import GoogleSession
+        from src.google_suite import GoogleSuite
+
+        session = GoogleSession(settings)
+        suite = GoogleSuite(session, settings.google_calendar_id)
+        inbox = GmailInbox(session, settings)
+        composer = BriefComposer(
+            suite,
+            inbox,
+            TriageClassifier(settings, gateway),
+            bot,
+            settings.authorized_user_id,
+            settings,
+        )
+    except Exception as error:  # noqa: BLE001 — missing Google creds degrade to honest offline lines
+        logger.warning("google stack unavailable; google tools degrade: {}", error)
+        composer = None
+    telemetry = TelemetryClient(bridge, gateway) if bridge is not None else None
+    coordinator = (
+        PCActionCoordinator(bridge, vault, _BotNotifier(bot, settings.authorized_user_id))
+        if bridge is not None
+        else None
+    )
+    tools = ToolRegistry(
+        inbox=inbox,
+        suite=suite,
+        telemetry=telemetry,
+        coordinator=coordinator,
+        composer=composer,
+        tz=ZoneInfo(settings.tz),
+    )
+    dp = build_dispatcher(
+        gateway,
+        voice,
+        settings,
+        vault=vault,
+        memory=memory,
+        writer=writer,
+        tools=tools,
+        coordinator=coordinator,
+    )
     try:
         await dp.start_polling(bot, skip_updates=True)
     finally:
         await gateway.aclose()
+        await vault.aclose()

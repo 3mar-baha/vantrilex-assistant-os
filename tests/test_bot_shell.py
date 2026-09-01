@@ -283,7 +283,6 @@ class _WriterDouble:
 
     async def maybe_learn(self, user_text, *, now):
         self.learns.append(user_text)
-        return None
 
 
 class _CoordinatorDouble:
@@ -335,9 +334,9 @@ async def test_streams_carry_history_and_long_term_envelope(fake_bot, make_shell
     second = shell.gateway.stream_calls[1][0]
     assert [m["role"] for m in second] == ["system", "user", "assistant", "user"]
     assert second[1] == {"role": "user", "content": "مرحبا"}
-    assert second[2] == {"role": "assistant", "content": "رد1"}
+    assert second[2] == {"role": "assistant", "content": "إقراررد1"}  # ack + deltas = final text
     assert second[-1] == {"role": "user", "content": "شو رأيك؟"}
-    assert memory.history(OWNER_ID)[-1] == {"role": "assistant", "content": "رد2"}
+    assert memory.history(OWNER_ID)[-1] == {"role": "assistant", "content": "إقرار2رد2"}
 
 
 async def test_exchange_persisted_and_learned_after_stream(fake_bot, make_shell):
@@ -353,7 +352,7 @@ async def test_exchange_persisted_and_learned_after_stream(fake_bot, make_shell)
     await _run(shell, bot, make_update(1, OWNER_ID, "مرحبا"))
     assert shell.gateway.stream_calls  # reply streamed first
     await wait_until(lambda: writer.exchanges and writer.learns)
-    assert writer.exchanges == [("مرحبا", "رد")]
+    assert writer.exchanges == [("مرحبا", "تمرد")]  # ack + delta = final text
     assert writer.learns == ["مرحبا"]
 
 

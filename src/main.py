@@ -57,7 +57,7 @@ async def run(argv: list[str] | None = None) -> int:
     try:
         if os.environ.get("PORT"):
             bridge, _bound = await start_public_port(settings, int(os.environ["PORT"]))
-        await run_bot(settings)
+        await run_bot(settings, bridge=bridge)
     finally:
         if bridge is not None:
             await bridge.close()
