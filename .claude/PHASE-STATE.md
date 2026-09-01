@@ -516,10 +516,14 @@ product.)
       owner with two static acks and no voice → `EMPTY_VOICE_AR` + `_voice_fail_reply`:
       empty transcript or transcription failure answers with honest text + ar-JO voice
       note, memo still filed. Suite 347/85.71%, docs synced.
-      ← **current: both live fixes shipped — owner side = run `/enroll-voice` then send
-      a voice note (kills the static pre-ack; no State/owner_voiceprint.enc yet), check
-      the mic (22:03 note was silence), re-run `sara.bat`; dormant skills + Oracle deploy
-      (docs/09) deferred until owner says**
+      ← **current: SESSION PAUSED 2026-09-01 late evening — owner resumes 2026-09-02.
+      PENDING OWNER TEST: the live retest of tonight's two fixes never ran. When the
+      owner returns: (1) run `/enroll-voice` in Telegram then send a voice note to seal
+      the voiceprint (no State/owner_voiceprint.enc yet — kills the static pre-ack),
+      (2) check the mic (22:03 note was 6s of silence), (3) re-run `sara.bat` to load
+      `ca1b065`, (4) retest memory + a voice note + a silent note on Telegram. Also
+      verify minimax ack quality (one corrupted ack seen earlier). Deferred until owner
+      says: dormant skills activation, Oracle deploy (docs/09, card still blocked)**
 
 ## Open items / blockers
 
