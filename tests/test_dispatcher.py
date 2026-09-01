@@ -194,3 +194,113 @@ async def test_gateway_regression_green():
     assert request.headers["authorization"] == "Bearer test-key"
     assert json.loads(request.content)["stream"] is True
     assert script.models() == [MEDIUM_PIN]
+
+
+# --- Tool lane (owner directive 2026-09-01): real tool execution behind the router;
+# every tool narration streams at Tier.HEAVY (nemotron — the exclusive tool model). ----
+
+
+class FakeRegistry:
+    def __init__(self, result: str | None = "بريد غير مقروء: 3", error: Exception | None = None):
+        self.result = result
+        self.error = error
+        self.calls: list[tuple[str, str]] = []
+
+    async def call(self, tool: str, arg: str) -> str | None:
+        self.calls.append((tool, arg))
+        if self.error is not None:
+            raise self.error
+        return self.result
+
+
+def _tool_router(tool: str, ack: str, arg: str = "") -> str:
+    return _chunk(json.dumps({"route": "tier2", "tool": tool, "arg": arg, "ack": ack}, ensure_ascii=False))
+
+
+async def test_tool_verdict_executes_real_registry_and_narrates_at_heavy(make_settings):
+    """Tool intent: router verdict carries tool+arg, the registry executes the REAL
+    backend call, and the narration streams at the HEAVY tool lane (nemotron) with
+    the result embedded as DATA."""
+    registry = FakeRegistry(result="3 رسائل غير مقروءة: فاتورة، اجتماع، قسيمة")
+    script = _Scripted(
+        httpx.Response(200, content=_sse(_tool_router("gmail", "بعطيك الإيميلات"))),
+        httpx.Response(200, content=_sse(_chunk("عندك"), _chunk(" 3 رسائل"))),
+    )
+    async with _gateway(script) as client:
+        out = await _collect(
+            FrontDoorDispatcher(client, make_settings())
+            .handle("افحصي اخر رسائل الجيميل", tools=registry)
+        )
+    assert registry.calls == [("gmail", "")]
+    assert out == ["بعطيك الإيميلات", "عندك", " 3 رسائل"]
+    assert script.models() == [FAST_PIN, HEAVY_PIN]  # tool lane narrates exclusively
+    messages = json.loads(script.requests[-1].content)["messages"]
+    assert any("3 رسائل غير مقروءة" in m["content"] for m in messages)
+    assert any("افحصي اخر رسائل الجيميل" in m["content"] for m in messages)
+
+
+async def test_launch_tool_notifies_directly_without_narration_stream(make_settings):
+    """launch: the coordinator notifies the owner itself (audit code inside) — the
+    dispatcher yields only the ack and never streams a narration."""
+    registry = FakeRegistry(result=None)  # None = owner already notified
+    script = _Scripted(
+        httpx.Response(200, content=_sse(_tool_router("launch", "لحظة", "الآلة الحاسبة")))
+    )
+    async with _gateway(script) as client:
+        out = await _collect(
+            FrontDoorDispatcher(client, make_settings())
+            .handle("افتحي الآلة الحاسبة", tools=registry)
+        )
+    assert registry.calls == [("launch", "الآلة الحاسبة")]
+    assert out == ["لحظة"]
+    assert script.models() == [FAST_PIN]
+
+
+async def test_registry_failure_degrades_to_plain_tier2(make_settings, logs):
+    """A crashed tool call never hangs the chat: loud log + plain Tier 2 stream."""
+    registry = FakeRegistry(error=RuntimeError("bridge exploded"))
+    script = _Scripted(
+        httpx.Response(200, content=_sse(_tool_router("telemetry", "بشوف"))),
+        httpx.Response(200, content=_sse(_chunk("ما قدرت أوصل للجسر"))),
+    )
+    async with _gateway(script) as client:
+        out = await _collect(
+            FrontDoorDispatcher(client, make_settings()).handle("شو وضع الجهاز؟", tools=registry)
+        )
+    assert out == ["بشوف", "ما قدرت أوصل للجسر"]
+    assert script.models() == [FAST_PIN, MEDIUM_PIN]
+    messages = json.loads(script.requests[-1].content)["messages"]
+    assert not any("bridge exploded" in m["content"] for m in messages)
+    assert any("tool" in str(record).lower() for record in logs)
+
+
+async def test_history_flows_into_narration_stream(make_settings):
+    """Short-term memory: the dispatcher passes the rolling history through."""
+    registry = FakeRegistry(result="المعالج 12%")
+    history = [{"role": "user", "content": "مرحبا"}, {"role": "assistant", "content": "أهلا"}]
+    script = _Scripted(
+        httpx.Response(200, content=_sse(_tool_router("telemetry", "بشوف"))),
+        httpx.Response(200, content=_sse(_chunk("المعالج 12%"))),
+    )
+    async with _gateway(script) as client:
+        await _collect(
+            FrontDoorDispatcher(client, make_settings())
+            .handle("شو وضع الجهاز؟", history=history, tools=registry)
+        )
+    messages = json.loads(script.requests[-1].content)["messages"]
+    assert [m["role"] for m in messages] == ["user", "assistant", "user"]
+    assert messages[0]["content"] == "مرحبا"
+    assert messages[1] == {"role": "assistant", "content": "أهلا"}
+
+
+async def test_tool_verdict_without_registry_falls_back_to_plain_stream(make_settings):
+    """No registry wired -> the verdict degrades to the plain tier2 text stream."""
+    script = _Scripted(
+        httpx.Response(200, content=_sse(_tool_router("gmail", "لحظة"))),
+        httpx.Response(200, content=_sse(_chunk("رد عادي"))),
+    )
+    async with _gateway(script) as client:
+        out = await _collect(FrontDoorDispatcher(client, make_settings()).handle("افحصي الجيميل"))
+    assert out == ["لحظة", "رد عادي"]
+    assert script.models() == [FAST_PIN, MEDIUM_PIN]
+
