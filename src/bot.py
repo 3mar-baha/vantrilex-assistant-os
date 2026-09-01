@@ -26,7 +26,13 @@ from loguru import logger
 from src.config import Settings
 from src.dispatcher import FrontDoorDispatcher
 from src.gateway import GatewayError, OmniRouteClient, Tier
-from src.memory import LONG_TERM_HEADER_AR, ConversationMemory, VaultMemoryWriter, load_long_term
+from src.memory import (
+    LONG_TERM_HEADER_AR,
+    ConversationMemory,
+    DailySummarizer,
+    VaultMemoryWriter,
+    load_long_term,
+)
 from src.middleware import OwnerOnlyMiddleware
 from src.pc_actions import PCActionCoordinator
 from src.skills.social_enrollment import VoiceprintRegistry
@@ -360,8 +366,11 @@ async def run_bot(settings: Settings, bridge=None) -> None:
         tools=tools,
         coordinator=coordinator,
     )
+    summarizer = DailySummarizer(vault, gateway, tz=ZoneInfo(settings.tz))
+    summary_task = asyncio.create_task(summarizer.run_forever())
     try:
         await dp.start_polling(bot, skip_updates=True)
     finally:
+        summary_task.cancel()
         await gateway.aclose()
         await vault.aclose()

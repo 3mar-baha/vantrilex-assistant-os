@@ -205,7 +205,6 @@ async def test_maybe_learn_never_writes_empty_fact():
 
 # --- daily conversation summary (owner directive 2026-09-01, 23:50 job) -------------
 
-from datetime import timedelta
 
 from src.memory import SUMMARY_MAX_MESSAGES, DailySummarizer, day_chat_lines
 
@@ -270,7 +269,9 @@ async def test_summarize_day_caps_sent_messages_to_last_150():
     brain = FakeBrain("ملخص")
     await _summarizer(vault, brain).summarize_day(NOW.date(), now=NOW)
     prompt = brain.calls[0][0]["content"]
-    assert "رسالة199" in prompt and "رسالة0\n" not in prompt  # only the last 150 sent
+    turns = prompt.split("[محادثة اليوم")[1]  # the CONTEXT block may quote the note head;
+    assert "رسالة50\n" in turns and "رسالة49" not in turns  # the TURNS block is the last 150
+    assert "رسالة199" in turns
 
 
 async def test_summarize_day_skips_days_without_chat():
@@ -287,7 +288,9 @@ async def test_summarize_day_skips_prose_only_note():
 
 
 async def test_summarize_day_is_idempotent_already_summarized():
-    vault = FakeVault({"Daily_Logs/2026-09-01.md": NOTE + "\n## ملخص محادثة اليوم 2026-09-01\n\nتم"})
+    vault = FakeVault(
+        {"Daily_Logs/2026-09-01.md": NOTE + "\n## ملخص محادثة اليوم 2026-09-01\n\nتم"}
+    )
     brain = FakeBrain("ملخص جديد")
     assert await _summarizer(vault, brain).summarize_day(NOW.date(), now=NOW) is None
     assert brain.calls == [] and vault.appends == []
