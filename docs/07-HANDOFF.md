@@ -51,8 +51,8 @@ record: `docs/01-ARCHITECTURE.md` §1. Vision: `docs/00-VISION.md`.
 
 | Measure | Value |
 |---|---|
-| Product release | **v1.0.1** — annotated tag pushed to origin; GitHub Release published from CHANGELOG. v1.0.0 remains at https://github.com/3mar-baha/vantrilex-assistant-os/releases/tag/v1.0.0 |
-| Version source | `src/__version__ = "1.0.1"` (single source; consistency-guarded by `scripts/make_release.py`) |
+| Product release | **v1.0.2** — annotated tag pushed to origin; GitHub Release published from CHANGELOG. v1.0.0 remains at https://github.com/3mar-baha/vantrilex-assistant-os/releases/tag/v1.0.0 |
+| Version source | `src/__version__ = "1.0.2"` (single source; consistency-guarded by `scripts/make_release.py`) |
 | Test suite | **285 passed, 1 skipped** (skip = docker-build test: dev machine lacks docker + OmniRoute clone) |
 | Coverage | **>=85% branch** (gate is LIVE in pytest addopts — fail-closed; 85.7% at v1.0.1) |
 | Quality gate | `make gate` green: Ruff (lint+format) → pytest → security gate (bandit + vendored secret scanner) → docs guard (16 canonical files) |
@@ -124,6 +124,7 @@ record: `docs/01-ARCHITECTURE.md` §1. Vision: `docs/00-VISION.md`.
 | Google suite | `src/google_auth.py`, `src/google_suite.py`, `src/gmail.py`, `src/email_triage.py`, `src/daily_brief.py` | OAuth + sealed cache, Calendar/Tasks/Drive/Contacts, Gmail watch/sweep, tiered triage, daily brief |
 | TokenJuice | (in `src/email_triage.py` path) | Quoted-chain/signature/boilerplate compaction before LLM calls |
 | PC bridge | `common/protocol.py`, `bridge/{guard,executor,wol,idle,telemetry,daemon}.py`, `src/bridge_server.py`, `src/pc_actions.py` | Whitelist guard, executor, WoL, idle, daemon, WSS server, owner-origin actions + audit |
+| App indexer (v1.0.2) | `src/app_indexer.py` | Start Menu .lnk discovery → PowerShell target resolution → categorized idempotent whitelist merge (System32 dropped; `python -m src.app_indexer [--dry-run]`) |
 | Telemetry | `bridge/telemetry.py`, `src/telemetry.py` | psutil snapshot + Tier-1 Arabic narration |
 | Syllabus parser | `src/syllabus.py` | PDF → TIER3 strict-JSON → validated DAG → Calendar/Tasks schedule → `Studies/` |
 | Expansion (M4) | `src/expansion.py` | Arabic NL cron → runtime capability tasks; loud-disable; `State/capabilities.json` |

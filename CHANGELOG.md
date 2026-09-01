@@ -8,6 +8,28 @@ product release tags start independently at v1.0.0.)
 
 ## [Unreleased]
 
+## [1.0.2] — 2026-09-01
+
+Owner-directed runtime enhancements ahead of the first cloud deploy (local test phase).
+
+### Added
+- **Start Menu app indexer** (`src/app_indexer.py`, `python -m src.app_indexer [--dry-run]`):
+  discovers installed applications from both Windows Start Menu shortcut roots
+  (`C:\ProgramData\...` + `%APPDATA%\...`), resolves each `.lnk` target through
+  PowerShell WScript.Shell COM (batched EncodedCommand — no shell, no quoting hazards),
+  categorizes apps (Coding / Gaming / Study / Productivity) and merges them into
+  `config/whitelist.json` so the owner never hand-writes executable paths. Safety
+  contract: only Start-Menu-installed desktop shortcuts enter the whitelist — anything
+  resolving under `C:\Windows` (System32 included) is dropped; existing entries and
+  `restricted_actions` are preserved verbatim; merging is idempotent (casefold dedupe);
+  the whitelist Guard keeps re-reading the file per check. First live run: 223
+  shortcuts discovered, 154 apps merged, 63 system binaries skipped.
+- **Headless remote boot documentation** (RUNBOOK §5b): Windows Auto-Logon via
+  Sysinternals Autologon (LSA secret, preferred) or netplwiz, so a Wake-on-LAN magic
+  packet boots straight into the owner's desktop session; bridge daemon auto-start via
+  Task Scheduler (ONLOGON preferred — runs in the user session after auto-logon;
+  ONSTART alternative documented); end-to-end headless proof checklist.
+
 ## [1.0.1] — 2026-08-31
 
 Patch release closing the two gaps discovered while preparing the first cloud deploy.
