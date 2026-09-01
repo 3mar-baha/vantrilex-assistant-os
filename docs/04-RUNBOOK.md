@@ -180,6 +180,17 @@ verified before ticking:
 
 ## 5. PC Bridge Daemon (Windows)
 
+### 5a. One-command local cycle (owner utility, 2026-09-01)
+
+`sara.bat` (repo root, double-clickable) runs the FULL stop/stop-start cycle: kills
+stale `src.main` / `bridge.daemon` python processes (the TelegramConflictError fix),
+checks the OmniRoute gateway :20128 with a warning when it is down, then opens two
+PowerShell windows — core (`$env:PORT='8443'; make run-core`) and bridge
+(`make run-bridge`). Options: `-StopOnly` (shutdown only), `-Port 9000` (other port).
+Equivalent PowerShell: `.\sara.ps1`.
+
+1. `make setup` on the PC; fill `[CORE <-> BRIDGE]` block of `.env`
+
 1. `make setup` on the PC; fill `[CORE <-> BRIDGE]` block of `.env`
    (`BRIDGE_SERVER_URL` points at the Oracle VM's WSS endpoint, e.g.
    `wss://sara-os.duckdns.org/bridge`; shared `BRIDGE_TOKEN`).

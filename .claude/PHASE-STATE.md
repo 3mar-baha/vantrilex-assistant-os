@@ -492,6 +492,10 @@ product.)
       one MEDIUM call with Obsidian context, appends separate `## ملخص محادثة اليوم
       YYYY-MM-DD` section, idempotent via heading; run_forever tick loop launched in
       run_bot + cancelled on shutdown; suite 345/85.64%).
+      Owner utility: `sara.ps1` + `sara.bat` one-command local cycle (kill stale
+      src.main/bridge.daemon -> gateway :20128 preflight -> two launch windows,
+      -StopOnly/-Port; RUNBOOK 5a + CHANGELOG). LIVE: two stale src.main PIDs found
+      running (29300/23220) — the owner's next cycle run clears them.
       ← **current: two-strong-model refactor CODE-COMPLETE + gate green — owner side =
       restart core (kill stale PIDs first) and retest the Telegram checklist; Oracle deploy
       (docs/09) when the card clears**
