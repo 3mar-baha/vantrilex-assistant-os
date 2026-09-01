@@ -14,17 +14,19 @@ from src.dispatcher import DEFAULT_ACK_AR, FrontDoorDispatcher
 from src.gateway import OmniRouteClient, Tier
 from tests.test_omniroute_gateway import _chunk, _collect, _Scripted, _sse
 
-FAST_PIN = "groq/openai/gpt-oss-20b"
-FAST_FB1 = "openrouter/minimax/minimax-m2.7:free"
-MEDIUM_PIN = "groq/openai/gpt-oss-20b"
+# Owner architecture update (2026-09-01): two strong models only — the conversation
+# lane (minimax, fb gpt-oss-120b) is Sara's exclusive speaker; the tool lane
+# (nemotron-3-ultra) executes every Gmail/Calendar/Tasks/bridge call.
+FAST_PIN = "openrouter/minimax/minimax-m2.7:free"
+FAST_FB1 = "groq/openai/gpt-oss-120b"
+MEDIUM_PIN = "groq/openai/gpt-oss-120b"
 MEDIUM_FB1 = "openrouter/minimax/minimax-m2.7:free"
-MEDIUM_FB2 = "groq/openai/gpt-oss-120b"
 HEAVY_PIN = "openrouter/nvidia/nemotron-3-ultra-550b-a55b:free"
 HEAVY_FB1 = "groq/openai/gpt-oss-120b"
 
 CHAINS = {
     Tier.FAST: [FAST_PIN, FAST_FB1],
-    Tier.MEDIUM: [MEDIUM_PIN, MEDIUM_FB1, MEDIUM_FB2],
+    Tier.MEDIUM: [MEDIUM_PIN, MEDIUM_FB1],
     Tier.HEAVY: [HEAVY_PIN, HEAVY_FB1],
 }
 
@@ -56,7 +58,7 @@ def test_settings_carries_tier_pins(make_settings):
     s = make_settings()
     assert (s.fast_model, s.medium_model, s.heavy_model) == (FAST_PIN, MEDIUM_PIN, HEAVY_PIN)
     assert s.fast_chain == [FAST_PIN, FAST_FB1]
-    assert s.medium_chain == [MEDIUM_PIN, MEDIUM_FB1, MEDIUM_FB2]
+    assert s.medium_chain == [MEDIUM_PIN, MEDIUM_FB1]
     assert s.heavy_chain == [HEAVY_PIN, HEAVY_FB1]
     # blank fallbacks -> pin-only chain
     assert make_settings(FAST_MODEL_FALLBACKS="").fast_chain == [FAST_PIN]
@@ -72,7 +74,7 @@ def test_env_pins_match_adr16():
         f"FAST_MODEL={FAST_PIN}",
         f"FAST_MODEL_FALLBACKS={FAST_FB1}",
         f"MEDIUM_MODEL={MEDIUM_PIN}",
-        f"MEDIUM_MODEL_FALLBACKS={MEDIUM_FB1},{MEDIUM_FB2}",
+        f"MEDIUM_MODEL_FALLBACKS={MEDIUM_FB1}",
         f"HEAVY_MODEL={HEAVY_PIN}",
         f"HEAVY_MODEL_FALLBACKS={HEAVY_FB1}",
     ):

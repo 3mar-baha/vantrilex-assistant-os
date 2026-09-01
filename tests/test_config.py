@@ -23,8 +23,8 @@ def test_settings_accept_all_env_example_vars(make_settings):
     s = make_settings()
     assert s.omniroute_base_url == "http://localhost:20128/v1"
     assert s.omniroute_api_key == "sk-omniroute-local-key"
-    assert s.fast_model == "groq/openai/gpt-oss-20b"
-    assert s.medium_model == "groq/openai/gpt-oss-20b"
+    assert s.fast_model == "openrouter/minimax/minimax-m2.7:free"
+    assert s.medium_model == "groq/openai/gpt-oss-120b"
     assert s.heavy_model == "openrouter/nvidia/nemotron-3-ultra-550b-a55b:free"
     assert s.telegram_bot_token.startswith("1234567890:")
     assert s.authorized_user_id == 123456789
