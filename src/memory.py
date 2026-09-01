@@ -1,5 +1,5 @@
 """Dual-tier memory (owner directive 2026-09-01): the conversation lane speaks WITH
-memory. Short-term = a rolling per-chat deque of the last 15 {role, content} messages;
+memory. Short-term = a rolling per-chat deque of the last 50 {role, content} messages;
 long-term = Obsidian vault excerpts (User_Info.md + Dialect_Notes.md + today's
 Daily_Logs note) injected into the system block every turn. Background writers persist
 every exchange to the daily ledger and learn durable owner facts into User_Info.md.
@@ -23,7 +23,7 @@ from loguru import logger
 from src.gateway import Tier
 from src.vault import PROFILE_USER_INFO, daily_log_path, split_frontmatter
 
-DEFAULT_BUFFER_MESSAGES = 15
+DEFAULT_BUFFER_MESSAGES = 50
 SECTION_CHAR_CAP = 1600
 EXCHANGE_CHAR_CAP = 400
 LEARN_MAX_TOKENS = 200

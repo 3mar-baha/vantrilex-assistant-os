@@ -1,10 +1,11 @@
 """Fast Front-Door Dispatcher (ADR-18): Tier-1 ack first, then tiered execution.
 
 One Tier-1 router call classifies the request (tiny JSON verdict) and supplies the
-instant Jordanian acknowledgment; simple chat is answered fully at Tier 1,
-single/dual-tool work streams at Tier 2, multi-step DAGs at Tier 3 (ADR-16).
-Owner directive (2026-09-01): concrete tool intents (gmail/calendar/tasks/
-telemetry/launch/brief) execute against a real ToolRegistry and narrate at the
+instant Jordanian acknowledgment; every chat path — direct included (amendment
+2026-09-01: the history-less router never speaks alone) — streams the answer through
+the full memory envelope; single/dual-tool work streams at Tier 2, multi-step DAGs at
+Tier 3 (ADR-16). Owner directive (2026-09-01): concrete tool intents (gmail/calendar/
+tasks/telemetry/launch/brief) execute against a real ToolRegistry and narrate at the
 HEAVY tool lane exclusively; launch notifies the owner directly (no narration).
 Router failure degrades safely to Tier 2 with a loud log — Sara always speaks
 immediately, never hangs.
@@ -26,7 +27,7 @@ _ROUTER_PROMPT_AR: Final[str] = (
     "أنت بوابة سارة الأمامية. صنّف طلب المالك وأجب بسطر JSON واحد فقط:\n"
     '{"route": "direct"|"tier2"|"tier3", "tool": "none"|"gmail"|"calendar"|"tasks"'
     '|"telemetry"|"launch"|"brief", "arg": "...", "ack": "..."}\n'
-    '- direct: دردشة أو سؤال بسيط — ضع ردّك الكامل بالعامية الأردنية الدافئة في "ack".\n'
+    '- direct: دردشة أو سؤال بسيط — إقرار فوري قصير في "ack"، والرد الكامل يُبث بعد التصنيف.\n'
     '- tier2: مهمة بأداة أو أداتين (تقويم، مهام، بريد، ملفات) — إقرار فوري قصير في "ack".\n'
     '- tier3: تخطيط متعدد الخطوات، تعليم عميق، تحليل ملفات — إقرار فوري في "ack".\n'
     '- tool: "none" للدردشة الصرفة؛ وإلا الأداة المطلوبة حصراً:\n'
@@ -36,8 +37,12 @@ _ROUTER_PROMPT_AR: Final[str] = (
     "لا تكتب أي شيء خارج الـ JSON."
 )
 
-_ROUTES: Final[dict[str, Tier]] = {"tier2": Tier.MEDIUM, "tier3": Tier.HEAVY}
-_VALID_ROUTES: Final = ("direct", *_ROUTES)
+_ROUTES: Final[dict[str, Tier]] = {
+    "direct": Tier.FAST,
+    "tier2": Tier.MEDIUM,
+    "tier3": Tier.HEAVY,
+}
+_VALID_ROUTES: Final = ("direct", "tier2", "tier3")
 _VALID_TOOLS: Final = ("none", "gmail", "calendar", "tasks", "telemetry", "launch", "brief")
 _JSON_RE: Final = re.compile(r"\{.*\}", re.DOTALL)
 
@@ -99,8 +104,6 @@ class FrontDoorDispatcher:
         if tool != "none":
             async for delta in self._tool_lane(tool, arg, route, user_text, system, history, tools):
                 yield delta
-            return
-        if route == "direct":
             return
         async for delta in self._gateway.stream_chat(
             self._plain_messages(system, history, user_text), tier=_ROUTES[route]

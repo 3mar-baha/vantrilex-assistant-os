@@ -3,7 +3,7 @@
 The owner text path streams through the front-door dispatcher: placeholder ->
 first edit on the ack (<250 ms TTFT) -> coalesced edits -> final verbatim edit.
 Owner directive (2026-09-01): every turn carries the dual-tier memory envelope
-(15-message rolling history + Obsidian long-term excerpt), background writers
+(50-message rolling history + Obsidian long-term excerpt), background writers
 persist exchanges to the vault, tool intents execute real backends, and voice
 messages get a voice note back. A pending PC-launch confirmation is answered by
 the coordinator before the brain ever sees it. Every handler exception is
