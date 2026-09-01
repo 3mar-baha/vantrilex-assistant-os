@@ -257,3 +257,134 @@ async def test_start_voice_synthesis_failure_still_delivers_text(fake_bot, make_
     await shell.dp.feed_update(bot, make_update(1, OWNER_ID, "/start", command=True))
     assert bot.session.sent("SendMessage")[0].method.text == WELCOME_AR
     assert bot.session.sent("SendVoice") == []
+
+
+# --- Owner directive 2026-09-01 wiring: memory envelope, background vault writers,
+# --- pending-launch intercept, voice-origin voice replies. --------------------------
+
+
+class _ReadVault:
+    def __init__(self, reads):
+        self.reads = reads
+
+    async def read(self, path):
+        if path not in self.reads:
+            raise FileNotFoundError(path)
+        return self.reads[path]
+
+
+class _WriterDouble:
+    def __init__(self):
+        self.exchanges = []
+        self.learns = []
+
+    async def log_exchange(self, user_text, reply_text, *, now):
+        self.exchanges.append((user_text, reply_text))
+
+    async def maybe_learn(self, user_text, *, now):
+        self.learns.append(user_text)
+        return None
+
+
+class _CoordinatorDouble:
+    def __init__(self, target="calc.exe"):
+        self.target = target
+        self.replies = []
+
+    def pending_active(self):
+        return True
+
+    async def handle_owner_reply(self, text):
+        self.replies.append(text)
+        return self.target
+
+
+async def test_pending_launch_reply_consumed_by_coordinator(fake_bot, make_shell):
+    """A pending PC-launch confirmation is answered to the coordinator directly —
+    the message never reaches the brain and no stream spawns."""
+    coordinator = _CoordinatorDouble()
+    shell = make_shell(
+        coordinator=coordinator,
+        router_replies=[_router("direct", "ليش حكيت؟")],
+    )
+    bot = fake_bot()
+    await _run(shell, bot, make_update(1, OWNER_ID, "تم"))
+    assert coordinator.replies == ["تم"]
+    assert shell.gateway.router_calls == []  # brain never consulted
+
+
+async def test_streams_carry_history_and_long_term_envelope(fake_bot, make_shell):
+    """Dual-tier memory: system block carries the vault profile excerpt; the second
+    turn streams with the first exchange as rolling history; both turns remembered."""
+    from src.memory import ConversationMemory
+
+    memory = ConversationMemory()
+    shell = make_shell(
+        memory=memory,
+        vault=_ReadVault({"02_Areas/Profile/User_Info.md": "---\ntype: profile\n---\nالمالك عمر"}),
+        router_replies=[_router("tier2", "إقرار"), _router("tier2", "إقرار2")],
+        stream_programs=[StreamProgram(deltas=("رد1",)), StreamProgram(deltas=("رد2",))],
+    )
+    bot = fake_bot()
+    await _run(shell, bot, make_update(1, OWNER_ID, "مرحبا"))
+    first = shell.gateway.stream_calls[0][0]
+    assert first[0]["role"] == "system"
+    assert "المالك عمر" in first[0]["content"]
+
+    await _run(shell, bot, make_update(2, OWNER_ID, "شو رأيك؟"))
+    second = shell.gateway.stream_calls[1][0]
+    assert [m["role"] for m in second] == ["system", "user", "assistant", "user"]
+    assert second[1] == {"role": "user", "content": "مرحبا"}
+    assert second[2] == {"role": "assistant", "content": "رد1"}
+    assert second[-1] == {"role": "user", "content": "شو رأيك؟"}
+    assert memory.history(OWNER_ID)[-1] == {"role": "assistant", "content": "رد2"}
+
+
+async def test_exchange_persisted_and_learned_after_stream(fake_bot, make_shell):
+    """Background writers: every exchange lands in the daily ledger, and the
+    learner gets its shot — both after the reply, never blocking it."""
+    writer = _WriterDouble()
+    shell = make_shell(
+        writer=writer,
+        router_replies=[_router("tier2", "تم")],
+        stream_programs=[StreamProgram(deltas=("رد",))],
+    )
+    bot = fake_bot()
+    await _run(shell, bot, make_update(1, OWNER_ID, "مرحبا"))
+    assert shell.gateway.stream_calls  # reply streamed first
+    await wait_until(lambda: writer.exchanges and writer.learns)
+    assert writer.exchanges == [("مرحبا", "رد")]
+    assert writer.learns == ["مرحبا"]
+
+
+async def test_voice_origin_reply_arrives_as_voice_note(
+    fake_bot, make_shell, monkeypatch, tmp_path
+):
+    """Voice in, voice out: an enrolled owner voice note gets the streamed text reply
+    AND an ar-JO Ogg Opus voice note of the same reply."""
+    monkeypatch.chdir(tmp_path)
+    transcriber = FakeTranscriber()
+    shell = make_shell(
+        VAULT_ENC_KEY=Fernet.generate_key().decode(),
+        router_replies=[_router("tier2", "تم")],
+        stream_programs=[StreamProgram(deltas=("رتبت لك الموضوع",))],
+        transcriber=transcriber,
+    )
+    bot = fake_bot()
+
+    async def fake_download(file, destination=None, **kwargs):
+        destination.write(b"FAKE-OGG")
+
+    monkeypatch.setattr(bot, "download", fake_download)
+    monkeypatch.setattr(VoiceBiometrics, "_embed_sync", lambda self, ogg: [0.6, 0.8, 0.0])
+    try:
+        await _run(shell, bot, make_update(1, OWNER_ID, "/enroll-voice", command=True))
+        await _run(shell, bot, make_update(2, OWNER_ID, voice=True))
+        assert bot.session.sent("SendMessage")[-1].method.text == ENROLL_DONE_AR
+
+        await _run(shell, bot, make_update(3, OWNER_ID, voice=True))
+        voices = bot.session.sent("SendVoice")
+        assert len(voices) == 1  # enroll path sends no voice reply; the answer does
+        assert b"OGGOPUS-FAKE-BYTES" in voices[0].method.voice.data
+    finally:
+        _ENROLL_PENDING.clear()

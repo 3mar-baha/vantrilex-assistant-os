@@ -280,14 +280,38 @@ def make_shell(make_settings):
         stream_programs=(),
         voice_error=None,
         transcriber=None,
+        vault=None,
+        memory=None,
+        writer=None,
+        tools=None,
+        coordinator=None,
         **settings_overrides,
     ):
         gateway = FakeGateway(router_replies=router_replies, stream_programs=stream_programs)
         voice = FakeVoice(error=voice_error)
         settings = make_settings(STREAM_EDIT_INTERVAL_MS="40", **settings_overrides)
-        dp = build_dispatcher(gateway, voice, settings, transcriber=transcriber)
+        dp = build_dispatcher(
+            gateway,
+            voice,
+            settings,
+            transcriber=transcriber,
+            vault=vault,
+            memory=memory,
+            writer=writer,
+            tools=tools,
+            coordinator=coordinator,
+        )
         return SimpleNamespace(
-            dp=dp, gateway=gateway, voice=voice, settings=settings, transcriber=transcriber
+            dp=dp,
+            gateway=gateway,
+            voice=voice,
+            settings=settings,
+            transcriber=transcriber,
+            vault=vault,
+            memory=memory,
+            writer=writer,
+            tools=tools,
+            coordinator=coordinator,
         )
 
     return _make
