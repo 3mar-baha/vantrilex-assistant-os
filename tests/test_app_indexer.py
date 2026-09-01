@@ -73,7 +73,10 @@ def test_resolve_targets_reads_real_shortcuts(tmp_path):
         f"$s.TargetPath = '{target}'; $s.Save()"
     )
     subprocess.run(
-        ["powershell", "-NoProfile", "-Command", script], check=True, timeout=30, capture_output=True
+        ["powershell", "-NoProfile", "-Command", script],
+        check=True,
+        timeout=30,
+        capture_output=True,
     )
 
     resolved = app_indexer.resolve_targets_sync([shortcut])
@@ -109,8 +112,10 @@ def _discovered_entries(tmp_path: Path) -> list[dict]:
     system, _ = _both_roots(tmp_path)
     names = app_indexer.discover([system])
     resolved = app_indexer.filter_system(
-        {name: f"C:\\Users\\omarb\\Apps\\{name.replace(' ', '')}\\{name.replace(' ', '')}.exe"
-         for name in names}
+        {
+            name: f"C:\\Users\\omarb\\Apps\\{name.replace(' ', '')}\\{name.replace(' ', '')}.exe"
+            for name in names
+        }
     )
     return app_indexer.build_entries(names, resolved)
 
@@ -151,13 +156,9 @@ async def test_index_start_menu_end_to_end_guard_accepted(tmp_path, monkeypatch)
     _write_whitelist(whitelist)
 
     async def fake_resolver(paths: list[Path]) -> dict[str, str]:
-        return {
-            str(p): f"C:\\Users\\omarb\\Apps\\{p.stem.replace(' ', '')}.exe" for p in paths
-        }
+        return {str(p): f"C:\\Users\\omarb\\Apps\\{p.stem.replace(' ', '')}.exe" for p in paths}
 
-    report = await app_indexer.index_start_menu(
-        whitelist, dirs=[system], resolver=fake_resolver
-    )
+    report = await app_indexer.index_start_menu(whitelist, dirs=[system], resolver=fake_resolver)
 
     assert report["discovered"] == 2
     assert report["added"] == 2
