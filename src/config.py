@@ -69,7 +69,7 @@ class Settings(BaseSettings):
     telegram_api_id: int | None = None
     telegram_api_hash: str | None = None
     telegram_user_session_string: str | None = None
-    voice_name: str = "ar-JO-SanaNeural"
+    voice_name: str = "ar-EG-SalmaNeural"
     voice_rate: str = "+0%"
     voice_pitch: str = "+0Hz"
     vault_github_repo: str  # VAULT_GITHUB_REPO (private vault repo, "owner/name")

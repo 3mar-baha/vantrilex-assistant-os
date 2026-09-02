@@ -8,6 +8,7 @@ from src.dialect import (
     parse_notes,
     parse_teachings,
     prompt_block,
+    shape_for_tts,
 )
 
 

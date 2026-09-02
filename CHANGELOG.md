@@ -9,6 +9,12 @@ product release tags start independently at v1.0.0.)
 ## [Unreleased]
 
 ### Added
+- **Dialect TTS shaper (owner directive 2026-09-02, Path A)**: `shape_for_tts()` in
+  `src/dialect.py` runs before every synthesis — emoji stripped (emoji read aloud or
+  corrupted the stream), whole-word pronunciation lexicon (owner Dialect_Notes override
+  the 10-word seed), and trailing-harakat تسكين الأواخر (shadda preserved) so Microsoft
+  G2P stops forcing MSA tanween on unvocalized Jordanian endings. Never-blocking: any
+  internal failure returns the input verbatim.
 - **Two-strong-model brain (owner directive 2026-09-01)**: conversation lane FAST `minimax-m2.7:free` (fb `gpt-oss-120b`) + MEDIUM `gpt-oss-120b`; tool lane HEAVY `nemotron-3-ultra-550b` as the exclusive Gmail/Calendar/Tasks/bridge executor.
 - **Dual-tier memory** (`src/memory.py`): 50-message rolling buffer per chat (owner directive — widened from 15), Obsidian long-term envelope (User_Info + Dialect_Notes + today's Daily_Logs) injected every turn, background writers persist each exchange to Daily_Logs and learn durable facts into User_Info.
 - **Memory on every chat path (live-debug fix 2026-09-01)**: the ADR-18 `direct` route no longer answers from the history-less router call — simple chat acks at Tier 1 then streams the FAST conversation lane with the full envelope; the router only classifies.
@@ -18,6 +24,18 @@ product release tags start independently at v1.0.0.)
 - **Voice-out replies**: owner voice notes now get an ar-JO Ogg Opus voice note of Sara's streamed reply; pending PC-launch confirmations are consumed by the coordinator before the brain sees them.
 - **Overlong router ack guard (live-debug fix 2026-09-01)**: minimax sometimes writes a mini-ANSWER into the router's `ack` field, so the owner saw a wrong reply followed seconds later by the real one in the same bubble. Acks over 30 chars are now discarded for the default «من عيوني هسا ببدأ...», and the router prompt forbids answering inside the ack.
 - **Honest voice reply on silent/failed transcription (live-debug fix 2026-09-01)**: a 6-second silent voice note transcribed empty and left the owner with two static acks. Empty transcript or transcription failure now answers with the honest line «ما سمعت شي واضح بالملاحظة...» as text AND an ar-JO voice note; the memo is still filed.
+
+### Changed
+- **Voice encoding 24k voip -> 64k audio-mode Opus (Path A, 2026-09-02)**: the
+  telephone-grade `voip` application mode choked every voice (live 2026-09-02, owner:
+  «صوت رديء وغير بشري») — ffmpeg now encodes 64k VBR `-application audio` at 48 kHz
+  mono. Voice default pin `ar-JO-SanaNeural` -> `ar-EG-SalmaNeural` (owner pick after
+  the 6-voice A/B; larger Egyptian training data, still free; switchable via
+  `VOICE_NAME`).
+- **Injectable clock in ToolRegistry (2026-09-02)**: calendar/tasks/brief handlers
+  take an optional `now_fn` (default: real clock) — the frozen-date test bomb
+  (2026-09-01 -> 2026-09-02 midnight rollover) is structurally dead; tests pin their
+  own clock.
 
 ## [1.0.2] — 2026-09-01
 

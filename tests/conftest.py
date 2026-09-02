@@ -63,7 +63,7 @@ ENV_EXAMPLE: dict[str, str] = {
     "TELEGRAM_API_ID": "",
     "TELEGRAM_API_HASH": "",
     "TELEGRAM_USER_SESSION_STRING": "",
-    "VOICE_NAME": "ar-JO-SanaNeural",
+    "VOICE_NAME": "ar-EG-SalmaNeural",
     "VOICE_RATE": "+0%",
     "VOICE_PITCH": "+0Hz",
     "VAULT_GITHUB_REPO": "owner/vault-repo",

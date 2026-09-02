@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from typing import Final
 
 from loguru import logger
 
@@ -58,6 +59,60 @@ def normalize(text: str, notes: list[DialectNote]) -> str:
     for note in sorted(notes, key=lambda n: len(n.term), reverse=True):
         text = text.replace(note.term, note.phonetic)
     return text
+
+
+# --- TTS pre-synthesis shaper (owner directive 2026-09-02): Microsoft G2P reads
+# --- unvocalized dialect text through MSA rules — forced tanween, mangled Jordanian
+# --- words — so shape every synthesis input before it reaches the engine. -------
+
+_EMOJI_RE: Final = re.compile(
+    "["
+    "\U0001f000-\U0001faff"  # pictographs + supplemental symbols (emoji planes)
+    "\U00002600-\U000027bf"  # misc symbols + dingbats
+    "\U0001f1e6-\U0001f1ff"  # regional indicators (flags)
+    "\U00002b00-\U00002bff"  # misc symbols/arrows (⭐ …)
+    "️‍⃣⁉‼ℹ←-⇿〰〽㊗㊙"
+    "]+"
+)
+_ARABIC_CLASS: Final[str] = "ء-يً-ْ"
+# تسكين الأواخر: strip tanween + final fatha/damma/kasra/sukun at word end only
+_TRAILING_HARAKAT_RE: Final = re.compile(r"[ً-ِْ]+\Z")
+_SEED_TTS_LEXICON: Final[dict[str, str]] = {
+    "هسا": "هسَّا",
+    "هلق": "هَلَق",
+    "هيك": "هَيك",
+    "شو": "شُو",
+    "ليش": "لِيش",
+    "كتير": "كْتير",
+    "بدي": "بِدِّي",
+    "بدك": "بِدَّك",
+    "ابعت": "إبْعَت",
+    "شغلة": "شُغْلة",
+}
+
+
+def shape_for_tts(text: str, notes: list[DialectNote] | None = None) -> str:
+    """Emoji-strip + whole-word pronunciation lexicon (owner notes override the seed)
+    + trailing-harakat skeleton, so the engine never forces MSA tanween on dialect
+    endings. Pure and never-blocking: any internal failure returns the input."""
+    original = text
+    try:
+        text = _EMOJI_RE.sub(" ", text)
+        text = re.sub(r"[ \t]{2,}", " ", text).strip()
+        if text:
+            lex = dict(_SEED_TTS_LEXICON)
+            for note in notes or []:
+                lex[note.term] = note.phonetic
+            pattern = re.compile(
+                "(?<![" + _ARABIC_CLASS + "])"
+                "(?:" + "|".join(re.escape(t) for t in sorted(lex, key=len, reverse=True)) + ")"
+                "(?![" + _ARABIC_CLASS + "])"
+            )
+            text = pattern.sub(lambda m: lex[m.group()], text)
+            text = " ".join(_TRAILING_HARAKAT_RE.sub("", word) for word in text.split())
+        return text
+    except Exception:  # noqa: BLE001 — shaping must never block synthesis
+        return original
 
 
 def parse_teachings(text: str, *, today: str) -> list[DialectNote]:

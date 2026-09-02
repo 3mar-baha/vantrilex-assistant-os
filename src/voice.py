@@ -1,7 +1,9 @@
 """Voice pipeline: Edge-TTS -> ffmpeg -> Ogg Opus, fully in memory (Sprint-1 §1.3).
 
-First encoded chunk is yielded the moment ffmpeg emits it — that yield IS the
-<600ms first-chunk event. Every path reaps the ffmpeg child; no orphans.
+Every synthesis input passes the dialect TTS shaper first (emoji strip + pronunciation
+lexicon + تسكين الأواخر — owner directive 2026-09-02). Opus encodes at 64k in 'audio'
+application mode (24k voip choked every voice — live 2026-09-02). First encoded chunk
+is yielded the moment ffmpeg emits it; every path reaps the ffmpeg child; no orphans.
 """
 
 import asyncio
@@ -11,6 +13,8 @@ from typing import Final
 
 import edge_tts
 from loguru import logger
+
+from src.dialect import shape_for_tts
 
 FFMPEG_BIN: Final[str] = "ffmpeg"
 MAX_TTS_CHARS: Final[int] = 4000
@@ -39,7 +43,7 @@ _FFMPEG_ARGS: Final[tuple[str, ...]] = (
     "-c:a",
     "libopus",
     "-b:a",
-    "24k",
+    "64k",
     "-ar",
     "48000",
     "-ac",
@@ -49,7 +53,7 @@ _FFMPEG_ARGS: Final[tuple[str, ...]] = (
     "-frame_duration",
     "20",
     "-application",
-    "voip",
+    "audio",
     "-f",
     "ogg",
     "-flush_packets",
@@ -72,11 +76,12 @@ class VoicePipeline:
         self._ffmpeg_bin = ffmpeg_bin
 
     def synthesize_stream(self, text: str) -> AsyncIterator[bytes]:
-        if not text.strip():
+        shaped = shape_for_tts(text)
+        if not shaped.strip():
             raise ValueError("text is blank — nothing to synthesize")
-        if len(text) > MAX_TTS_CHARS:
-            raise ValueError(f"text exceeds MAX_TTS_CHARS ({len(text)} > {MAX_TTS_CHARS})")
-        return self._stream(text)
+        if len(shaped) > MAX_TTS_CHARS:
+            raise ValueError(f"text exceeds MAX_TTS_CHARS ({len(shaped)} > {MAX_TTS_CHARS})")
+        return self._stream(shaped)
 
     async def synthesize(self, text: str) -> bytes:
         return b"".join([chunk async for chunk in self.synthesize_stream(text)])

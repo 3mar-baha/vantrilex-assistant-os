@@ -53,7 +53,8 @@ strictly-zero-cost executive AI assistant named **Sara (سارة)**.
 ## 2. Hard Architectural Rules & Invariants
 
 1. **Zero-Cost Invariant ($0.00/month, absolute)**: All LLM calls route through OmniRoute free pools;
-   all speech uses local/free Edge-TTS (`ar-JO-SanaNeural`); all storage and compute on verified free
+   all speech uses local/free Edge-TTS (`ar-EG-SalmaNeural`, dialect-shaped via
+   `src/dialect.py shape_for_tts` — owner directive 2026-09-02); all storage and compute on verified free
    tiers. Any dependency introduced MUST be free/open-source.
 2. **Never Hardcode Secrets**: All tokens, keys, IDs and MAC addresses load strictly from environment
    variables (see `.env.example`). Never commit `.env`, session strings, or OAuth client credentials
@@ -89,7 +90,7 @@ strictly-zero-cost executive AI assistant named **Sara (سارة)**.
 |---|---|---|
 | Python | **3.12** (`py -3.12`) | 3.14 default has wheel gaps for aiogram/pytgcalls ecosystem |
 | Bot framework | Aiogram 3.x | long polling (outbound-only) |
-| Voice | Edge-TTS `ar-JO-SanaNeural` -> `io.BytesIO` -> ffmpeg -> Ogg Opus | <600ms first-chunk target |
+| Voice | Edge-TTS `ar-EG-SalmaNeural` (switchable `VOICE_NAME`) -> dialect TTS shaper (emoji strip + pronunciation lexicon + تسكين الأواخر) -> `io.BytesIO` -> ffmpeg -> Ogg Opus 64k audio-mode | <600ms first-chunk target |
 | LLM gateway | OmniRoute OpenAI-compatible `/v1` | 3-tier brain (ADR-16): `FAST_MODEL` / `MEDIUM_MODEL` / `HEAVY_MODEL` behind the ADR-18 dispatcher |
 | Typing/config | Pydantic v2 settings | |
 | Logging | Loguru, structured | never swallow exceptions silently |

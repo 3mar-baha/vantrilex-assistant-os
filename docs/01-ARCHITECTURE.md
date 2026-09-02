@@ -19,7 +19,8 @@
   **progressive delivery** (task 2.2): placeholder message instantly, first edit on the
   ack (<250 ms Audio-TTFT), deltas coalesced at `STREAM_EDIT_INTERVAL_MS` (750 ms default),
   final text verbatim; a newer owner message cancels the in-flight stream. Edge-TTS
-  (`ar-JO-SanaNeural`) streamed in-memory via `io.BytesIO`, transcoded by ffmpeg to native
+  (`ar-EG-SalmaNeural`, owner-approved 2026-09-02, switchable via `VOICE_NAME`) streamed
+  in-memory via `io.BytesIO`, transcoded by ffmpeg to native
   Ogg Opus voice bubbles (<600 ms first-chunk target); live bidirectional calls via PyTgCalls
   arrive in v1.1.
 - **Validated deployment path (ADR-15 as amended 2026-08-31)**: **Oracle Cloud Always-Free
@@ -65,14 +66,17 @@ graph TD
 
 ## 3. Audio Pipeline (voice notes) — `src/voice.py`
 
-1. Response text is dialect-normalized (M1 `src/dialect.py`, from Sprint 1.4) and
-   finalized by the orchestrator.
-2. `VoicePipeline.synthesize_stream(text)`: Edge-TTS streams `ar-JO-SanaNeural` MP3
+1. Response text is finalized by the orchestrator, then shaped by the dialect TTS
+   shaper (`shape_for_tts`, owner directive 2026-09-02): emoji stripped, whole-word
+   pronunciation lexicon applied, trailing harakat removed (تسكين الأواخر, shadda
+   preserved) — Microsoft G2P otherwise forces MSA tanween on unvocalized dialect.
+2. `VoicePipeline.synthesize_stream(text)`: Edge-TTS streams `ar-EG-SalmaNeural` MP3
    chunks straight into the ffmpeg child's stdin — zero disk writes anywhere.
 3. ffmpeg runs via asyncio subprocess (natively non-blocking) transcoding MP3 -> Ogg
-   Opus (48 kHz mono, 20 ms frames, 24k VBR voip); tiny `-probesize 32` keeps output
-   flowing from the first frames (the default probesize gates ALL output until EOF —
-   measured 2026-08-29).
+   Opus (48 kHz mono, 20 ms frames, 64k VBR `audio` application mode — the former
+   24k `voip` mode choked every voice, live 2026-09-02); tiny `-probesize 32` keeps
+   output flowing from the first frames (the default probesize gates ALL output
+   until EOF — measured 2026-08-29).
 4. Latency metric (binding, Q1): **time-to-first-encoded-chunk** — Telegram Bot API
    cannot progressively upload one voice bubble, so the first Ogg Opus chunk is
    handed to the sender as soon as it is encoded (<600 ms target); the remainder
@@ -310,7 +314,7 @@ ambiguous `category_inferred: null` holds for owner confirmation before filing;
   "agent": {
     "name": "Sara (سارة)",
     "dialect": "ar-JO",
-    "voice": "ar-JO-SanaNeural",
+    "voice": "ar-EG-SalmaNeural",
     "personality": "Warm, executive, polymath tutor, supportive friend",
     "mcp_servers": [
       "google_workspace_mcp",
