@@ -516,14 +516,27 @@ product.)
       owner with two static acks and no voice → `EMPTY_VOICE_AR` + `_voice_fail_reply`:
       empty transcript or transcription failure answers with honest text + ar-JO voice
       note, memo still filed. Suite 347/85.71%, docs synced.
-      ← **current: SESSION PAUSED 2026-09-01 late evening — owner resumes 2026-09-02.
-      PENDING OWNER TEST: the live retest of tonight's two fixes never ran. When the
-      owner returns: (1) run `/enroll-voice` in Telegram then send a voice note to seal
-      the voiceprint (no State/owner_voiceprint.enc yet — kills the static pre-ack),
-      (2) check the mic (22:03 note was 6s of silence), (3) re-run `sara.bat` to load
-      `ca1b065`, (4) retest memory + a voice note + a silent note on Telegram. Also
-      verify minimax ack quality (one corrupted ack seen earlier). Deferred until owner
-      says: dormant skills activation, Oracle deploy (docs/09, card still blocked)**
+      **SESSION PAUSED 2026-09-01 late evening — owner resumed 2026-09-02 and the
+      retest arc was superseded by the forensic audit + remediation arc below.**
+
+      ### FORENSIC AUDIT + REMEDIATION ARC (2026-09-02 → 2026-09-03, owner-directed)
+      Voice-quality complaint («صوت رديء وغير بشري وغير عربي») → root causes →
+      **Path A** implemented (red `3fe13ea`: dialect shaper tests + 64k opus tests +
+      Salma pin; green tree = voice.py/dialect.py/config.py/.env.example/conftest +
+      injectable clock tools.py/test_tools.py; gate 355/85.73%) → owner froze
+      commits and ordered a READ-ONLY forensic audit: 6 axes × 43 agents (max
+      effort) + adversarial verify (3 refuters × top-12) + completeness critic →
+      **`docs/AUDIT_REPORT.md`** (health 56/100; 10 CONFIRMED findings C-1..C-10,
+      2 refuted, 68 passthrough; every live symptom mechanically explained).
+      Owner approved **`docs/REMEDIATION_PLAN.md`** (3 phases, 21 steps, each:
+      target/red-test/AC) and said «التالي» 2026-09-03.
+      ← **current: PHASE 1 EXECUTION (persona & modality)**. 1.1 DONE: Path A
+      unfrozen — feat(voice)+fix(tools)+docs synced (CLAUDE §1/§3, ARCH §1/§3/§7,
+      TEST-PLAN, CHANGELOG [Unreleased]). NEXT: 1.2 creator-recognition persona
+      (عمر الفياض + service-language bans), then 1.3 ack purification (transient
+      ack — rewrites the enshrined tests), 1.4-1.8 per the plan. Phase-2 owner
+      prerequisites still pending: /enroll-voice + one-time Google OAuth bootstrap
+      (vault/State empty — the LOCAL cause of live Gmail failures per audit §14).
 
 ## Open items / blockers
 
