@@ -9,6 +9,17 @@ product release tags start independently at v1.0.0.)
 ## [Unreleased]
 
 ### Added
+- **Transient ack, never glued (remediation 1.3, 2026-09-03)**: the Tier-1 ack now lives
+  exactly as the owner demanded — it shows instantly in the bubble for reassurance, then
+  is DELETED from the text the moment answer deltas start streaming. Memory, the daily
+  ledger, and voice synthesis receive the answer ONLY (audit C-4 closed: «تمام، ببدأ»
+  never again prefixes «سجّلت الموعد»). The router ack also gains a content guard beside
+  the length guard: gateway identity (بوابة/مساعد/بوت/خدمة/برنامج) or claimed actions
+  (تم فتح/فتحت/بعت/جدولت…) inside an ack → replaced with the default «من عيوني هسا ببدأ...»
+  (audit C-5 closed), and the router prompt no longer introduces itself as «بوابة سارة
+  الأمامية» — it just classifies. The silent tool lane (launch, which notifies the owner
+  directly) now keeps the ack bubble without appending a fake empty-reply line, and the
+  ack is never remembered as Sara's reply.
 - **Fish Audio primary voice engine (remediation 1.9, owner directive 2026-09-03)**:
   Sara's voice is now Fish `s2.1-pro-free:free` with the «سمسم-بوس» reference voice
   (`56c2f0c2…`) via OpenRouter's `/api/v1/audio/speech`, borrowing the same

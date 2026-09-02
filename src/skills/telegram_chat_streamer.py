@@ -4,6 +4,15 @@ Placeholder lands immediately; the first streamed delta fires one edit (<250 ms
 Audio-TTFT KPI); further deltas coalesce onto the interval; the completed text
 lands verbatim as the final edit. A cancel event (owner interjection) stops
 consumption with the received partial preserved.
+
+Remediation 1.3 (owner 2026-09-03): the first delta — the transient ack — is
+DISPOSABLE. With transient_ack=True the bubble shows the ack for instant
+reassurance, then the answer REPLACES it: the ack is dropped from the
+accumulated text the moment real answer deltas arrive, so memory, the daily
+ledger, and voice synthesis only ever see the answer (audit C-4). If the
+stream yields nothing beyond the ack (silent tool lane), the returned reply is
+EMPTY — never the ack masquerading as a final answer — and the bubble keeps
+the ack; `ack_consumed` lets the shell know which is which.
 """
 
 import asyncio
@@ -22,23 +31,39 @@ class ChatStreamer:
         self._bot = bot
         self._chat_id = chat_id
         self._interval = edit_interval_ms / 1000
+        self.ack_consumed: str | None = None  # set when the first delta was the transient ack
 
-    async def stream_reply(self, deltas: AsyncIterator[str], cancel: asyncio.Event) -> str:
+    async def stream_reply(
+        self, deltas: AsyncIterator[str], cancel: asyncio.Event, *, transient_ack: bool = False
+    ) -> str:
         try:
             message = await self._bot.send_message(self._chat_id, PLACEHOLDER_AR)
         except Exception as error:  # noqa: BLE001 — any send failure -> aggregate fallback (spec error mode)
             # Placeholder failed -> Sprint-1 aggregate behavior: one send, full text.
             logger.warning("streamer placeholder failed -> aggregate fallback: {}", error)
-            return await self._aggregate(deltas)
+            return await self._aggregate(deltas, transient_ack=transient_ack)
 
         pending = ""
+        answer = ""  # the durable text: ack-free once answer deltas arrive
         last_text = PLACEHOLDER_AR
         last_edit = perf_counter()
         started = False
+        ack_shown = False
         async for delta in deltas:
             if cancel.is_set():
                 break
-            pending += delta
+            if transient_ack and not ack_shown:
+                ack_shown = True
+                self.ack_consumed = delta
+                await self._edit(delta, message.message_id)  # instant reassurance
+                last_edit = perf_counter()
+                last_text = delta
+                continue
+            if transient_ack and not answer:
+                answer = delta  # first answer delta: the ack dies here
+            else:
+                answer += delta
+            pending = answer
             if not pending.strip():
                 continue
             if not started or perf_counter() - last_edit >= self._interval:
@@ -48,7 +73,7 @@ class ChatStreamer:
                 last_text = pending
         if pending.strip() and pending != last_text:
             await self._edit(pending, message.message_id)  # final verbatim edit
-        return pending
+        return answer if transient_ack else pending
 
     async def _edit(self, text: str, message_id: int) -> None:
         try:
@@ -57,8 +82,12 @@ class ChatStreamer:
             self._interval *= 2
             logger.warning("streamer rate-limited -> edit interval doubled: {}", error)
 
-    async def _aggregate(self, deltas: AsyncIterator[str]) -> str:
-        text = "".join([part async for part in deltas])
+    async def _aggregate(self, deltas: AsyncIterator[str], *, transient_ack: bool = False) -> str:
+        parts = [part async for part in deltas]
+        if transient_ack and parts:
+            self.ack_consumed = parts[0]
+            parts = parts[1:]  # the ack is disposable here too
+        text = "".join(parts)
         if text.strip():
             await self._bot.send_message(self._chat_id, text)
         return text

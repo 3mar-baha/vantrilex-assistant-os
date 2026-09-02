@@ -73,8 +73,10 @@ async def test_help_lists_capabilities(fake_bot, make_shell):
 
 
 async def test_owner_text_streams_brain_progressively(fake_bot, make_shell):
-    """AC8 (2.2 re-map): placeholder -> ack first edit -> coalesced edits -> exact final;
-    typing issued; the brain stream saw the system prompt + owner text ONLY."""
+    """AC8 (2.2 re-map, remediation 1.3): placeholder -> ack first edit (instant
+    reassurance) -> the ack is DELETED the moment the answer starts streaming ->
+    final bubble carries the answer only; typing issued; the brain stream saw
+    the system prompt + owner text ONLY."""
     shell = make_shell(
         router_replies=[_router("tier2", "تمام، ببدأ")],
         stream_programs=[StreamProgram(deltas=("سجّلت", " الموعد", " بكره"))],
@@ -86,8 +88,9 @@ async def test_owner_text_streams_brain_progressively(fake_bot, make_shell):
     edits = bot.session.sent("EditMessageText")
     assert sends[0].method.text == "…"
     assert len(edits) >= 2
-    assert edits[0].method.text == "تمام، ببدأ"
-    assert edits[-1].method.text == "تمام، ببدأسجّلت الموعد بكره"
+    assert edits[0].method.text == "تمام، ببدأ"  # the ack shows instantly...
+    assert edits[-1].method.text == "سجّلت الموعد بكره"  # ...then the answer replaces it, ack gone
+    assert "تمام" not in edits[-1].method.text
     assert any(c.name == "SendChatAction" for c in bot.session.calls)
 
     stream_messages, _tier = shell.gateway.stream_calls[0]
@@ -247,7 +250,8 @@ async def test_owner_voice_transcribed_filed_and_streamed(
 
 
 async def test_new_owner_message_cancels_inflight_stream(fake_bot, make_shell):
-    """Interjection: a newer owner message cancels the in-flight stream; partial kept."""
+    """Interjection: a newer owner message cancels the in-flight stream; partial kept.
+    (Remediation 1.3: the partial is the answer alone — the ack never glues onto it.)"""
     gate = asyncio.Event()
     shell = make_shell(
         router_replies=[_router("tier2", "تم"), _router("tier2", "جواب ثاني")],
@@ -269,7 +273,8 @@ async def test_new_owner_message_cancels_inflight_stream(fake_bot, make_shell):
     await asyncio.gather(task1, task2)
 
     final_edits = [c.method.text for c in bot.session.sent("EditMessageText")]
-    assert "تمأول" in final_edits  # partial received text preserved in the bubble
+    assert "أول" in final_edits  # partial answer preserved in the bubble
+    assert not any("تمأول" in t for t in final_edits)  # the ack was replaced, never glued
     assert not any("تالٍ" in t for t in final_edits)  # never consumed the late delta
     assert any("جواب ثاني" in c.method.text for c in bot.session.sent("EditMessageText"))
 
@@ -369,9 +374,12 @@ async def test_streams_carry_history_and_long_term_envelope(fake_bot, make_shell
     second = shell.gateway.stream_calls[1][0]
     assert [m["role"] for m in second] == ["system", "user", "assistant", "user"]
     assert second[1] == {"role": "user", "content": "مرحبا"}
-    assert second[2] == {"role": "assistant", "content": "إقراررد1"}  # ack + deltas = final text
+    assert second[2] == {
+        "role": "assistant",
+        "content": "رد1",
+    }  # remediation 1.3: answer-only, ack dropped
     assert second[-1] == {"role": "user", "content": "شو رأيك؟"}
-    assert memory.history(OWNER_ID)[-1] == {"role": "assistant", "content": "إقرار2رد2"}
+    assert memory.history(OWNER_ID)[-1] == {"role": "assistant", "content": "رد2"}
 
 
 async def test_exchange_persisted_and_learned_after_stream(fake_bot, make_shell):
@@ -387,7 +395,9 @@ async def test_exchange_persisted_and_learned_after_stream(fake_bot, make_shell)
     await _run(shell, bot, make_update(1, OWNER_ID, "مرحبا"))
     assert shell.gateway.stream_calls  # reply streamed first
     await wait_until(lambda: writer.exchanges and writer.learns)
-    assert writer.exchanges == [("مرحبا", "تمرد")]  # ack + delta = final text
+    assert writer.exchanges == [
+        ("مرحبا", "رد")
+    ]  # remediation 1.3: ledger gets the answer without the ack
     assert writer.learns == ["مرحبا"]
 
 
@@ -426,6 +436,40 @@ async def test_voice_origin_reply_arrives_as_voice_note(
 
 # --- Remediation 1.2 (owner directive 2026-09-03): the persona contract ————————
 # --- Sara knows her creator; service-register and gateway identity are banned. ——
+
+
+class _SilentTools:
+    """Launch-shaped registry: the coordinator already notified the owner directly."""
+
+    async def call(self, tool, arg):
+        return None
+
+
+async def test_launch_turn_keeps_ack_bubble_no_empty_reply(fake_bot, make_shell):
+    """Remediation 1.3 silent tool lane: launch already notified the owner — the
+    bubble keeps the transient ack, NO EMPTY_REPLY follows, and nothing fake lands
+    in memory (the ack is never remembered as a reply)."""
+    from src.memory import ConversationMemory
+
+    memory = ConversationMemory()
+    verdict = json.dumps(
+        {"route": "tier2", "tool": "launch", "arg": "calc", "ack": "من عيوني"},
+        ensure_ascii=False,
+    )
+    shell = make_shell(
+        memory=memory,
+        tools=_SilentTools(),
+        router_replies=[verdict],
+        stream_programs=[],
+    )
+    bot = fake_bot()
+    await _run(shell, bot, make_update(1, OWNER_ID, "افتحي الآلة الحاسبة"))
+
+    edits = bot.session.sent("EditMessageText")
+    assert edits[-1].method.text == "من عيوني"  # bubble holds the ack
+    send_texts = [c.method.text for c in bot.session.sent("SendMessage")]
+    assert send_texts == ["…"]  # placeholder only — no EMPTY_REPLY_AR, no fake answer
+    assert memory.history(OWNER_ID) == []  # the ack never masquerades as a reply
 
 
 def test_persona_contract_recognizes_creator():

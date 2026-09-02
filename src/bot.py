@@ -273,7 +273,9 @@ async def _stream_answer(
                 system = f"{system}\n\n{LONG_TERM_HEADER_AR}\n{long_term}"
         history = memory.history(chat_id) if memory is not None else None
         reply = await streamer.stream_reply(
-            front.handle(text, system=system, history=history, tools=tools), cancel
+            front.handle(text, system=system, history=history, tools=tools),
+            cancel,
+            transient_ack=True,
         )
     except GatewayError as error:
         logger.error("brain stream failed: {}", error)
@@ -284,7 +286,10 @@ async def _stream_answer(
         await message.answer(APOLOGY_AR)
         return
     if not reply.strip():
-        await message.answer(EMPTY_REPLY_AR)
+        if streamer.ack_consumed is None:
+            await message.answer(EMPTY_REPLY_AR)
+        # else: the bubble already carries the transient ack (silent tool lane —
+        # the tool spoke to the owner directly); never add a fake line after it.
         return
     if memory is not None:
         memory.remember(chat_id, "user", text)

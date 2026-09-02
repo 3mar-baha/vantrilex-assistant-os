@@ -148,6 +148,53 @@ async def test_overlong_router_ack_discarded_for_default_placeholder(make_settin
     assert script.models() == [FAST_PIN, FAST_PIN]
 
 
+# --- Remediation 1.3: the ack is Sara's voice — never a gateway identity, never a
+# --- claim of completed action. Content guard sits beside the length guard. ---------
+
+
+@pytest.mark.parametrize(
+    "bad_ack",
+    [
+        "أنا بوابة سارة الأمامية",  # gateway identity leak (audit C-5)
+        "أنا مساعد آلي جاهز لخدمتك",
+        "هذا البوت جاهز",
+        "تم فتح البرنامج بنجاح",  # claimed completed action (audit C-4/C-5)
+        "بعت الإيميل لك",
+        "جدولت الموعد وهلا كله تمام",
+    ],
+)
+async def test_identity_or_claim_ack_replaced_by_default(make_settings, bad_ack):
+    """An ack carrying gateway identity or a claimed completed action is router
+    drift — replace it with DEFAULT_ACK_AR (remediation 1.3 content guard)."""
+    script = _Scripted(
+        httpx.Response(200, content=_sse(_router_json("direct", bad_ack))),
+        httpx.Response(200, content=_sse(_chunk("الجواب"))),
+    )
+    async with _gateway(script) as client:
+        out = await _collect(FrontDoorDispatcher(client, make_settings()).handle("طلب عادي"))
+    assert out[0] == DEFAULT_ACK_AR
+    assert bad_ack not in "".join(out)
+
+
+async def test_clean_ack_passes_unchanged(make_settings):
+    """A clean two-word Jordanian ack within budget passes the content guard as-is."""
+    script = _Scripted(
+        httpx.Response(200, content=_sse(_router_json("direct", "من عيوني هسا"))),
+        httpx.Response(200, content=_sse(_chunk("الجواب"))),
+    )
+    async with _gateway(script) as client:
+        out = await _collect(FrontDoorDispatcher(client, make_settings()).handle("طلب عادي"))
+    assert out[0] == "من عيوني هسا"
+
+
+async def test_router_prompt_has_no_gateway_identity(make_settings):
+    """The router prompt must not introduce Sara as a «بوابة» — the third-person
+    framing was the mechanical source of the owner-reported identity leaks."""
+    from src.dispatcher import _ROUTER_PROMPT_AR
+
+    assert "بوابة" not in _ROUTER_PROMPT_AR
+
+
 async def test_tool_intent_routes_tier2(make_settings):
     """AC5: single/dual-tool intent acks at Tier 1 then streams Tier 2."""
     script = _Scripted(

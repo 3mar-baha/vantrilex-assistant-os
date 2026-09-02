@@ -24,8 +24,13 @@ from src.gateway import GatewayError, OmniRouteClient, Tier
 DEFAULT_ACK_AR: Final[str] = "من عيوني هسا ببدأ..."
 MAX_ACK_CHARS: Final[int] = 30
 
+# Remediation 1.3 (owner 2026-09-03): the ack speaks as Sara — a gateway identity
+# or a claimed completed action inside it is router drift, not an ack.
+_ACK_IDENTITY_WORDS: Final[tuple[str, ...]] = ("بوابة", "مساعد", "بوت", "خدمة", "برنامج")
+_ACK_CLAIM_WORDS: Final[tuple[str, ...]] = ("تم فتح", "فتحت", "بعت", "جدولت", "سجّلت", "أنجزت")
+
 _ROUTER_PROMPT_AR: Final[str] = (
-    "أنت بوابة سارة الأمامية. صنّف طلب المالك وأجب بسطر JSON واحد فقط:\n"
+    "صنّف طلب المالك وأجب بسطر JSON واحد فقط:\n"
     '{"route": "direct"|"tier2"|"tier3", "tool": "none"|"gmail"|"calendar"|"tasks"'
     '|"telemetry"|"launch"|"brief", "arg": "...", "ack": "..."}\n'
     '- "ack" إقرار من كلمتين إلى خمس كلمات فقط (مثل «من عيوني هسا» أو «لحظة بفحصلك») '
@@ -67,6 +72,11 @@ def _parse_router(reply: str) -> tuple[str, str, str, str] | None:
     if tool not in _VALID_TOOLS:
         tool = "none"
     if len(ack) > MAX_ACK_CHARS:  # router drift: a mini-answer, not an acknowledgment
+        ack = DEFAULT_ACK_AR
+    lowered = ack  # Arabic has no case; identity/claim scan runs on the raw ack
+    if any(word in lowered for word in _ACK_IDENTITY_WORDS) or any(
+        word in lowered for word in _ACK_CLAIM_WORDS
+    ):  # gateway identity / claimed action: never Sara's voice (remediation 1.3)
         ack = DEFAULT_ACK_AR
     return route, ack or DEFAULT_ACK_AR, tool, str(verdict.get("arg") or "").strip()
 

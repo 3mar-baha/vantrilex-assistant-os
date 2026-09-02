@@ -171,3 +171,63 @@ async def test_plain_text_no_parse_mode(fake_bot):
     assert final == "*not* _markdown_ [link](x)"
     for call in bot.session.sent("SendMessage") + bot.session.sent("EditMessageText"):
         assert not isinstance(getattr(call.method, "parse_mode", None), str)
+
+
+# --- Remediation 1.3: the transient ack — shown instantly, DELETED from the text
+# --- the moment the answer starts; memory/ledger/voice only ever see the answer. ----
+
+
+async def test_transient_ack_shown_then_replaced_by_answer(fake_bot):
+    """Owner contract: the bubble shows the ack, then the answer REPLACES it — the
+    final text (what memory/ledger/voice receive) never contains the ack."""
+    bot = fake_bot()
+
+    async def deltas():
+        yield "من عيوني هسا"
+        await asyncio.sleep(0.02)
+        yield "سجّلت"
+        yield " الموعد"
+
+    streamer = ChatStreamer(bot, OWNER_ID, edit_interval_ms=40)
+    final = await streamer.stream_reply(deltas(), asyncio.Event(), transient_ack=True)
+
+    assert final == "سجّلت الموعد"  # answer only — the ack is gone from the returned text
+    edit_texts = [c.method.text for c in _edits(bot)]
+    assert edit_texts[0] == "من عيوني هسا"  # ack shows instantly...
+    assert edit_texts[-1] == "سجّلت الموعد"  # ...then the answer replaces it
+    assert "عيوني" not in edit_texts[-1]
+
+
+async def test_transient_ack_only_stream_returns_empty(fake_bot):
+    """Tool-lane silent path (launch already notified the owner directly): the bubble
+    keeps the ack, the returned reply is EMPTY — never the ack masquerading as a
+    final answer (audit C-4: acks never stick to memory)."""
+    bot = fake_bot()
+
+    async def deltas():
+        yield "من عيوني"
+
+    streamer = ChatStreamer(bot, OWNER_ID, edit_interval_ms=40)
+    final = await streamer.stream_reply(deltas(), asyncio.Event(), transient_ack=True)
+
+    assert final == ""
+    assert streamer.ack_consumed == "من عيوني"  # the shell reads this to stay silent
+    assert _edits(bot)[-1].method.text == "من عيوني"  # bubble keeps the ack
+
+
+async def test_transient_ack_aggregate_fallback_skips_ack(fake_bot):
+    """Placeholder send failure -> aggregate: the ack is dropped there too — one
+    message with the answer only."""
+    bot = fake_bot(fail_send_indices={1})
+
+    async def deltas():
+        yield "لحظة"
+        yield "الرد الكامل"
+
+    streamer = ChatStreamer(bot, OWNER_ID, edit_interval_ms=40)
+    final = await streamer.stream_reply(deltas(), asyncio.Event(), transient_ack=True)
+
+    assert final == "الرد الكامل"
+    sends = [c for c in bot.session.calls if c.name == "SendMessage"]
+    assert sends[-1].method.text == "الرد الكامل"
+    assert _edits(bot) == []
