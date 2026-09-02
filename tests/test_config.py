@@ -28,7 +28,7 @@ def test_settings_accept_all_env_example_vars(make_settings):
     assert s.heavy_model == "openrouter/nvidia/nemotron-3-ultra-550b-a55b:free"
     assert s.telegram_bot_token.startswith("1234567890:")
     assert s.authorized_user_id == 123456789
-    assert s.voice_name == "ar-JO-SanaNeural"
+    assert s.voice_name == "ar-EG-SalmaNeural"
     assert s.google_oauth_client_json == "./config/google_oauth_client.json"
     assert s.google_calendar_id == "primary"
     assert s.bridge_lan_port == 8000

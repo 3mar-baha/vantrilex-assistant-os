@@ -146,3 +146,49 @@ async def test_metadata_events_skipped_only_audio_forwarded(monkeypatch):
     without_meta = await VoicePipeline(**PIPE).synthesize("أهلاً")
     assert with_meta.startswith(b"OggS")
     assert _mask_ogg_volatile(with_meta) == _mask_ogg_volatile(without_meta)
+
+
+# --- Owner directive 2026-09-02: 64k audio-mode opus + dialect TTS shaper. --------
+
+
+@needs_ffmpeg
+async def test_opus_encoding_is_64k_audio_mode(monkeypatch):
+    """Live 2026-09-02: 24k voip mode choked every voice (owner: صوت رديء) —
+    the opus encode must be 64k in 'audio' application mode, never telephony."""
+    args_seen = []
+    real_spawn = asyncio.create_subprocess_exec
+
+    async def _spy(*args, **kwargs):
+        args_seen.append(args)
+        return await real_spawn(*args, **kwargs)
+
+    monkeypatch.setattr(asyncio, "create_subprocess_exec", _spy)
+    monkeypatch.setattr("edge_tts.Communicate", _script([{"type": "audio", "data": CANNED_MP3}]))
+    await VoicePipeline(**PIPE).synthesize("أهلاً")
+    args = list(args_seen[0])
+    assert args[args.index("-b:a") + 1] == "64k"
+    assert args[args.index("-application") + 1] == "audio"
+    assert "voip" not in args
+
+
+@needs_ffmpeg
+async def test_synthesis_applies_dialect_shaper(monkeypatch):
+    """Text reaching edge_tts is shaped: emoji stripped + seed lexicon applied."""
+    cls = _script([{"type": "audio", "data": CANNED_MP3}])
+    monkeypatch.setattr("edge_tts.Communicate", cls)
+    await VoicePipeline(**PIPE).synthesize("هسا 👋")
+    assert cls.instances[-1].text == "هسَّا"
+
+
+async def test_emoji_only_text_rejected_pre_spawn(monkeypatch):
+    """Emoji-only text shapes to blank -> rejected before any spawn."""
+    spawns = []
+
+    async def _no_spawn(*args, **kwargs):
+        spawns.append(args)
+        raise AssertionError("spawned despite emoji-only input")
+
+    monkeypatch.setattr(asyncio, "create_subprocess_exec", _no_spawn)
+    with pytest.raises(ValueError):
+        VoicePipeline(**PIPE).synthesize_stream("👋🎉")
+    assert spawns == []

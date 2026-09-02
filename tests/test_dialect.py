@@ -63,3 +63,30 @@ def test_snapshot_injection_into_prompt():
 
     # empty registry -> nothing injected
     assert prompt_block([]) == ""
+
+
+def test_shape_for_tts_strips_emoji():
+    assert shape_for_tts("أهلا 👋 عمر") == "أهلا عمر"
+    assert shape_for_tts("جاهزة 🎉✨🎉 للشغل") == "جاهزة للشغل"
+
+
+def test_shape_for_tts_skeletizes_trailing_harakat():
+    # tanween/final harakat stripped (تسكين الأواخر); internal ones kept verbatim
+    assert shape_for_tts("تماماً") == "تماما"
+    assert shape_for_tts("عُمَرُ") == "عُمَر"
+    assert shape_for_tts("جاهزةٌ") == "جاهزة"
+
+
+def test_shape_for_tts_applies_seed_lexicon_whole_word():
+    assert shape_for_tts("هسا وينك") == "هسَّا وينك"
+    # whole-word: شوف must never be hit by the شو entry
+    assert shape_for_tts("شوف هسا") == "شوف هسَّا"
+
+
+def test_shape_for_tts_owner_notes_override_seed():
+    owner = DialectNote(term="هسا", phonetic="هِسّا", context="تعلّم من المالك")
+    assert shape_for_tts("هسا", notes=[owner]) == "هِسّا"
+
+
+def test_shape_for_tts_plain_text_untouched():
+    assert shape_for_tts("مرحبا كيف حالك اليوم") == "مرحبا كيف حالك اليوم"
