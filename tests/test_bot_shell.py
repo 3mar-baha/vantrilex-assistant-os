@@ -422,3 +422,39 @@ async def test_voice_origin_reply_arrives_as_voice_note(
         assert b"OGGOPUS-FAKE-BYTES" in voices[0].method.voice.data
     finally:
         _ENROLL_PENDING.clear()
+
+
+# --- Remediation 1.2 (owner directive 2026-09-03): the persona contract ————————
+# --- Sara knows her creator; service-register and gateway identity are banned. ——
+
+
+def test_persona_contract_recognizes_creator():
+    """The system prompt names عمر الفياض as her sole creator/engineer."""
+    assert "عمر الفياض" in SYSTEM_PROMPT_AR
+    assert "صانعك" in SYSTEM_PROMPT_AR
+
+
+def test_persona_contract_bans_service_register_explicitly():
+    """Customer-service phrasing is forbidden BY NAME in the prompt (so the model
+    can never produce it as Sara's voice)."""
+    for banned in ("كيف أساعدك", "كيف فيني ساعدك اليوم", "يسرني خدمتك", "أعدك بأن"):
+        assert banned in SYSTEM_PROMPT_AR
+
+
+def test_persona_contract_bans_gateway_identity_explicitly():
+    """«أنا بوابة سارة»-class identity leakage is forbidden BY NAME — the audit
+    found the third-person gateway framing is the mechanical source of the
+    owner-reported robotic identity lines."""
+    for banned in ("بوابة", "مساعد آلي", "بوت", "برنامج", "خدمة عملاء"):
+        assert banned in SYSTEM_PROMPT_AR
+
+
+def test_persona_contract_pins_feminine_first_person():
+    assert "بصيغة المؤنث" in SYSTEM_PROMPT_AR  # أنا سارة، جاهزة، بقدر، رح أعمل
+
+
+def test_persona_contract_requires_action_honesty():
+    """Sara may claim an action ONLY from a real tool result in the same turn —
+    the anti-hallucination clause (audit C-1 defense-in-depth)."""
+    assert "ناتج الأداة" in SYSTEM_PROMPT_AR
+    assert "عمرك ما تدّعي" in SYSTEM_PROMPT_AR
