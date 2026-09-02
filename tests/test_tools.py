@@ -132,7 +132,7 @@ async def test_gmail_backend_failure_degrades_to_honest_line():
 
 
 async def test_calendar_formats_next_24h_events_in_owner_tz():
-    registry = ToolRegistry(suite=FakeSuite(events=[_event()]), tz=TZ)
+    registry = ToolRegistry(suite=FakeSuite(events=[_event()]), tz=TZ, now_fn=lambda: NOW)
     out = await registry.call("calendar", "")
     assert "اجتماع الفريق" in out
     assert "20:00" in out  # NOW+2h = 17:00 UTC = 20:00 Amman
@@ -146,14 +146,16 @@ async def test_calendar_without_suite_is_honest_google_offline():
 async def test_tasks_filters_to_due_today():
     today = _task("تسليم التقرير", NOW + timedelta(hours=3))
     tomorrow = _task("بعيد", NOW + timedelta(days=1))
-    registry = ToolRegistry(suite=FakeSuite(tasks=[today, tomorrow]), tz=TZ)
+    registry = ToolRegistry(suite=FakeSuite(tasks=[today, tomorrow]), tz=TZ, now_fn=lambda: NOW)
     out = await registry.call("tasks", "")
     assert "تسليم التقرير" in out
     assert "بعيد" not in out
 
 
 async def test_tasks_none_due_today_is_explicit():
-    registry = ToolRegistry(suite=FakeSuite(tasks=[_task("بعيد", NOW + timedelta(days=2))]), tz=TZ)
+    registry = ToolRegistry(
+        suite=FakeSuite(tasks=[_task("بعيد", NOW + timedelta(days=2))]), tz=TZ, now_fn=lambda: NOW
+    )
     out = await registry.call("tasks", "")
     assert "ما في" in out
 

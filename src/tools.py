@@ -6,6 +6,7 @@ dispatcher skips narration. Google/bridge outages degrade to explicit offline
 lines; backend failures degrade loudly to a plain apology line.
 """
 
+from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -34,6 +35,7 @@ class ToolRegistry:
         coordinator: Any = None,
         composer: Any = None,
         tz: ZoneInfo | None = None,
+        now_fn: Callable[[], datetime] | None = None,
     ) -> None:
         self._inbox = inbox
         self._suite = suite
@@ -41,6 +43,9 @@ class ToolRegistry:
         self._coordinator = coordinator
         self._composer = composer
         self._tz = tz or ZoneInfo("UTC")
+        # Injectable clock: the frozen-date test bomb (2026-09-01 -> 2026-09-02) showed
+        # wall-clock reads inside handlers make tests die at midnight rollovers.
+        self._now = now_fn or (lambda: datetime.now(UTC))
 
     async def call(self, tool: str, arg: str = "") -> str | None:
         handler = getattr(self, f"_do_{tool}", None)
@@ -68,7 +73,7 @@ class ToolRegistry:
     async def _do_calendar(self, arg: str) -> str:
         if self._suite is None:
             return GOOGLE_OFFLINE_AR
-        now = datetime.now(UTC)
+        now = self._now()
         events = await self._suite.list_events(now, now + timedelta(days=1))
         if not events:
             return NO_EVENTS_AR
@@ -82,7 +87,7 @@ class ToolRegistry:
         if self._suite is None:
             return GOOGLE_OFFLINE_AR
         tasks = await self._suite.list_tasks()
-        today = datetime.now(self._tz).date()
+        today = self._now().astimezone(self._tz).date()
         due_today = [
             task
             for task in tasks
@@ -116,7 +121,7 @@ class ToolRegistry:
     async def _do_brief(self, arg: str) -> str:
         if self._composer is None:
             return GOOGLE_OFFLINE_AR
-        data = await self._composer.collect(datetime.now(UTC))
+        data = await self._composer.collect(self._now())
         lines = ["الإحاطة اليومية:"]
         if data.events is None:
             lines.append("المواعيد: تعذّر الوصول للتقويم")
