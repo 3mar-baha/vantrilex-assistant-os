@@ -9,6 +9,20 @@ product release tags start independently at v1.0.0.)
 ## [Unreleased]
 
 ### Added
+- **Fish Audio primary voice engine (remediation 1.9, owner directive 2026-09-03)**:
+  Sara's voice is now Fish `s2.1-pro-free:free` with the «سمسم-بوس» reference voice
+  (`56c2f0c2…`) via OpenRouter's `/api/v1/audio/speech`, borrowing the same
+  `OPENROUTER_API_KEY` free pool that feeds OmniRoute — $0.00 held. New `src/fish_voice.py`
+  (`FishVoice` wire client + `FishFirstVoice` fish-first wrapper): Fish MP3 → the existing
+  ffmpeg 64k/audio-mode Opus chain; ANY Fish failure (402/429/5xx/timeout/JSON body)
+  transparently falls back to Edge-TTS Salma — the owner is never left hanging.
+  Unconfigured (no key) → pure Edge lane, zero behavior change. Wire note: the voice lane
+  calls OpenRouter directly (OmniRoute's speech endpoint does not proxy `openrouter/*` slugs).
+- **Creator-recognition persona contract (remediation 1.2, 2026-09-03)**: `SYSTEM_PROMPT_AR`
+  now pins Sara's addressee as **عمر الفياض, صانعك ومهندسك الوحيد** — first-person feminine,
+  identity bans BY NAME (بوابة/مساعد آلي/بوت/برنامج/خدمة عملاء), customer-service phrasing
+  bans (كيف أساعدك/كيف فيني ساعدك اليوم/يسرني خدمتك/أعدك بأن), and the action-honesty clause
+  (no claim without ناتج الأداة in the same turn). 5 contract tests enforce it.
 - **Dialect TTS shaper (owner directive 2026-09-02, Path A)**: `shape_for_tts()` in
   `src/dialect.py` runs before every synthesis — emoji stripped (emoji read aloud or
   corrupted the stream), whole-word pronunciation lexicon (owner Dialect_Notes override

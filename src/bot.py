@@ -25,6 +25,7 @@ from loguru import logger
 
 from src.config import Settings
 from src.dispatcher import FrontDoorDispatcher
+from src.fish_voice import FishFirstVoice, FishVoice
 from src.gateway import GatewayError, OmniRouteClient, Tier
 from src.memory import (
     LONG_TERM_HEADER_AR,
@@ -326,6 +327,17 @@ class _BotNotifier:
         await self._bot.send_message(self._chat_id, text)
 
 
+def build_voice(settings: Settings):
+    """Voice lane factory (remediation 1.9): Fish Audio primary when configured,
+    pure Edge-TTS Salma otherwise — same synthesize() interface either way."""
+    edge = VoicePipeline(
+        voice=settings.voice_name, rate=settings.voice_rate, pitch=settings.voice_pitch
+    )
+    if not settings.fish_audio_ready:
+        return edge
+    return FishFirstVoice(fish=FishVoice.from_settings(settings), edge=edge)
+
+
 async def run_bot(settings: Settings, bridge=None) -> None:
     gateway = OmniRouteClient(
         settings.omniroute_base_url,
@@ -336,9 +348,7 @@ async def run_bot(settings: Settings, bridge=None) -> None:
             Tier.HEAVY: settings.heavy_chain,
         },
     )
-    voice = VoicePipeline(
-        voice=settings.voice_name, rate=settings.voice_rate, pitch=settings.voice_pitch
-    )
+    voice = build_voice(settings)
     vault = VaultClient(
         settings.vault_github_repo,
         settings.vault_github_token.get_secret_value(),

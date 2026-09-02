@@ -63,6 +63,10 @@ ENV_EXAMPLE: dict[str, str] = {
     "TELEGRAM_API_ID": "",
     "TELEGRAM_API_HASH": "",
     "TELEGRAM_USER_SESSION_STRING": "",
+    # Fish Audio primary voice lane (remediation 1.9): borrows the OpenRouter key.
+    "OPENROUTER_API_KEY": "your-openrouter-key",
+    "FISH_AUDIO_MODEL": "fish-audio/s2.1-pro-free:free",
+    "FISH_AUDIO_VOICE_REF": "56c2f0c23924449781863ff20aceb5fa",
     "VOICE_NAME": "ar-EG-SalmaNeural",
     "VOICE_RATE": "+0%",
     "VOICE_PITCH": "+0Hz",

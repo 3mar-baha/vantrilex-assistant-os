@@ -72,6 +72,13 @@ class Settings(BaseSettings):
     voice_name: str = "ar-EG-SalmaNeural"
     voice_rate: str = "+0%"
     voice_pitch: str = "+0Hz"
+    # Fish Audio primary voice lane (remediation 1.9, owner directive 2026-09-03):
+    # fish s2.1-pro-free + the سمسم-بوس reference voice via OpenRouter speech API.
+    # Uses the same OPENROUTER_API_KEY already in .env — the voice lane borrows it
+    # directly (OmniRoute's speech lane does not proxy openrouter/* slugs).
+    openrouter_api_key: str | None = None  # OPENROUTER_API_KEY
+    fish_audio_model: str = "fish-audio/s2.1-pro-free:free"  # FISH_AUDIO_MODEL
+    fish_audio_voice_ref: str = "56c2f0c23924449781863ff20aceb5fa"  # FISH_AUDIO_VOICE_REF (سمسم)
     vault_github_repo: str  # VAULT_GITHUB_REPO (private vault repo, "owner/name")
     vault_github_token: SecretStr  # VAULT_GITHUB_TOKEN (fine-grained PAT, repo scope)
     vault_branch: str = "main"  # VAULT_BRANCH (vault git branch)
@@ -134,6 +141,15 @@ class Settings(BaseSettings):
     @property
     def heavy_chain(self) -> list[str]:
         return [self.heavy_model, *self._split_fallbacks(self.heavy_model_fallbacks)]
+
+    @property
+    def fish_audio_key(self) -> str | None:
+        """The voice lane's bearer key: OPENROUTER_API_KEY when present, else none."""
+        return self.openrouter_api_key
+
+    @property
+    def fish_audio_ready(self) -> bool:
+        return bool(self.fish_audio_key and self.fish_audio_model)
 
 
 @lru_cache(maxsize=1)
