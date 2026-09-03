@@ -803,5 +803,9 @@ async def run_bot(settings: Settings, bridge=None) -> None:
         for task in loop_tasks:
             task.cancel()
         await asyncio.gather(*loop_tasks, return_exceptions=True)
+        # pass-1 (V-4): in-flight ledger writes are reaped BEFORE the vault
+        # session closes — the last exchanges never die at shutdown.
+        if _PERSIST_TASKS:
+            await asyncio.gather(*list(_PERSIST_TASKS), return_exceptions=True)
         await gateway.aclose()
         await vault.aclose()

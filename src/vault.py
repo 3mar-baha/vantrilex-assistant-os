@@ -13,6 +13,7 @@ FileNotFoundError; oversize payloads are refused pre-flight.
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import re
 from datetime import date
@@ -174,6 +175,9 @@ class VaultClient:
         }
         _REGISTERED_SECRETS.add(token)
         self._owns_session = session is None
+        # pass-1 (C-9): every write path serializes on this lock — concurrent
+        # appends to the same note can no longer race past each other.
+        self._write_lock = asyncio.Lock()
         self._http = session or httpx.AsyncClient(
             base_url=self._API, headers=self._headers, timeout=30.0
         )
@@ -201,18 +205,39 @@ class VaultClient:
             raise ValueError(f"{path}: {error}") from error
         return text
 
-    async def upsert(self, path: str, content: str, *, message: str) -> WriteResult:
+    async def upsert(self, path: str, content: str, *, message: str, merge=None) -> WriteResult:
+        """Serialized + conflict-remerged (C-9/V-4 fix, pass-1): every write
+        takes the client-wide lock (concurrent appends can no longer race to
+        the same note), and a 409 re-runs the WHOLE merge (re-read + re-merge
+        + re-PUT) via the caller's ``merge(path, content)`` callback when one
+        is given — a stale re-PUT can never silently drop another writer's
+        lines."""
+        async with self._write_lock:
+            return await self._upsert_locked(path, content, message=message, merge=merge)
+
+    async def _upsert_locked(
+        self, path: str, content: str, *, message: str, merge=None
+    ) -> WriteResult:
+        """The write body — caller holds ``_write_lock``."""
         payload = content.encode("utf-8")
         if len(payload) > MAX_NOTE_BYTES:
             raise ValueError(f"payload for {path} exceeds {MAX_NOTE_BYTES} bytes ({len(payload)})")
         sha = await self._lookup_sha(path)
         response = await self._put(path, content, message, sha)
-        if response.status_code == 409:
-            logger.warning("vault conflict on {path}; retrying GET->PUT once", path=path)
+        for attempt in (1, 2, 3):  # C-9: full re-merge, never a stale re-PUT
+            if response.status_code != 409:
+                break
+            logger.warning(
+                "vault conflict on {} (attempt {}); re-reading + re-merging",
+                path,
+                attempt,
+            )
             sha = await self._lookup_sha(path)
+            if merge is not None:
+                content = await merge(path, content)
             response = await self._put(path, content, message, sha)
-            if response.status_code == 409:
-                raise VaultConflictError(f"vault conflict persists for {path}")
+        if response.status_code == 409:
+            raise VaultConflictError(f"vault conflict persists for {path}")
         response.raise_for_status()
         data = response.json()
         return WriteResult(path=path, commit_sha=data["commit"]["sha"], created=sha is None)
@@ -225,14 +250,24 @@ class VaultClient:
     async def append_section(
         self, path: str, heading: str, lines: list[str], *, commit_prefix: str
     ) -> WriteResult:
-        """Append a `## heading` section (append-only dossier/log discipline)."""
-        try:
-            existing = (await self.read(path)).rstrip("\n")
-        except FileNotFoundError:
-            existing = ""
-        block = "\n".join([f"## {heading}", "", *lines])
-        merged = f"{existing}\n\n{block}\n" if existing else f"{block}\n"
-        return await self.upsert(path, merged, message=f"{commit_prefix}: {heading}")
+        """Append a `## heading` section (append-only dossier/log discipline).
+        Pass-1 (C-9): read-modify-write + the 409 re-merge both run under the
+        client lock; a conflict re-appends onto the LATEST remote content — a
+        racing writer's section survives and ours re-lands on top of it."""
+
+        async def _merge(_path: str, _content: str) -> str:
+            try:
+                existing = (await self.read(_path)).rstrip("\n")
+            except FileNotFoundError:
+                existing = ""
+            block = "\n".join([f"## {heading}", "", *lines])
+            return f"{existing}\n\n{block}\n" if existing else f"{block}\n"
+
+        async with self._write_lock:
+            merged = await _merge(path, "")
+            return await self._upsert_locked(
+                path, merged, message=f"{commit_prefix}: {heading}", merge=_merge
+            )
 
     async def commit_files(self, changes: dict[str, str | None], *, message: str) -> str:
         """Land many file changes as ONE structural commit (Git Data API):

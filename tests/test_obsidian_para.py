@@ -68,6 +68,46 @@ async def test_note_create_update_roundtrip():
         await client.upsert(note.path, "x", message="conflict")
 
 
+async def test_concurrent_appends_lose_no_sections():
+    """Pass-1 (audit C-9): two append_section calls racing on the SAME note
+    both land — the client lock serializes the read-modify-write, and a 409
+    re-merge re-appends onto the LATEST remote (never a stale re-PUT that
+    would drop the other writer's lines)."""
+    import asyncio
+
+    gh = FakeGitHub()
+    client = _client(gh)
+    await client.append_section(
+        "Daily_Logs/2026-09-04.md", "دردشة 10:00", ["**المالك:** أول"], commit_prefix="sara"
+    )
+    await asyncio.gather(
+        client.append_section(
+            "Daily_Logs/2026-09-04.md", "دردشة 11:00", ["**المالك:** ثاني"], commit_prefix="sara"
+        ),
+        client.append_section(
+            "Daily_Logs/2026-09-04.md", "دردشة 12:00", ["**المالك:** ثالث"], commit_prefix="sara"
+        ),
+    )
+    body = gh.objects["Daily_Logs/2026-09-04.md"][1]
+    assert "أول" in body and "ثاني" in body and "ثالث" in body  # NOTHING lost
+
+
+async def test_conflict_remerge_keeps_racing_writer():
+    """Pass-1: on a forced 409 the re-merge re-appends onto the LATEST remote
+    content — a racing writer's section survives, ours re-lands on top."""
+    gh = FakeGitHub()
+    client = _client(gh)
+    await client.append_section("Daily_Logs/2026-09-04.md", "أساس", ["أ"], commit_prefix="sara")
+    # one conflict: the first PUT after the read bumps into a foreign commit;
+    # the re-merge must read THAT content (with the foreign section) first.
+    gh.put_conflicts["Daily_Logs/2026-09-04.md"] = 1
+    await client.append_section(
+        "Daily_Logs/2026-09-04.md", "دردشة 13:00", ["**المالك:** بعد تعارض"], commit_prefix="sara"
+    )
+    body = gh.objects["Daily_Logs/2026-09-04.md"][1]
+    assert "أساس" in body and "بعد تعارض" in body
+
+
 def test_frontmatter_writer_and_splitter():
     """AC2: roundtrip is byte-identical on the body, Arabic intact, insertion
     order kept; only leading fences count as frontmatter; malformed YAML raises."""
