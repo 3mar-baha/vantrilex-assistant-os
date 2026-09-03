@@ -559,6 +559,15 @@ product.)
       same day (config + tests + docs synced); owner re-run needed after restart.
       NOTE: enroll note was 24KB opus; keep /enroll-voice notes ≥5s for a
       stronger print.
+      OWNER DIRECTIVES BATCH (2026-09-03 ~05:00, all landed same day):
+      (1) speed=0.9 on the Fish wire (FISH_AUDIO_SPEED; temperature does not
+      exist in the speech schema — the 0.7-steadiness emulation); (2) photo/
+      video comprehension via m3 native image_url/video_url blocks (>10MiB
+      honest line, brain untouched); (3) reply_modality skill — 70/30 mirror
+      (text origin 70% text, voice origin 70% voice) + explicit «رد صوتي/
+      رد نصي» always wins, one surface only; (4) reply_to_message quote rides
+      the brain prompt; (5) 50-message history + Obsidian envelope confirmed
+      already in every turn (pre-existing). Gate: 447 passed / 86.14%.
 
 ## Open items / blockers
 

@@ -11,6 +11,7 @@ mapped to a Jordanian apology — the owner is never left hanging.
 """
 
 import asyncio
+import base64
 import io
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
@@ -84,6 +85,9 @@ EMPTY_REPLY_AR: Final[str] = (
 )
 ENROLL_PROMPT_AR: Final[str] = "تمام، ابعتلي هسا ملاحظة صوتية قصيرة وأسجل بصمتك."
 ENROLL_DONE_AR: Final[str] = "سجّلت بصمتك! من هسا بصوتك بتعرفني — أهلا فيك!"
+MEDIA_TOO_BIG_AR: Final[str] = "هاد الملف كبير كتير عن اللي بقدر أعالجه — جرّب ملف أصغر."
+DEFAULT_MEDIA_PROMPT_AR: Final[str] = "دقّقي فيه وقوليلي شو بتشوفي."
+_MEDIA_MAX_BYTES: Final[int] = 10 * 1024 * 1024  # raw bytes; base64 inflates ~4/3 on the wire
 
 _STREAMS: Final[dict[int, tuple[asyncio.Task, asyncio.Event]]] = {}
 _ENROLL_PENDING: Final[set[int]] = set()
@@ -101,14 +105,22 @@ def build_dispatcher(
     writer=None,
     tools=None,
     coordinator=None,
+    decide_modality=None,
 ) -> Dispatcher:
     """gateway: the OmniRouteClient; wrapped here in the ADR-18 front door.
     transcriber: injectable for tests; production builds the local Whisper one.
     vault/memory/writer/tools/coordinator: dual-tier memory + tool-lane wiring;
-    None keeps the legacy bare-chat behavior (tests, degraded boots)."""
+    None keeps the legacy bare-chat behavior (tests, degraded boots).
+    decide_modality: the reply-surface chooser (owner 2026-09-03: 70/30 mirror
+    + explicit request); None falls back to the shipped skill."""
     dp = Dispatcher()
     dp.update.outer_middleware(OwnerOnlyMiddleware(settings.authorized_user_id))
     front = FrontDoorDispatcher(gateway, settings)
+    decide = decide_modality
+    if decide is None:
+        from src.skills.reply_modality import decide_reply_modality  # local: lands with its usage
+
+        decide = decide_reply_modality
     if transcriber is None:
         transcriber = VoiceToVault(
             model_size=settings.whisper_model_size,
@@ -194,9 +206,53 @@ def build_dispatcher(
             target = await coordinator.handle_owner_reply(message.text)
             if target is not None:
                 return  # consumed as the launch confirmation/rejection
-        _spawn_stream(message, bot, message.text)
+        # Reply-awareness (owner 2026-09-03): when the owner replies to a specific
+        # message, Sara must KNOW it — the quote reaches the brain as context.
+        text = message.text
+        quoted = getattr(message, "reply_to_message", None)
+        if quoted is not None:
+            quoted_text = quoted.text or quoted.caption or ""
+            quoted_label = quoted_text.strip()[:120]
+            if quoted_label:
+                text = f"{text}\n\n[عمر ردّ على رسالة سابقة: «{quoted_label}» — خديها بالحسبان]"
+        _spawn_stream(message, bot, text)
 
-    def _spawn_stream(message: Message, bot: Bot, text: str, *, voice_origin: bool = False) -> None:
+    @dp.message(F.photo)
+    async def on_photo(message: Message, bot: Bot) -> None:
+        """Media comprehension (owner directive 2026-09-03): a photo the owner
+        sends is understood natively — m3's image input describes it. m3 takes
+        image_url data-URIs; the caption (or the default ask) is the prompt."""
+        await _media_stream(message, bot, media_type="image")
+
+    @dp.message(F.video)
+    async def on_video(message: Message, bot: Bot) -> None:
+        """A video the owner sends is understood via m3's video input channel."""
+        await _media_stream(message, bot, media_type="video")
+
+    async def _media_stream(message: Message, bot: Bot, *, media_type: str) -> None:
+        file = message.photo[-1] if media_type == "image" else message.video
+        buffer = await bot.download(file, destination=io.BytesIO())
+        raw = buffer.getvalue()
+        if len(raw) > _MEDIA_MAX_BYTES:
+            await message.answer(MEDIA_TOO_BIG_AR)
+            return
+        prompt = (message.caption or DEFAULT_MEDIA_PROMPT_AR).strip() or DEFAULT_MEDIA_PROMPT_AR
+        b64 = base64.b64encode(raw).decode()
+        mime = "image/jpeg" if media_type == "image" else "video/mp4"
+        block = {
+            "type": f"{media_type}_url",
+            f"{media_type}_url": {"url": f"data:{mime};base64,{b64}"},
+        }
+        _spawn_stream(message, bot, prompt, media=[block])
+
+    def _spawn_stream(
+        message: Message,
+        bot: Bot,
+        text: str,
+        *,
+        voice_origin: bool = False,
+        media: list[dict] | None = None,
+    ) -> None:
         previous = _STREAMS.get(message.chat.id)
         if previous is not None:
             # Owner interjection: signal the in-flight stream AND hard-cancel its
@@ -214,12 +270,14 @@ def build_dispatcher(
                 settings,
                 cancel,
                 text,
+                decide,
                 voice=voice,
                 vault=vault,
                 memory=memory,
                 writer=writer,
                 tools=tools,
                 voice_origin=voice_origin,
+                media=media,
             )
         )
         _STREAMS[message.chat.id] = (task, cancel)
@@ -266,6 +324,7 @@ async def _stream_answer(
     settings: Settings,
     cancel: asyncio.Event,
     text: str,
+    decide,
     *,
     voice=None,
     vault=None,
@@ -273,6 +332,7 @@ async def _stream_answer(
     writer=None,
     tools=None,
     voice_origin: bool = False,
+    media: list[dict] | None = None,
 ) -> None:
     chat_id = message.chat.id
     streamer = ChatStreamer(bot, chat_id, edit_interval_ms=settings.stream_edit_interval_ms)
@@ -290,13 +350,20 @@ async def _stream_answer(
             if long_term:
                 system = f"{system}\n\n{LONG_TERM_HEADER_AR}\n{long_term}"
         history = memory.history(chat_id) if memory is not None else None
-        if voice_origin:
-            # Remediation 1.4: a voice note begets ONE surface — a voice note. The
-            # stream is consumed off the wire (no text bubble at all); the answer
-            # lands as a single voice note, or as a single honest text fallback
-            # when synthesis dies (audit C-3 double delivery is dead).
+        # Owner directive 2026-09-03: Sara's reply surface is DECIDED once per
+        # turn — his explicit request always wins («رد صوتي» / «رد نصي»);
+        # otherwise the 70/30 mirror (his text -> 70% text / 30% voice; his
+        # voice note -> flipped). Exactly one surface; the no-duplicates
+        # contract (remediation 1.4) is untouched.
+        reply_modality = decide(text, voice_origin)
+        if reply_modality == "voice":
+            # voice reply: the stream is consumed off the wire (no text
+            # bubble), the answer lands as ONE voice note, or as a single
+            # honest text fallback when synthesis dies.
             ack, answer, spoke = "", "", False
-            async for delta in front.handle(text, system=system, history=history, tools=tools):
+            async for delta in front.handle(
+                text, system=system, history=history, tools=tools, media=media
+            ):
                 if cancel.is_set():
                     break
                 if not ack:
@@ -316,7 +383,7 @@ async def _stream_answer(
             reply = answer
         else:
             reply = await streamer.stream_reply(
-                front.handle(text, system=system, history=history, tools=tools),
+                front.handle(text, system=system, history=history, tools=tools, media=media),
                 cancel,
                 transient_ack=True,
             )

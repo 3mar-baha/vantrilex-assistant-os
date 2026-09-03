@@ -79,6 +79,10 @@ class Settings(BaseSettings):
     openrouter_api_key: str | None = None  # OPENROUTER_API_KEY
     fish_audio_model: str = "fish-audio/s2.1-pro-free:free"  # FISH_AUDIO_MODEL
     fish_audio_voice_ref: str = "56c2f0c23924449781863ff20aceb5fa"  # FISH_AUDIO_VOICE_REF (سمسم)
+    # Calm-tone lever (owner 2026-09-03): the /audio/speech schema has NO
+    # temperature (chat param) — the official "speed" multiplier emulates the
+    # requested 0.7-temperature steadiness as a measured 0.9 pace. Tune via env.
+    fish_audio_speed: float = 0.9  # FISH_AUDIO_SPEED
     vault_github_repo: str  # VAULT_GITHUB_REPO (private vault repo, "owner/name")
     vault_github_token: SecretStr  # VAULT_GITHUB_TOKEN (fine-grained PAT, repo scope)
     vault_branch: str = "main"  # VAULT_BRANCH (vault git branch)

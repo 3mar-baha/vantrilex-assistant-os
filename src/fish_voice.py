@@ -27,9 +27,18 @@ class FishVoiceError(RuntimeError):
 class FishVoice:
     """Thin async client over OpenRouter's audio/speech endpoint (Fish s2.1 voices)."""
 
-    def __init__(self, *, model: str, voice_ref: str, api_key: str, transport=None) -> None:
+    def __init__(
+        self,
+        *,
+        model: str,
+        voice_ref: str,
+        api_key: str,
+        speed: float | None = None,
+        transport=None,
+    ) -> None:
         self.model = model
         self.voice_ref = voice_ref
+        self.speed = speed
         self._api_key = api_key
         self._client = httpx.AsyncClient(timeout=_TIMEOUT, transport=transport)
 
@@ -43,6 +52,7 @@ class FishVoice:
             model=settings.fish_audio_model,
             voice_ref=settings.fish_audio_voice_ref,
             api_key=settings.fish_audio_key,
+            speed=settings.fish_audio_speed,
             transport=transport,
         )
 
@@ -56,16 +66,22 @@ class FishVoice:
             raise ValueError("blank text — nothing to synthesize")
         if not self.available:
             raise FishVoiceError("fish voice unconfigured (no API key)")
+        payload = {
+            "model": self.model,
+            "input": text,
+            "voice": self.voice_ref,
+            "response_format": "mp3",
+        }
+        if self.speed is not None:
+            # Officially supported multiplier (docs): "Only used by models that
+            # support it" — the temperature-0.7 steadiness emulation (owner
+            # 2026-09-03); harmless no-op if the provider drops it.
+            payload["speed"] = self.speed
         try:
             response = await self._client.post(
                 FISH_SPEECH_URL,
                 headers={"Authorization": f"Bearer {self._api_key}"},
-                json={
-                    "model": self.model,
-                    "input": text,
-                    "voice": self.voice_ref,
-                    "response_format": "mp3",
-                },
+                json=payload,
             )
         except httpx.HTTPError as error:
             raise FishVoiceError(f"fish speech network failure: {error}") from error

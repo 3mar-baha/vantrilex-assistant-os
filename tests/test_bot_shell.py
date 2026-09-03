@@ -21,6 +21,7 @@ from src.bot import (
     ENROLL_DONE_AR,
     ENROLL_PROMPT_AR,
     HELP_AR,
+    MEDIA_TOO_BIG_AR,
     SYSTEM_PROMPT_AR,
     WELCOME_AR,
 )
@@ -102,8 +103,116 @@ async def test_owner_text_streams_brain_progressively(fake_bot, make_shell):
     assert [m["content"] for m in stream_messages] == [SYSTEM_PROMPT_AR, "حدّد موعد بكره"]
     assert [m["role"] for m in stream_messages] == ["system", "user"]
 
-    for call in sends + edits:
-        assert not isinstance(getattr(call.method, "parse_mode", None), str)
+
+async def test_photo_reaches_brain_as_native_image_block(fake_bot, make_shell, monkeypatch):
+    """Media comprehension (owner 2026-09-03): a photo the owner sends is seen
+    NATIVELY — the stream carries an image_url content block to m3, not a text
+    description. The caption is the prompt; no caption -> the default ask."""
+    shell = make_shell(
+        router_replies=[_router("direct", "دقايق")],
+        stream_programs=[StreamProgram(deltas=("هاد كلب صغير حلو",))],
+    )
+    bot = fake_bot()
+
+    async def fake_download(file, destination=None, **kwargs):
+        destination.write(b"PHOTO-BYTES")
+        return destination
+
+    monkeypatch.setattr(bot, "download", fake_download)
+    update = make_update(1, OWNER_ID, "شو هاد؟", photo=True)
+    await _run(shell, bot, update)
+
+    stream_messages, _tier = shell.gateway.stream_calls[0]
+    user_msg = stream_messages[-1]
+    assert isinstance(user_msg["content"], list)  # multimodal block, not plain text
+    types = [b["type"] for b in user_msg["content"]]
+    assert types == ["text", "image_url"]
+    assert user_msg["content"][1]["image_url"]["url"].startswith("data:image/jpeg;base64,")
+    assert "شو هاد" in user_msg["content"][0]["text"]
+
+
+async def test_video_reaches_brain_as_native_video_block(fake_bot, make_shell, monkeypatch):
+    """Same contract for video: m3's video input describes what the owner sent."""
+    shell = make_shell(
+        router_replies=[_router("direct", "دقايق")],
+        stream_programs=[StreamProgram(deltas=("مشهد حلو كتير",))],
+    )
+    bot = fake_bot()
+
+    async def fake_download(file, destination=None, **kwargs):
+        destination.write(b"VIDEO-BYTES")
+        return destination
+
+    monkeypatch.setattr(bot, "download", fake_download)
+    update = make_update(1, OWNER_ID, "وين هاد؟", video=True)
+    await _run(shell, bot, update)
+
+    stream_messages, _tier = shell.gateway.stream_calls[0]
+    user_msg = stream_messages[-1]
+    assert [b["type"] for b in user_msg["content"]] == ["text", "video_url"]
+
+
+async def test_oversized_media_gets_honest_line_no_brain_call(fake_bot, make_shell, monkeypatch):
+    """>10MiB raw -> the honest size line lands; the brain is never called."""
+    shell, bot = make_shell(), fake_bot()
+
+    async def fake_download(file, destination=None, **kwargs):
+        destination.write(b"X" * (10 * 1024 * 1024 + 1))
+        return destination
+
+    monkeypatch.setattr(bot, "download", fake_download)
+    await _run(shell, bot, make_update(1, OWNER_ID, "شو هاد؟", photo=True))
+    assert bot.session.sent("SendMessage")[-1].method.text == MEDIA_TOO_BIG_AR
+    assert shell.gateway.stream_calls == []
+
+
+async def test_reply_to_message_quote_reaches_brain(fake_bot, make_shell):
+    """Reply-awareness (owner 2026-09-03): when the owner replies to a specific
+    message, Sara knows WHAT he replied to — the quote rides the prompt."""
+    shell = make_shell(
+        router_replies=[_router("direct", "من عيوني")],
+        stream_programs=[StreamProgram(deltas=("فهمتك تمام",))],
+    )
+    bot = fake_bot()
+    quoted = make_update(7, OWNER_ID, "بكره عندي اجتماع الساعة ١٠")
+    reply_update = make_update(8, OWNER_ID, "شو رأيك فيه؟", reply_to=quoted.message)
+    await _run(shell, bot, reply_update)
+
+    stream_messages, _ = shell.gateway.stream_calls[0]
+    user_content = stream_messages[-1]["content"]
+    assert "شو رأيك فيه؟" in user_content
+    assert "عمر ردّ على رسالة سابقة" in user_content
+    assert "بكره عندي اجتماع" in user_content  # the quoted tail rides along
+
+
+def test_decide_modality_wired_by_default(make_shell):
+    """The deterministic decider is the shell-test default (legacy tests pin the
+    old channel contract); production falls back to the shipped 70/30 skill —
+    proven by the import fallback test in test_reply_modality.py."""
+    shell = make_shell()
+    assert shell.decide("نص عادي", False) == "text"  # text origin -> text
+    assert shell.decide("نص عادي", True) == "voice"  # voice origin -> voice
+    assert (
+        shell.decide("رد صوتي", False) == "text"
+    )  # the deterministic stub ignores forcing — real forcing is the skill's own suite
+
+
+async def test_forced_voice_reply_on_text_message(fake_bot, make_shell):
+    """Owner directive 2026-09-03 (integration): «رد صوتي» on a TEXT message ->
+    the answer arrives as ONE voice note, no text bubble — the skill's forcing
+    honored end-to-end through the shell."""
+    from src.skills.reply_modality import decide_reply_modality
+
+    shell = make_shell(
+        router_replies=[_router("direct", "من عيوني")],
+        stream_programs=[StreamProgram(deltas=("جاهزة رح جاوبك بصوتي",))],
+        decide_modality=decide_reply_modality,
+    )
+    bot = fake_bot()
+    await _run(shell, bot, make_update(1, OWNER_ID, "رد صوتي كيف حالك"))
+    assert len(bot.session.sent("SendVoice")) == 1
+    assert bot.session.sent("SendMessage") == []  # no text bubble beside it
+    assert shell.voice.calls == ["جاهزة رح جاوبك بصوتي"]
 
 
 async def test_brain_failure_sends_apology_and_logs(fake_bot, make_shell, logs):

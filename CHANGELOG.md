@@ -8,7 +8,30 @@ product release tags start independently at v1.0.0.)
 
 ## [Unreleased]
 
+### Added
+- **Media comprehension — photos & videos seen natively (owner directive 2026-09-03)**:
+  a photo or video the owner sends on Telegram is understood automatically —
+  downloaded, base64-encoded, and carried to minimax-m3 as an `image_url`/`video_url`
+  content block (the caption is the prompt; no caption -> the default ask). The
+  conversation lane answers naturally; >10MiB files get one honest size line and
+  the brain is never called. Reply-awareness in the same directive: when the owner
+  replies to a specific message, the quoted message rides the prompt («عمر ردّ على
+  رسالة سابقة: …») so Sara knows exactly what he is responding to.
+- **Reply-modality skill — 70/30 mirror + explicit forcing (owner directive
+  2026-09-03)**: `src/skills/reply_modality.py` decides Sara's reply surface once
+  per turn — his text -> 70% text / 30% voice note; his voice note -> the ratio
+  flips (70% voice / 30% text); an explicit request («رد صوتي» / «رد نصي /
+  اكتبي») is always honored. Exactly ONE surface either way (the remediation-1.4
+  no-duplicates contract untouched). The shipped skill is the default; the shell
+  tests inject a deterministic decider so legacy contracts stay unflakeable.
+
 ### Changed
+- **Fish calm-tone: speed on the wire (owner directive 2026-09-03)**: the official
+  `/audio/speech` schema carries NO temperature (a chat param, never a speech
+  param) — the requested 0.7-temperature steadiness is emulated through the
+  officially supported `speed` multiplier, default 0.9 (`FISH_AUDIO_SPEED`,
+  tunable; a no-op if the provider drops it). Wire + settings + conftest mirror
+  + tests pinned.
 - **Two-tier architecture ratified in the remediation plan (owner directive 2026-09-03)**:
   TALKER_AND_MEMORY = `minimax-m3:free` (428B MoE / 23B active / 1M context / native
   image+video input confirmed from OpenRouter's schema; strongest free Jordanian

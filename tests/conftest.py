@@ -17,7 +17,17 @@ from aiogram import Bot
 from aiogram.client.session.base import BaseSession
 from aiogram.exceptions import TelegramRetryAfter
 from aiogram.methods import EditMessageText, SendMessage, SendVoice
-from aiogram.types import CallbackQuery, Chat, Message, MessageEntity, Update, User, Voice
+from aiogram.types import (
+    CallbackQuery,
+    Chat,
+    Message,
+    MessageEntity,
+    PhotoSize,
+    Update,
+    User,
+    Video,
+    Voice,
+)
 
 from src.config import Settings
 
@@ -67,6 +77,7 @@ ENV_EXAMPLE: dict[str, str] = {
     "OPENROUTER_API_KEY": "your-openrouter-key",
     "FISH_AUDIO_MODEL": "fish-audio/s2.1-pro-free:free",
     "FISH_AUDIO_VOICE_REF": "56c2f0c23924449781863ff20aceb5fa",
+    "FISH_AUDIO_SPEED": "0.9",
     "VOICE_NAME": "ar-EG-SalmaNeural",
     "VOICE_RATE": "+0%",
     "VOICE_PITCH": "+0Hz",
@@ -234,6 +245,9 @@ def make_update(
     *,
     command: bool = False,
     voice: bool = False,
+    photo: bool = False,
+    video: bool = False,
+    reply_to: Message | None = None,
 ) -> Update:
     kwargs: dict = {
         "message_id": update_id,
@@ -242,11 +256,21 @@ def make_update(
         "from_user": User(id=from_id or 0, is_bot=False, first_name="O") if from_id else None,
     }
     if text is not None:
-        kwargs["text"] = text
-        if command:
-            kwargs["entities"] = [MessageEntity(type="bot_command", offset=0, length=len(text))]
+        if photo or video:
+            # Telegram reality: media rides a CAPTION, never message.text
+            kwargs["caption"] = text
+        else:
+            kwargs["text"] = text
+            if command:
+                kwargs["entities"] = [MessageEntity(type="bot_command", offset=0, length=len(text))]
     if voice:
         kwargs["voice"] = Voice(file_id="f1", file_unique_id="u1", duration=2)
+    if reply_to is not None:
+        kwargs["reply_to_message"] = reply_to
+    if photo:
+        kwargs["photo"] = [PhotoSize(file_id="p1", file_unique_id="pu1", width=64, height=64)]
+    if video:
+        kwargs["video"] = Video(file_id="v1", file_unique_id="vu1", width=64, height=64, duration=2)
     return Update(update_id=update_id, message=Message(**kwargs))
 
 
@@ -289,8 +313,15 @@ def make_shell(make_settings):
         writer=None,
         tools=None,
         coordinator=None,
+        decide_modality=None,
         **settings_overrides,
     ):
+        # Deterministic default (2026-09-03): legacy shell tests pin the OLD
+        # channel contract (text-origin -> text bubble, voice-origin -> voice
+        # note) — the shipped 70/30 mirror would make them flaky. Modality
+        # tests inject their own decider; the real skill has its own suite.
+        if decide_modality is None:
+            decide_modality = lambda text, voice_origin: "voice" if voice_origin else "text"
         gateway = FakeGateway(router_replies=router_replies, stream_programs=stream_programs)
         voice = FakeVoice(error=voice_error)
         settings = make_settings(STREAM_EDIT_INTERVAL_MS="40", **settings_overrides)
@@ -304,6 +335,7 @@ def make_shell(make_settings):
             writer=writer,
             tools=tools,
             coordinator=coordinator,
+            decide_modality=decide_modality,
         )
         return SimpleNamespace(
             dp=dp,
@@ -316,6 +348,7 @@ def make_shell(make_settings):
             writer=writer,
             tools=tools,
             coordinator=coordinator,
+            decide=decide_modality,
         )
 
     return _make

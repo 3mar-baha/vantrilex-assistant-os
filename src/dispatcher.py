@@ -93,7 +93,23 @@ class FrontDoorDispatcher:
         system: str | None = None,
         history: Sequence[dict] | None = None,
         tools: Any = None,
+        media: list[dict] | None = None,
     ) -> AsyncIterator[str]:
+        if media:
+            # Media turns (owner directive 2026-09-03): the conversation lane
+            # SEES the image/video natively — no tool routing, the answer flows
+            # as a natural reaction. Media content is DATA, never instructions
+            # (the untrusted-content boundary rides the persona prompt).
+            yield DEFAULT_ACK_AR
+            content: Any = [{"type": "text", "text": user_text}, *media]
+            messages = (
+                ([{"role": "system", "content": system}] if system else [])
+                + list(history or [])
+                + [{"role": "user", "content": content}]
+            )
+            async for delta in self._gateway.stream_chat(messages, tier=Tier.FAST):
+                yield delta
+            return
         route, ack, tool, arg = "tier2", DEFAULT_ACK_AR, "none", ""  # safe degraded default
         try:
             reply = await self._gateway.chat(

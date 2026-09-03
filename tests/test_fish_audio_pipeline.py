@@ -24,6 +24,7 @@ def _settings(**over) -> Settings:
         "vault_enc_key": "your-fernet-key",
         "fish_audio_model": "fish-audio/s2.1-pro-free:free",
         "fish_audio_voice_ref": "56c2f0c23924449781863ff20aceb5fa",
+        "fish_audio_speed": "0.9",
         "openrouter_api_key": "sk-or-test",
     }
     base.update(over)
@@ -170,6 +171,30 @@ def test_from_settings_carries_config():
     assert fish.model == "fish-audio/s2.1-pro-free:free"
     assert fish.voice_ref == "56c2f0c23924449781863ff20aceb5fa"
     assert fish.available is True
+
+
+# --- calm-tone speed lever (owner 2026-09-03) --------------------------------------
+
+
+async def test_speed_on_the_wire_when_configured():
+    """The officially supported speed multiplier (the temperature-0.7 steadiness
+    emulation) rides the payload when configured; default 0.9 from settings."""
+    rec = _Recorder(body=MP3)
+    fish = FishVoice(model="m", voice_ref="r", api_key="k", speed=0.9, transport=rec)
+    await fish.synthesize("من عيوني")
+    assert b'"speed":0.9' in rec.requests[0].read()
+
+
+async def test_speed_absent_when_none():
+    """No speed configured -> the payload carries no speed key (provider default)."""
+    rec = _Recorder(body=MP3)
+    fish = FishVoice(model="m", voice_ref="r", api_key="k", transport=rec)
+    await fish.synthesize("من عيوني")
+    assert b"speed" not in rec.requests[0].read()
+
+
+def test_settings_default_speed_09():
+    assert _settings().fish_audio_speed == 0.9
 
 
 # --- FishFirstVoice: fish preferred, Salma fallback (the wiring contract) ---------
