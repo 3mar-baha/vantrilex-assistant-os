@@ -9,6 +9,15 @@ product release tags start independently at v1.0.0.)
 ## [Unreleased]
 
 ### Added
+- **Hardcoded-line cleanup + string contract (remediation 1.5/1.6, 2026-09-03)**: every
+  owner-facing Arabic constant rewritten in Sara's register, mechanically enforced by a
+  new AST-based contract test (`tests/test_persona_lines.py`) scanning EVERY string
+  constant in src/: WELCOME «كيف فيني ساعدك اليوم؟» → «يا هلا عمر! شغّالة وجاهزة —
+  ابعثلي أي شي.» (identity lives in ONE surface — the voice greeting); EMPTY_VOICE
+  «وهسا القريب من الميك» (garbled) → honest, clear line; «انسمعت بصمتك» → «سجّلت
+  بصمتك!»; «سمسعتك» → «سمعت بصوتك» (contact mode); EMPTY_REPLY desk-style → Sara's
+  own voice; «لسأ» misspelling extinct with VOICE_ACK_AR (deleted in 1.4). Zero
+  service-desk/garbled lines can ship — the contract test fails on any.
 - **Voice-origin single modality (remediation 1.4, 2026-09-03)**: a voice note now
   begets exactly ONE surface. The voice-origin turn consumes the stream off the wire
   (record_voice action, NO text bubble) and delivers the answer as a single voice note;

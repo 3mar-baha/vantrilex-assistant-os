@@ -20,7 +20,7 @@ from pydantic import BaseModel
 
 from src.skills.voice_biometric_auth import DEFAULT_MODEL_ID, VoiceBiometrics, _cosine, _fernet
 
-CONTACT_MODE_AR: Final[str] = "هلا ونور! عمر مش موجود هسا، بس أنا سمسعتك — سيبلي رسالة وببلّغه فوراً."
+CONTACT_MODE_AR: Final[str] = "هلا ونور! عمر مش موجود هسا، بس سمعت بصوتك — سيبلي رسالة وببلّغه فوراً."
 
 _CONTACTS = "Contacts"
 

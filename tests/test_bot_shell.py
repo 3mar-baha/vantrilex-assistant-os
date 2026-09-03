@@ -54,14 +54,20 @@ async def _run(shell, bot, update):
 
 
 async def test_start_sends_welcome_and_voice_greeting(fake_bot, make_shell):
-    """AC6: /start -> welcome text + one answer_voice with non-empty buffered bytes."""
+    """/start (remediation 1.5): ONE greeting voice note + ONE short caption line —
+    no duplicated identity content between the two surfaces (transcript 14:19-14:22
+    text-then-voice repeat is impossible now)."""
     shell, bot = make_shell(), fake_bot()
     await shell.dp.feed_update(bot, make_update(1, OWNER_ID, "/start", command=True))
-    assert bot.session.sent("SendMessage")[0].method.text == WELCOME_AR
     voices = bot.session.sent("SendVoice")
     assert len(voices) == 1
     assert len(voices[0].method.voice.data) > 0
-    assert shell.voice.calls  # greeting came through the VoicePipeline
+    sends = bot.session.sent("SendMessage")
+    assert len(sends) == 1
+    caption, spoken = sends[0].method.text, shell.voice.calls[0]
+    assert caption == WELCOME_AR
+    assert "سارة" not in caption or "سارة" not in spoken  # identity lives in ONE surface only
+    assert shell.voice.calls  # greeting came through the voice pipeline
 
 
 async def test_help_lists_capabilities(fake_bot, make_shell):
