@@ -820,3 +820,29 @@ ADRs: `docs/03-DECISIONS.md` · Setup/troubleshooting: `docs/04-RUNBOOK.md` ·
 Oracle deploy guide (owner, Arabic): `docs/09-ORACLE-DEPLOY.md` ·
 Gates: `docs/05-TEST-PLAN.md` · Handoff briefing: `docs/07-HANDOFF.md` ·
 Owner steps: `docs/08-OWNER-NEXT-STEPS.md`.
+
+      ### OVERNIGHT AUTONOMOUS MISSION (2026-09-04, owner: "اصلح كل شيء سوف اعود
+      بعد 5 ساعات لاجد افضل نسخة ممكنة من سارة")
+      PHASE 1 (docs sync): ARCHITECTURE now leads with Fish-primary voice +
+      the active-loops section; HANDOFF pins corrected to minimax-m3 —
+      commit e8a8517.
+      PHASE 2 (v1.1 suite, all TDD): (f1) speaker_diarization 6220d84;
+      (f2) AffectiveStateTracker f2e8d51; (f3) acoustic_nuance 71e0902;
+      (f4) self_evolution e21c347 — the sixth background loop.
+      PHASE 3 (prereq scaffolding): live_calls + telegram_login +
+      docs/OWNER_ACTION_REQUIRED.md (3-step owner sheets: PyTgCalls session
+      string, Google OAuth, Docker size check) — 8844df7. Release-scope
+      guard amended for the two scaffold modules (lazy imports only).
+      PHASE 5 (5-pass refinement, each archived to versions/release-v1.1-pass{N}):
+      pass-1 f5af946 — C-9/V-4 FIXED (vault write lock + 409 full-remerge +
+      shutdown persist-gather — the last MAJOR deferred finding);
+      pass-2 f986b19 — lane edge hardening (affect timeout/injection,
+      outreach midnight-rollover + window boundaries);
+      pass-3 4c03dd0 — humanization (seed lexicon 10→19, warmth clause);
+      pass-4 985e84f — shutdown-cleanliness contract (pure CancelledError);
+      pass-5 — full docs-truth cross-check + the five-feature CHANGELOG +
+      ARCHITECTURE §6c (this commit).
+      Final gate this run: 494+ passed / 86% / security+docs green; sacred
+      floors green. Round-3 fixes landed earlier this night: f39d95f
+      (short-clip biometric floor + enroll centroid blend + voice-retry +
+      tool-narration contract + post-stream split).

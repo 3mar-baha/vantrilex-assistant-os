@@ -8,6 +8,41 @@ product release tags start independently at v1.0.0.)
 
 ## [Unreleased]
 
+### Added — the v1.1 intelligence suite (2026-09-04, owner overnight mission)
+- **Universal multi-speaker diarization & separation**
+  (`src/skills/speaker_diarization.py`): a conversation recording splits
+  into per-speaker dialogue turns fully on CPU — ffmpeg in-memory decode →
+  energy-window segmentation → ECAPA embedding per segment (the same local
+  model as the biometric gate) → cosine clustering → attribution via the
+  sealed owner print + the Contacts voiceprint registry (a voice in neither
+  stays «متحدث غير معروف», never guessed) → local Whisper per turn.
+  render(): «المتحدث (عمر): ... | (أحمد): ...». Transcripts are DATA — the
+  module has zero tool/exec surface (AST-guarded).
+- **Contextual affect & emotional trajectory engine**
+  (`AffectiveStateTracker` in src/memory.py): ONE FAST micro-verdict per
+  turn reads the last 6 turns + the User_Info baseline and judges the
+  owner's state (banter/sarcasm/fatigue/stress/joy/neutral) — the model
+  distinguishes playful mock-outrage from genuine anger via history, not a
+  keyword table. The guide rides the envelope as subtle Arabic context;
+  any failure injects nothing.
+- **Acoustic & paralinguistic nuance pipeline**
+  (`src/skills/acoustic_nuance.py`): deterministic local DSP (RMS energy
+  windows — zero models, zero cost) profiles HOW he spoke (activity, pause
+  ratio, energy); the subtle Arabic block rides every voice-turn envelope.
+  Short notes (<1 s) yield an empty block — never a guess. ECAPA stays the
+  ONLY authorization path (no verify/enroll surface here, AST-guarded).
+- **Self-improvement & linguistic evolution engine**
+  (`src/skills/self_evolution.py`, the SIXTH background loop): a nightly
+  ~23:40 reflection reads the day's ledger + the current Dialect_Notes and
+  proposes recurring Jordanian idioms she kept missing — filed as
+  «مقترحات تعلم» PROPOSALS for the owner to adopt with «تعلمي:». NEVER
+  silently learns; every failure skips.
+- **Live-call lane scaffold** (`src/skills/live_calls.py` +
+  `src/telegram_login.py` + `docs/OWNER_ACTION_REQUIRED.md`): the
+  CallSession facade runs mock-complete now (dial/hang-up recorded +
+  tested) and goes live the moment TELEGRAM_USER_SESSION_STRING lands in
+  .env — one interface, zero code changes, honest owner-action lines.
+
 ### Fixed
 - **Round-3 live fixes (owner test 2026-09-03 22:51–22:58)**:
   - **The owner's own ~2s voice note locked him out as a guest** (his note

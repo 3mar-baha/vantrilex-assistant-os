@@ -301,6 +301,32 @@ PRUNED 2026-09-03 (remediation 3.3 — `src/skills/social_graph.py` deleted; no
 production consumer ever wired it). The dossier tree structure above stays the
 schema `social_enrollment.py` writes into.
 
+## 6c. The v1.1 Intelligence Suite (owner overnight mission 2026-09-04)
+
+Five new capabilities, all local, all zero-cost, all contract-tested:
+
+- **Universal multi-speaker diarization** (`src/skills/speaker_diarization.py`):
+  a recording splits into per-speaker dialogue turns on CPU — energy windows
+  segment, ECAPA embeds each segment (the biometric gate's own model), cosine
+  clustering groups turns, attribution crosses the sealed owner print + the
+  Contacts registry (unknown stays unknown), local Whisper transcribes each
+  turn. Transcripts are DATA — the module has no tool/exec surface at all.
+- **Affect & emotional trajectory** (`AffectiveStateTracker` in
+  `src/memory.py`): one FAST micro-verdict per turn reads the recent turns +
+  the profile baseline and judges banter vs genuine fatigue; the subtle
+  Arabic guide rides the envelope. Failures inject nothing.
+- **Acoustic paralinguistics** (`src/skills/acoustic_nuance.py`):
+  deterministic DSP (RMS windows, zero ML) turns HOW he spoke — pace,
+  pauses, energy — into envelope context on every voice turn. ECAPA remains
+  the only authorization path; this module never touches auth.
+- **Self-evolution** (`src/skills/self_evolution.py`, sixth background loop,
+  ~23:40 local): a nightly reflection proposes recurring Jordanian idioms
+  she kept missing — filed as owner-review PROPOSALS, never silent learning.
+- **Live-call scaffold** (`src/skills/live_calls.py`): the CallSession facade
+  is mock-complete today (recorded + tested) and routes to PyTgCalls the
+  moment TELEGRAM_USER_SESSION_STRING lands — see
+  `docs/OWNER_ACTION_REQUIRED.md` §1 (the 10-minute owner login).
+
 ## 7. Component Registry
 
 *(Removed 2026-09-03, remediation 3.3: `config/agents_config.json` was deleted —
