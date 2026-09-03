@@ -111,6 +111,8 @@ test-guard · `everything-claude-code` systems-architect. Teardown → `docs/10-
       commits + idempotent bootstrap + Studies migration) and `src/skills/social_graph.py`
       (3.1b dossier/extract/file); 31 new tests (181 total), gate green; no plaintext tokens.
       *AC*: `test_obsidian_para.py` + vault-dir guard test; no plaintext tokens.
+      PRUNED 2026-09-03 (remediation 3.3, owner-approved): only `social_graph.py` deleted
+      — `vault.py` STAYS (the live VaultClient). No production consumer wired the graph.
 - [x] **3.2 `skill-dynamic-vault-expander`** — M5: Sara grows directories/tag ontologies as
       domains emerge; every structural change is an auditable git commit; PARA backbone
       expansion-only.
@@ -118,6 +120,8 @@ test-guard · `everything-claude-code` systems-architect. Teardown → `docs/10-
       Done 2026-08-31: `src/vault_expand.py` — `VaultExpander` (one-commit domain growth
       via Git Data API, `_tags.yaml` ontology, backbone immutable pre-flight, idempotent
       vault-state-as-memory); 10 new tests (191 total), gate green.
+      PRUNED 2026-09-03 (remediation 3.3, owner-approved): `src/vault_expand.py` +
+      `test_vault_expand.py` deleted — no production consumer ever wired it.
 - [x] **3.3 `skill-verbal-action-summary-protocol` + conversation capture**: preference
       extraction -> `User_Info.md`, colloquialisms -> `Dialect_Notes.md`; summary protocol
       («هل بتحب ألخص لك شو رح أعمل هسا؟») on task-bearing turns, suppressed for casual ones.
@@ -125,6 +129,9 @@ test-guard · `everything-claude-code` systems-architect. Teardown → `docs/10-
       Done 2026-08-31: `src/summary.py` (TIER-2 extractor, one-pending state machine,
       arbitration + consent binding) + `common/consent.py` (shared grammar for 3.4);
       10 new tests (201 total), gate green.
+      PRUNED 2026-09-03 (remediation 3.3, owner-approved): `src/summary.py` +
+      `test_post_call_summary.py` deleted — no production consumer ever wired it
+      (`common/consent.py` STAYS: pc_actions + bot use it live).
 - [x] **3.4 `skill-pc-whitelist-safety-guardrail`**: Windows daemon — outbound-only TLS
       WebSocket to the Space, LAN port 8000, zero public inbound (asserted), WoL magic
       packet UDP:9, 20-min idle -> one offer per window, strict `config/whitelist.json`
@@ -160,6 +167,8 @@ Final teardown → `docs/10-CHECKPOINT.md` (v1.0.0 entry).
       (one retry then loud), validated DAG (cycles/orphans named), weighted capped
       schedule with idempotency tags, Studies filing; 9 new tests (237 total), gate
       green. AC10 live smoke (real PDF -> real Calendar sandbox) is owner-side.
+      PRUNED 2026-09-03 (remediation 3.3, owner-approved): `src/syllabus.py` + tests
+      deleted, pypdf dropped from requirements — no production consumer ever wired it.
 - [x] **4.2 `skill-dynamic-capability-expansion`** — M4: owner-supplied credentials -> new
       scheduled async tasks without redeploy; natural-language Arabic cron; loud failure
       disables a task; secrets enter via `.env` only, never chat logs.
@@ -171,6 +180,8 @@ Final teardown → `docs/10-CHECKPOINT.md` (v1.0.0 entry).
       disables loudly with one owner notify, state record `State/capabilities.json` +
       `restore(pipelines)` re-derivation on restart (ADR-15); 10 new tests (247 total),
       gate green. AC10 live smoke (owner registers a real task on Telegram) is owner-side.
+      PRUNED 2026-09-03 (remediation 3.3, owner-approved): `src/expansion.py` + tests
+      deleted — no production consumer ever wired it.
 - [x] **4.3 `skill-polymath-tutor`**: curriculum compiler — study guides + 10-language
       lessons with YAML frontmatter filed to `Studies/`; first-principles deconstruction;
       no new engine (chat + 3-tier brain + vault).
@@ -183,6 +194,8 @@ Final teardown → `docs/10-CHECKPOINT.md` (v1.0.0 entry).
       carrying the FULL content (loud ERROR + Arabic apology — never lost); AST-scanned
       zero provider/PC surface; 6 new tests (253 total), gate green. AC6 live smoke
       (one real study session) is owner-side.
+      PRUNED 2026-09-03 (remediation 3.3, owner-approved): `src/tutor.py` + tests
+      deleted — no production consumer ever wired it.
 - [x] **4.4 Production hardening + release (HF Spaces primary, Cloud Run documented
       fallback)**: **>=85% BRANCH coverage** (pytest-cov `--cov-branch`) in `make gate`,
       pre-commit secret scanning, $0.00 verification step, Space Dockerfile (`app_port`,

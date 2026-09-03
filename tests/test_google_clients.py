@@ -58,12 +58,16 @@ def _token_path(settings) -> "Path":
 
 
 def test_consent_url_contains_scopes(client_secret):
-    """AC1a: consent URL carries all five scopes + offline + consent + loopback redirect."""
+    """AC1a: consent URL carries every scope + offline + consent + loopback
+    redirect. Remediation 3.4: exactly THREE scopes — Drive/Contacts readonly
+    were never consumed by the OS, so they left the consent screen."""
     _path, cfg = client_secret
     url = build_consent_url(cfg, port=8765, state="st4te")
     for scope in AUTH_SCOPES:
         assert f"scope={scope}" in url
-    assert len(AUTH_SCOPES) == 5
+    assert len(AUTH_SCOPES) == 3  # calendar + tasks + gmail.modify only
+    assert "drive.readonly" not in url  # never consumed — pruned (3.4)
+    assert "contacts.readonly" not in url
     assert "https://www.googleapis.com/auth/gmail.modify" in AUTH_SCOPES  # least-privilege
     assert "access_type=offline" in url
     assert "prompt=consent" in url

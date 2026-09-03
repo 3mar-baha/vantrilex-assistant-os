@@ -687,7 +687,48 @@ product.)
       FIFTH loop in start_background_loops. 7 new settings
       PROACTIVE_* (+.env.example +conftest mirror). 13 new engine tests +
       1 wiring test. Gate: 492 passed / 86.51% / security+docs green.
-      Next: 3.3 pruning batch 1 (dead code deletion).
+
+      **3.3 DONE (prune batch 1)**: 13 files deleted (agents_config.json +
+      expansion/syllabus/tutor/summary/social_graph/vault_expand + their 7
+      test files) — 2,515 lines out of the tree; pypdf dropped from
+      requirements (~376KB wheel). Zero-consumption verified by grep before
+      every deletion; consent.py + vault.py stay (live). Gate after cut: 445
+      passed / 87.06% (coverage ROSE).
+
+      **3.4 DONE (settings prune)**: seven dead keys removed from config.py +
+      .env.example + conftest mirror (obsidian_rest_api_url, obsidian_api_key,
+      target_pc_mac/ip/wol_port, idle_shutdown_minutes; google_cloud_project
+      was never a config field). telegram_api_* stay (v1.1 plan, deploy-smoke
+      consumers). OAuth scopes: calendar/tasks/gmail.modify ONLY —
+      drive.readonly + contacts.readonly dropped (nothing reads Drive/People
+      APIs). Contract tests updated. Gate: 445 / 87.09%.
+
+      **3.5 DONE (partial, honest)**: documented local numbers — 2,515 lines
+      pruned; pypdf wheel ~376KB; src.bot import 2.84s (aiogram 2.26s of it —
+      our own path is featherweight). Docker image before/after BLOCKED: the
+      owner's WSL service is off (Wsl/0x80070422) — docker daemon unreachable.
+      One owner command (`docker build`) finalizes the MB delta when Docker
+      Desktop runs. Recorded in REMEDIATION_PLAN 3.5.
+
+      **3.6 DONE (docs sync)**: RUNBOOK §3 gains the five-loop table
+      (cadence/gates/OAuth needs) + proactive tuning knobs; §6 OAuth path
+      fixed (was the retired core-foundation worktree → main checkout; 3
+      scopes; obsidian-rest mention dropped). CHANGELOG [Unreleased]
+      restructured (Added/Changed/Removed). BACKLOG: PRUNED notes on
+      3.1b/3.2/3.3/4.1/4.2/4.3 entries. TEST-PLAN: 6 deleted rows annotated.
+      REMEDIATION_PLAN 3.3-3.6 all ✅-marked.
+
+      **PHASES 1-3 ALL COMPLETE (2026-09-03)** — the full remediation plan
+      (21 steps) is executed. Final gate: 445 passed / 1 skipped / 87.09% /
+      security+docs green; sacred floors green. OWNER LIVE-TEST LIST (all
+      three phases): voice note → ONE Fish/سمسم note; «افتحي الآلة
+      الحاسبة» → honest unknown/app-launch (aliases + keyword net); «نعم»
+      voice confirmation consumed; «تعلمي: كفيك -> كفايك» → vault write +
+      live speech; «افحصي الجيميل» AFTER one-time OAuth bootstrap (§6
+      RUNBOOK — vault/State empty is the local cause of live Gmail
+      failures); 07:30 brief + evening check-in + proactive check-in
+      (08:00-22:30, max 3/day) arrive unprompted. Docker build pending
+      owner-side (WSL off).
 
 ## Open items / blockers
 

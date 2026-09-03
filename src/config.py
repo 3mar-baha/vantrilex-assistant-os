@@ -94,20 +94,14 @@ class Settings(BaseSettings):
     vault_github_repo: str  # VAULT_GITHUB_REPO (private vault repo, "owner/name")
     vault_github_token: SecretStr  # VAULT_GITHUB_TOKEN (fine-grained PAT, repo scope)
     vault_branch: str = "main"  # VAULT_BRANCH (vault git branch)
-    obsidian_rest_api_url: str | None = None
-    obsidian_api_key: str | None = None
     google_oauth_client_json: str = "./config/google_oauth_client.json"
     google_calendar_id: str = "primary"
     bridge_token: SecretStr  # BRIDGE_TOKEN (shared core<->bridge secret, sprint-3 3.4)
     bridge_server_url: str  # BRIDGE_SERVER_URL (core WSS endpoint the daemon dials)
     bridge_lan_port: int = 8000  # BRIDGE_LAN_PORT (daemon loopback/LAN health surface)
-    target_pc_mac_address: str | None = None
-    target_pc_ip: str | None = None
-    target_pc_wol_port: int = 9
     space_url: str | None = None  # SPACE_URL (public Space root; deploy smoke + keep-alive target)
     tz: str = "Asia/Amman"
     log_level: str = "INFO"
-    idle_shutdown_minutes: int = 20
 
     @field_validator("*", mode="before")
     @classmethod

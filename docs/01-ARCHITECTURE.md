@@ -192,13 +192,10 @@ exception, or URL (`redact_secret` screens every such path). First boot:
 `ensure_mandatory_dirs()` upserts an index note per missing mandatory dir and contacts
 subdir plus both profile files — idempotent, re-run writes nothing.
 
-Dynamic taxonomy expansion (sprint-3 3.2, `src/vault_expand.py`): `VaultExpander.expand(domain, dirs, tags)`
-grows new domain trees under `01_Projects/<domain>` as structure emerges in conversation — a
-sanitized sub-directory per relative `dirs` entry, an `_index.md` per directory (frontmatter
-`type: vault-index`, body wikilinking the domain root), and the tag ontology at
-`<domain>/_tags.yaml` (safe_dump: `domain:`, `created:` ISO-UTC, `tags:` list, Arabic intact).
-The whole expansion lands as ONE auditable commit (`sara: expand vault — <domain>`) via the Git
-Data API. The PARA backbone is expansion-only:
+Vault taxonomy expansion (sprint-3 3.2) was PRUNED 2026-09-03 (remediation 3.3 —
+`src/vault_expand.py` deleted: never wired to a production caller). Structural vault
+growth now happens through the VaultClient's Git Data API directly when a live
+consumer needs it. The PARA backbone stays immutable:
 
 ```
 01_Projects/  02_Areas/  03_Resources/  04_Archives/
@@ -219,26 +216,13 @@ automatically. Conversations that produce actionable tasks close with Sara askin
 "هل بتحب ألخص لك شو رح أعمل هسا؟" — then recites the summary and files it
 (suppressed for casual check-ins). Full transcript persistence applies to calls from v1.1.
 
-Verbal action summary protocol (sprint-3 3.3, `src/summary.py` + `common/consent.py`):
-`TaskExtractor.extract` rides ONE TIER 2 MEDIUM call per turn (ADR-16 — the tool-executor
-tier); the reply is strict JSON validated into `ActionTask` models — LLM output is DATA,
-garbage/injection-shaped replies collapse to `[]` loudly (logged by SHA-256 hash, never
-content). A turn with tasks mints ONE `PendingSummary` and sends the exact prompt string
-«هل بتحب ألخص لك شو رح أعمل هسا؟»; a newer turn supersedes an unanswered older pending;
-casual turns capture nothing (zero vault writes). Consent grammar is shared with 3.4 via
-`common/consent.py` (`AFFIRMATIVES`, `is_affirmative` — first-token Jordanian affirmative
-match; ambiguous replies are declines, never guessed as consent), and the binding rule is
-structural: the affirmative mints consent only when it FOLLOWS the live prompt — a stale
-or foreign pending id is inert. On «ايه/نعم/تمام…» the summary files as
-`04_Archives/Conversations/YYYY-MM-DD-HHMMSS-summary.md` — frontmatter `id`, `asked_at`,
-`resolved_at`, `task_count`, `tags: [action-summary]`; numbered tasks (due dates inline) +
-a Zettelkasten wikilink to that day's daily log. Arbitration (safety > convenience): when
-a 3.4 pending confirmation is also active, the confirmation consumer owns the next owner
-message; the summary question is re-asked ONCE after the confirmation resolves
-(deterministic, tested). Brain failure leaves the turn uncaptured (learning loss
-acceptable, breakage not); a failed vault filing retains the pending for one retry then
-drops loudly; in-memory pendings are lost on restart — accepted ceiling (ponytail note in
-code documents the vault-scratch-note upgrade path).
+Verbal action summary protocol (sprint-3 3.3): the `src/summary.py` extractor was
+PRUNED 2026-09-03 (remediation 3.3 — never wired to a production caller; conversation
+capture now rides the 2.4 confirmation memory + DailySummarizer instead). Its consent
+grammar lives on in `common/consent.py` — shared with the live PC-action coordinator
+(`AFFIRMATIVES`, `is_affirmative`: standalone-affirmative rule, remediation 1.8 — a
+guarded action launches on a clean short yes alone; «نعم بس استنى» is a reservation
+and never executes).
 
 Voice-to-vault leg (sprint-2 2.5, `src/skills/voice_to_vault_transcriber.py`): after the
 2.3 biometric gate passes, the owner's voice note decodes in-memory (ffmpeg, 16 kHz mono
@@ -271,11 +255,10 @@ relational tags, interaction log, and (when enrolled) an encrypted voiceprint ve
 | `Contacts/Ignored/` | Blacklisted/ignored — no interaction tracking |
 | `Contacts/Unknown/` | Unidentified speakers — anonymous embeddings + timestamped transcripts, security flag |
 
-**Story entity & action extractor**: when the owner narrates their day, Sara extracts
-mentioned entities, infers/updates each one's relationship category, and appends a
-timestamped action summary to the person's `Contacts/{Category}/{Name}.md` AND
-`Daily_Logs/YYYY-MM-DD.md`. Ambiguous category changes are confirmed with the owner first;
-`Ignored/` dossiers are never tracked.
+**Story entity & action extractor**: the sprint-3 `SocialGraph` story extractor was
+PRUNED 2026-09-03 (remediation 3.3 — `src/skills/social_graph.py` deleted, never wired
+to a production caller). Dossier structure and the enrollment/verdict lifecycle below
+remain live through `src/skills/social_enrollment.py`.
 
 **Voiceprint lifecycle** (extends ADR-17 from owner-only to multi-speaker):
 - **A — known speaker**: incoming voice matching an enrolled contact -> transcript appended
@@ -297,33 +280,17 @@ LANDED (sprint-2 2.3b, `src/skills/social_enrollment.py`): `VoiceprintRegistry` 
 `record_transcript` (timestamped dossier section). Bot wiring: `verify_or_lockdown`
 routes matched contacts to `CONTACT_MODE_AR` (message-taking only) before Guest Mode.
 
-VAULT-SIDE (sprint-3 3.1b, `src/skills/social_graph.py`): `SocialGraph` rides
-`VaultClient` — `dossier()`/`create_dossier()` (frontmatter
-`name/category/relation_tags/voiceprint_ref/created/last_interaction`; `Ignored/`
-carries `tracking: false`, `Unknown/` carries `security_flag: true`), `extract_entities()`
-(ONE FAST-tier call per narration; strict-JSON reply validated into `EntityMention`
-models — LLM output is DATA, garbage -> [] loudly), and `file_action()` (dated
-`## YYYY-MM-DD` section appended to the person's dossier AND `Daily_Logs/YYYY-MM-DD.md`;
-ambiguous `category_inferred: null` holds for owner confirmation before filing;
-`Ignored/` mentions never write).
+VAULT-SIDE (sprint-3 3.1b): the `SocialGraph` dossier/extract/file module was
+PRUNED 2026-09-03 (remediation 3.3 — `src/skills/social_graph.py` deleted; no
+production consumer ever wired it). The dossier tree structure above stays the
+schema `social_enrollment.py` writes into.
 
-## 7. Component Registry (`config/agents_config.json`)
+## 7. Component Registry
 
-```json
-{
-  "agent": {
-    "name": "Sara (سارة)",
-    "dialect": "ar-JO",
-    "voice": "ar-EG-SalmaNeural",
-    "personality": "Warm, executive, polymath tutor, supportive friend",
-    "mcp_servers": [
-      "google_workspace_mcp",
-      "obsidian_mcp",
-      "windows_mcp"
-    ]
-  }
-}
-```
+*(Removed 2026-09-03, remediation 3.3: `config/agents_config.json` was deleted —
+zero consumers, and its stale Gemini/Sana pins misdescribed the shipped system.
+The live component registry is §12 of this document and HANDOFF §5; agent
+identity lives in `SYSTEM_PROMPT_AR` + `docs/01-ARCHITECTURE.md` §1.)*
 
 ## 8. Future Roadmap (owner-finalized 2026-09-01 — authoritative, not yet built)
 

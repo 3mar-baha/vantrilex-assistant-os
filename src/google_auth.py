@@ -24,12 +24,11 @@ from pydantic import BaseModel
 OAUTH_AUTH_URL: Final[str] = "https://accounts.google.com/o/oauth2/v2/auth"
 OAUTH_TOKEN_URL: Final[str] = "https://oauth2.googleapis.com/token"
 
-# Five scopes; readonly where the OS never writes (least privilege).
+# Three scopes (remediation 3.4): Calendar + Tasks + Gmail.modify — the OS
+# reads no Drive/Contacts data anywhere, so those consent screens are noise.
 AUTH_SCOPES: Final[tuple[str, ...]] = (
     "https://www.googleapis.com/auth/calendar",
     "https://www.googleapis.com/auth/tasks",
-    "https://www.googleapis.com/auth/drive.readonly",
-    "https://www.googleapis.com/auth/contacts.readonly",
     "https://www.googleapis.com/auth/gmail.modify",
 )
 

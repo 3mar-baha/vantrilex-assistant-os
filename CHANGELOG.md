@@ -8,6 +8,33 @@ product release tags start independently at v1.0.0.)
 
 ## [Unreleased]
 
+### Removed
+- **Dead code pruned (remediation 3.3, ~2,515 lines)**: `config/agents_config.json`
+  (zero consumers, stale Gemini/Sana pins), `src/expansion.py`, `src/syllabus.py`
+  + `src/tutor.py` (+ their tests), the sprint-3 trio `src/summary.py` +
+  `src/skills/social_graph.py` + `src/vault_expand.py` (+ their tests), and
+  **pypdf from requirements.txt** (~376KB wheel serving dead code only).
+  Zero-consumption verified by grep before deletion; `common/consent.py` and
+  `src/vault.py` stay (live consumers). Coverage ROSE to 87.09% after the cut.
+- **Dead settings keys (remediation 3.4)**: obsidian_rest_api_url,
+  obsidian_api_key, target_pc_mac_address/ip/wol_port, idle_shutdown_minutes
+  (+ the never-present google_cloud_project) removed from config.py,
+  .env.example, and the conftest mirror — zero keys feeding nothing.
+  telegram_api_* stay as the documented v1.1 plan.
+
+### Changed
+- **OAuth consent slimmed to three scopes (remediation 3.4)**: the OS asks for
+  Calendar + Tasks + Gmail.modify only — Drive/Contacts readonly left the
+  consent screen (the OS never reads either API).
+- **RUNBOOK live-loops table + OAuth path fix (remediation 3.6)**: §3 now
+  documents the five active background loops (cadence/gates/OAuth needs) and
+  the proactive tuning knobs; the §6 OAuth bootstrap no longer points at the
+  retired `core-foundation` worktree — the main checkout is the path.
+- **Memory reads the newest facts (remediation 2.7, head-vs-tail flaw)**:
+  the per-section cap in `load_long_term` now slices from the TAIL
+  (`body[-max_chars:]`) — learned facts append to the end of User_Info, so
+  the brain sees the newest slice, not the stale head that pushed it out.
+
 ### Added
 - **Proactive outreach engine (remediation 3.2 — Sara INITIATES, the heart of
   the initiative axis)**: a new ~45-min smart loop
@@ -34,12 +61,6 @@ product release tags start independently at v1.0.0.)
   `BRIEF_ENABLED=false` suppresses only the brief; a degraded Google boot
   (no OAuth) keeps the chat loops alive and skips only the Gmail watch.
   First activation since these features were built.
-- **Memory reads the newest facts (remediation 2.7, head-vs-tail flaw)**:
-  the per-section cap in `load_long_term` now slices from the TAIL
-  (`body[-max_chars:]`) — learned facts append to the end of User_Info, so
-  the brain sees the newest slice, not the stale head that pushed it out.
-
-### Added
 - **Whisper pinned to Jordanian Arabic (remediation 2.6, mishear fix)**:
   every voice-note transcription now calls faster-whisper with
   `language="ar"`, `beam_size=5`, and an `initial_prompt` seeded with the

@@ -13,4 +13,3 @@ speechbrain>=1.0  # ECAPA-TDNN voiceprint (ADR-17, sprint-2 2.3; py3.12 wheel-ve
 faster-whisper>=1.0  # LOCAL STT (sprint-2 2.5, MIT; CPU int8 via ctranslate2 4.8 — never cloud STT)
 websockets>=13,<16  # core<->bridge tunnel transport (sprint-3 3.4, BSD-3; asyncio API)
 psutil>=5.9  # desktop telemetry snapshot (sprint-3 3.5, BSD)
-pypdf>=5  # syllabus PDF text extraction (sprint-4 4.1, BSD-3; pure Python)

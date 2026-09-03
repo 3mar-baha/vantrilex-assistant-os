@@ -36,6 +36,23 @@ make run-bridge     # PC bridge daemon (on the Windows PC)
 The core talks to Telegram via long polling (outbound-only), so local development
 needs no open ports and no public endpoint.
 
+### Active background loops (remediation 3.1 + 3.2)
+
+`run_bot` starts every loop through `start_background_loops` and cancels them all
+on shutdown:
+
+| Loop | Cadence | Gate(s) | Needs Google OAuth? |
+|---|---|---|---|
+| Daily summary (`DailySummarizer`) | ~23:50 local, idempotent | due() tick | no |
+| Morning brief (`BriefComposer`) | 07:30 local | `BRIEF_ENABLED` | yes |
+| Evening check-in (`EveningJournaler`) | 18:00–19:30 window, once | `JOURNALER_ENABLED`, calendar-busy guard | partial (degrades honest) |
+| Proactive outreach (`ProactiveOutreach`) | ~45 min ticks | `PROACTIVE_ENABLED`, 08:00–22:30 window, cooldown, max 3/day, calendar guard | no (context = vault + time) |
+| Gmail watch (`run_gmail_poll`) | `GMAIL_POLL_SECONDS` | Google stack healthy | yes |
+
+Proactive tuning (`.env`, restart to apply): `PROACTIVE_INTERVAL_MIN`,
+`PROACTIVE_MAX_PER_DAY`, `PROACTIVE_WINDOW_START/END`, `PROACTIVE_COOLDOWN_MIN`.
+A HEAVY-model verdict gates every send; failures skip silently.
+
 ### Health probe
 
 ```powershell
@@ -278,17 +295,19 @@ remotely, audit line lands in `pc-ledger.md`.
 
 See `.env.example` comments — each variable names its source: @BotFather (bot token),
 @userinfobot (owner ID), my.telegram.org (API ID/hash, v1.1), console.cloud.google.com
-(OAuth client JSON), github.com/settings/tokens (vault PAT), obsidian-local-rest-api
-plugin (optional REST key), `python -c "import secrets; print(secrets.token_urlsafe(32))"`
-(bridge token).
+(OAuth client JSON), github.com/settings/tokens (vault PAT),
+`python -c "import secrets; print(secrets.token_urlsafe(32))"` (bridge token).
 
 ### Google OAuth bootstrap (one-time, browser machine)
 
 1. console.cloud.google.com → project `vantrilex-assistant-2008` → enable Calendar,
-   Tasks, Drive, People (Contacts), Gmail APIs.
-2. OAuth consent screen: External + test user `omarbaha224@gmail.com`.
+   Tasks, Gmail APIs (remediation 3.4: the consent screen asks for exactly these
+   three scopes — Drive/People left the OS's consent entirely).
+2. OAuth consent screen:External + test user `omarbaha224@gmail.com`.
 3. Credentials → OAuth client ID → **Desktop app** → download JSON → save as
-   `core-foundation/config/google_oauth_client.json` (gitignored; NEVER commit).
+   `config/google_oauth_client.json` in the MAIN checkout (gitignored; NEVER
+   commit). The `core-foundation` worktree is retired (owner branch directive
+   2026-08-31) — never place credentials there.
 4. Set `VAULT_ENC_KEY` (`python -c "import secrets; print(secrets.token_urlsafe(32))"`)
    and `VAULT_LOCAL_PATH` in `.env`.
 5. On the browser machine, inside the venv: `py -3.12 -m src.google_auth` → open the

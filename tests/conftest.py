@@ -91,20 +91,13 @@ ENV_EXAMPLE: dict[str, str] = {
     "VAULT_GITHUB_REPO": "owner/vault-repo",
     "VAULT_GITHUB_TOKEN": "your-github-fine-grained-pat",  # sprint-3 3.1: required (SecretStr)
     "VAULT_BRANCH": "main",
-    "OBSIDIAN_REST_API_URL": "https://127.0.0.1:27124",
-    "OBSIDIAN_API_KEY": "",
     "GOOGLE_OAUTH_CLIENT_JSON": "./config/google_oauth_client.json",
     "GOOGLE_CALENDAR_ID": "primary",
-    "GOOGLE_CLOUD_PROJECT": "",
     "BRIDGE_TOKEN": "your-bridge-shared-token",  # sprint-3 3.4: required (SecretStr)
     "BRIDGE_SERVER_URL": "wss://your-space-host/bridge",  # sprint-3 3.4: required
     "BRIDGE_LAN_PORT": "8000",
-    "TARGET_PC_MAC_ADDRESS": "AA:BB:CC:DD:EE:FF",
-    "TARGET_PC_IP": "192.168.1.100",
-    "TARGET_PC_WOL_PORT": "9",
     "TZ": "Asia/Amman",
     "LOG_LEVEL": "INFO",
-    "IDLE_SHUTDOWN_MINUTES": "20",
 }
 
 

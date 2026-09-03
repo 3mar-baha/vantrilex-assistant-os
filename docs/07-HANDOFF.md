@@ -90,7 +90,8 @@ record: `docs/01-ARCHITECTURE.md` §1. Vision: `docs/00-VISION.md`.
   faster-whisper transcription → vault + text pipeline.
 - **Knowledge base**: `src/vault.py` (`VaultClient`) over GitHub Contents API + Git Data
   API — read/write/upsert/one-commit structural changes/append-section; YAML frontmatter;
-  PARA backbone immutable (expansion-only via `src/vault_expand.py`); mandatory dirs:
+  PARA backbone immutable (the sprint-3 expander was pruned 2026-09-03, remediation
+  3.3 — structural growth rides the Git Data API directly); mandatory dirs:
   `Contacts/`, `Call_Transcripts/`, `Studies/`, `Voice_Memos/`, `Daily_Logs/` +
   `02_Areas/Profile/User_Info.md` + `02_Areas/Profile/Dialect_Notes.md`.
 - **PC control plane (sprint 3)**: outbound-only WSS daemon on the PC dials the core
@@ -121,15 +122,13 @@ record: `docs/01-ARCHITECTURE.md` §1. Vision: `docs/00-VISION.md`.
 | Voice out | `src/voice.py` | Edge-TTS → ffmpeg → Ogg Opus, in-memory bytes |
 | Voice in + biometrics | `src/skills/voice_biometric_auth.py`, `src/skills/voice_to_vault_transcriber.py`, `src/skills/social_enrollment.py` | ECAPA-TDNN owner verify, Guest lockdown, Whisper transcription, multi-speaker registry |
 | Dialect engine | `src/dialect.py` | M1 teach-lines («تعلمي: …») → pronunciation normalization + prompt snapshot |
-| Vault client | `src/vault.py`, `src/vault_expand.py`, `src/skills/social_graph.py` | GitHub-backed Obsidian: CRUD, one-commit expansion, dossiers |
-| Google suite | `src/google_auth.py`, `src/google_suite.py`, `src/gmail.py`, `src/email_triage.py`, `src/daily_brief.py` | OAuth + sealed cache, Calendar/Tasks/Drive/Contacts, Gmail watch/sweep, tiered triage, daily brief |
+| Vault client | `src/vault.py` | GitHub-backed Obsidian: CRUD, append-section, one-commit structural changes (vault_expand + social_graph pruned 2026-09-03 — dead, remediation 3.3) |
+| Google suite | `src/google_auth.py`, `src/google_suite.py`, `src/gmail.py`, `src/email_triage.py`, `src/daily_brief.py` | OAuth + sealed cache (THREE scopes: Calendar/Tasks/Gmail.modify — remediation 3.4), Gmail watch/sweep, tiered triage, daily brief |
 | TokenJuice | (in `src/email_triage.py` path) | Quoted-chain/signature/boilerplate compaction before LLM calls |
 | PC bridge | `common/protocol.py`, `bridge/{guard,executor,wol,idle,telemetry,daemon}.py`, `src/bridge_server.py`, `src/pc_actions.py` | Whitelist guard, executor, WoL, idle, daemon, WSS server, owner-origin actions + audit |
 | App indexer (v1.0.2) | `src/app_indexer.py` | Start Menu .lnk discovery → PowerShell target resolution → categorized idempotent whitelist merge (System32 dropped; `python -m src.app_indexer [--dry-run]`) |
 | Telemetry | `bridge/telemetry.py`, `src/telemetry.py` | psutil snapshot + Tier-1 Arabic narration |
-| Syllabus parser | `src/syllabus.py` | PDF → TIER3 strict-JSON → validated DAG → Calendar/Tasks schedule → `Studies/` |
-| Expansion (M4) | `src/expansion.py` | Arabic NL cron → runtime capability tasks; loud-disable; `State/capabilities.json` |
-| Tutor (M9) | `src/tutor.py` | TIER3 first-principles study artifacts → `Studies/<topic>/` |
+*(Syllabus parser, Expansion M4, Tutor M9 — PRUNED 2026-09-03, remediation 3.3: no production consumer ever wired them; pypdf left requirements.)*
 | Evening journaler | `src/skills/evening_journaler.py` | 18:00-19:30 check-in + daily ledger `Daily_Logs/` |
 | Summary protocol | `src/summary.py`, `common/consent.py` | «هل بتحب ألخص…» consent grammar + numbered-task approval files |
 | Packaging | `Dockerfile`, `.dockerignore`, `scripts/supervise.py`, `scripts/deploy_smoke.py`, `.github/workflows/keepalive.yml`, `README.md` (HF metadata) | The ONE container + supervision + smoke checks + keep-alive |
@@ -143,7 +142,7 @@ record: `docs/01-ARCHITECTURE.md` §1. Vision: `docs/00-VISION.md`.
   client with fallback chains → in-memory Opus voice pipeline → adaptive Jordanian dialect
   engine (M1) → **3-tier brain + Fast Front-Door Dispatcher**.
 - **Sprint 2 (Telegram suite)**: Google OAuth + sealed token cache → typed Calendar/Tasks/
-  Drive/Contacts clients → Gmail watch/sweep + **dispatch-then-mark** (no crash-window loss)
+  Gmail watch/sweep + **dispatch-then-mark** (no crash-window loss; Drive/Contacts scopes dropped 2026-09-03, remediation 3.4)
   → bot shell + owner-drop middleware + progressive chat streamer (<250 ms first edit) →
   **voice biometrics + Guest Mode lockdown (ADR-17, sacred floor)** → multi-speaker
   registry → TokenJuice compaction → local Whisper transcription to `Voice_Memos/` →

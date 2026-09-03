@@ -32,10 +32,8 @@ def test_settings_accept_all_env_example_vars(make_settings):
     assert s.google_oauth_client_json == "./config/google_oauth_client.json"
     assert s.google_calendar_id == "primary"
     assert s.bridge_lan_port == 8000
-    assert s.target_pc_wol_port == 9
     assert s.tz == "Asia/Amman"
     assert s.log_level == "INFO"
-    assert s.idle_shutdown_minutes == 20
     # Empty-string normalization (Guide amendment): optional vars read as None.
     assert s.telegram_api_id is None
     assert s.telegram_api_hash is None
@@ -43,7 +41,6 @@ def test_settings_accept_all_env_example_vars(make_settings):
     assert s.vault_github_repo == "owner/vault-repo"
     assert s.vault_github_token.get_secret_value() == "your-github-fine-grained-pat"
     assert s.vault_branch == "main"
-    assert s.obsidian_api_key is None
     assert s.bridge_token.get_secret_value() == "your-bridge-shared-token"
 
 
