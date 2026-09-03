@@ -18,11 +18,16 @@
 - **Telegram voice/chat architecture**: Aiogram 3.x long-polling plain-text chat;
   **progressive delivery** (task 2.2): placeholder message instantly, first edit on the
   ack (<250 ms Audio-TTFT), deltas coalesced at `STREAM_EDIT_INTERVAL_MS` (750 ms default),
-  final text verbatim; a newer owner message cancels the in-flight stream. Edge-TTS
-  (`ar-EG-SalmaNeural`, owner-approved 2026-09-02, switchable via `VOICE_NAME`) streamed
-  in-memory via `io.BytesIO`, transcoded by ffmpeg to native
-  Ogg Opus voice bubbles (<600 ms first-chunk target); live bidirectional calls via PyTgCalls
-  arrive in v1.1.
+  final text verbatim; a newer owner message cancels the in-flight stream; long replies
+  re-split into 2-3 short chat bubbles (round-3, 2026-09-03). **Voice = Fish Audio**
+  (`s2.1-pro-free:free`, the «سمسم» reference voice, via OpenRouter's speech API — owner
+  directive 2026-09-03: Fish is Sara's ONLY voice, NO Microsoft fallback; a Fish failure
+  retries once then lands the honest text) synthesized in-memory, transcoded by ffmpeg to
+  native Ogg Opus voice bubbles (<600 ms first-chunk target); unconfigured deployments
+  stay pure Edge-TTS (`ar-EG-SalmaNeural`, switchable `VOICE_NAME`); live bidirectional
+  calls via PyTgCalls arrive in v1.1. **Reply channel** (round-2): the router's
+  `voice_reply` verdict picks voice-vs-text per turn; the owner's explicit «رد صوتي/رد
+  نصي» always wins; voice-origin defaults voice.
 - **Validated deployment path (ADR-15 as amended 2026-08-31)**: **Oracle Cloud Always-Free
   VM** hosts ONE Docker container co-locating core + OmniRoute + Edge-TTS (single public
   port behind Caddy TLS = WSS bridge endpoint + `/health`; environment file on the VM;
@@ -35,6 +40,14 @@
 
 ## 2. Component Topology
 
+**Active background loops** (remediation 3.1/3.2, wired through ONE testable
+stitch point `start_background_loops` in `src/bot.py`; all cancelled on
+shutdown): the 07:30 morning brief (`BriefComposer`), the 18:00–19:30 evening
+check-in (`EveningJournaler`), the ~45-min proactive outreach
+(`ProactiveOutreach` — HEAVY-judged voice check-ins, 08:00–22:30 window,
+max 3/day, cooldown, calendar guard), the real Gmail watch (`run_gmail_poll`
++ triage), and the 23:50 daily conversation summary (`DailySummarizer`).
+
 ```mermaid
 graph TD
     User([Owner]) <-->|Chat / Voice Notes / v1.1 Calls| TG[Telegram]
@@ -46,7 +59,7 @@ graph TD
         Omni <--> T1[Tier1 FAST: minimax-m3 - talker]
         Omni <--> T2[Tier2 MEDIUM: gpt-oss-120b - depth]
         Omni <--> T3[Tier3 HEAVY: nemotron-3-ultra-550b - tool lane]
-        Core <--> TTS[Edge-TTS -> BytesIO -> ffmpeg -> Ogg Opus]
+        Core <--> TTS[Fish Audio (سمسم) -> ffmpeg -> Ogg Opus | fb: Edge-TTS]
         Core <--> Bio[Voice biometrics ECAPA-TDNN + Guest Mode]
         Core <--> G[Google Suite clients: Calendar / Gmail / Drive / Contacts / Tasks]
         Core <--> Vault[(Git-backed Obsidian Vault via GitHub API)]
@@ -70,8 +83,11 @@ graph TD
    shaper (`shape_for_tts`, owner directive 2026-09-02): emoji stripped, whole-word
    pronunciation lexicon applied, trailing harakat removed (تسكين الأواخر, shadda
    preserved) — Microsoft G2P otherwise forces MSA tanween on unvocalized dialect.
-2. `VoicePipeline.synthesize_stream(text)`: Edge-TTS streams `ar-EG-SalmaNeural` MP3
+2. `VoicePipeline.synthesize_stream(text)`: the configured lane synthesizes MP3
    chunks straight into the ffmpeg child's stdin — zero disk writes anywhere.
+   Production lane: **Fish Audio** via OpenRouter's `/api/v1/audio/speech`
+   (one-shot MP3, then the same 64k opus chain); the unconfigured fallback lane
+   streams Edge-TTS `ar-EG-SalmaNeural` (pure local, $0.00).
 3. ffmpeg runs via asyncio subprocess (natively non-blocking) transcoding MP3 -> Ogg
    Opus (48 kHz mono, 20 ms frames, 64k VBR `audio` application mode — the former
    24k `voip` mode choked every voice, live 2026-09-02); tiny `-probesize 32` keeps

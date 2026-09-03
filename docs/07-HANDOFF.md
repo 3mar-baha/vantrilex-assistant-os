@@ -80,8 +80,8 @@ record: `docs/01-ARCHITECTURE.md` §1. Vision: `docs/00-VISION.md`.
   - Fallback chains walked per tier: quota → immediate advance, transient → capped
     retries, fatal → loud stop.
   - **Current pins (owner-set 2026-09-01, two strong models, in `.env`)**: FAST =
-    `openrouter/minimax/minimax-m2.7:free` (fb `groq/openai/gpt-oss-120b`) — the
-    conversation lane; MEDIUM = `groq/openai/gpt-oss-120b` (fb minimax); HEAVY =
+    `openrouter/minimax/minimax-m3:free` (fb `groq/openai/gpt-oss-120b`) — the
+    conversation lane; MEDIUM = `groq/openai/gpt-oss-120b` (fb minimax-m3); HEAVY =
     `openrouter/nvidia/nemotron-3-ultra-550b-a55b:free` (fb `groq/openai/gpt-oss-120b`)
     — the EXCLUSIVE tool lane. Gemini is RETIRED from the brain.
     **Note**: `gpt-oss-120b` is a FALLBACK only — never the primary user-prose generator.
