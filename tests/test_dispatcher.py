@@ -392,3 +392,116 @@ async def test_tool_verdict_without_registry_falls_back_to_plain_stream(make_set
         out = await _collect(FrontDoorDispatcher(client, make_settings()).handle("افحصي الجيميل"))
     assert out == ["لحظة", "رد عادي"]
     assert script.models() == [FAST_PIN, MEDIUM_PIN]
+
+
+# --- Remediation 2.1 (owner directive 2026-09-03, audit C-1): anti-hallucination -----
+# --- keyword net. The router stays the primary classifier; this deterministic net is
+# --- the defense line BEHIND it — a text that clearly names a tool never degrades
+# --- to plain chat even when the router hallucinates tool="none". Every coercion is
+# --- logged loudly. Red (أ/ب/ج) per docs/REMEDIATION_PLAN.md §2.1. -------------------
+
+
+def test_keyword_net_unit_maps_and_guards():
+    """Direct unit contract: colloquial tool words map to real tools with a clean
+    launch arg; near-miss words (الشغل the noun, افتحت past tense) never coerce."""
+    from src.dispatcher import _keyword_net
+
+    assert _keyword_net("افحصلي الجيميل") == ("gmail", "")
+    assert _keyword_net("فحص بريدي بليز") == ("gmail", "")
+    assert _keyword_net("شو وضع الجهاز؟") == ("telemetry", "")
+    assert _keyword_net("شو مواعيدي بكرة؟") == ("calendar", "")
+    assert _keyword_net("شو مهامي اليوم؟") == ("tasks", "")
+    assert _keyword_net("اعطيني الإحاطة") == ("brief", "")
+    assert _keyword_net("افتحي الآلة الحاسبة على جهازي") == ("launch", "الآلة الحاسبة")
+    assert _keyword_net("افتحيلي الآلة الحاسبة لو سمحت") == ("launch", "الآلة الحاسبة")
+    assert _keyword_net("شغّل سبوتيفاي") == ("launch", "سبوتيفاي")
+    # guards — never a false launch
+    assert _keyword_net("رايح ع الشغل بكره") == ("none", "")
+    assert _keyword_net("افتحت الملف امبارح") == ("none", "")
+    assert _keyword_net("شو أخبارك اليوم؟") == ("none", "")
+    assert _keyword_net("شو النتيجة؟") == ("none", "")  # النتيجة is not النت
+
+
+async def test_keyword_net_rescues_router_miss_gmail(make_settings, logs):
+    """Red (أ): «افحصلي الجيميل» + router says tool=none -> the REAL gmail
+    executes at the HEAVY tool lane; the coercion is logged loudly (audit C-1)."""
+    registry = FakeRegistry(result="3 رسائل غير مقروءة")
+    script = _Scripted(
+        httpx.Response(200, content=_sse(_router_json("direct", DEFAULT_ACK_AR))),
+        httpx.Response(200, content=_sse(_chunk("عندك"), _chunk(" بريد"))),
+    )
+    async with _gateway(script) as client:
+        out = await _collect(
+            FrontDoorDispatcher(client, make_settings()).handle("افحصلي الجيميل", tools=registry)
+        )
+    assert registry.calls == [("gmail", "")]
+    assert out == [DEFAULT_ACK_AR, "عندك", " بريد"]
+    assert script.models() == [FAST_PIN, HEAVY_PIN]
+    assert any("keyword net" in str(m) for m in logs)
+
+
+async def test_keyword_net_rescues_router_miss_telemetry(make_settings, logs):
+    """Red (ب): «شو وضع الجهاز؟» + router miss -> telemetry executes for real."""
+    registry = FakeRegistry(result="المعالج 12%")
+    script = _Scripted(
+        httpx.Response(200, content=_sse(_router_json("direct", DEFAULT_ACK_AR))),
+        httpx.Response(200, content=_sse(_chunk("المعالج"), _chunk(" 12%"))),
+    )
+    async with _gateway(script) as client:
+        out = await _collect(
+            FrontDoorDispatcher(client, make_settings()).handle("شو وضع الجهاز؟", tools=registry)
+        )
+    assert registry.calls == [("telemetry", "")]
+    assert out == [DEFAULT_ACK_AR, "المعالج", " 12%"]
+    assert script.models() == [FAST_PIN, HEAVY_PIN]
+    assert any("keyword net" in str(m) for m in logs)
+
+
+async def test_keyword_net_launch_captures_clean_app_name(make_settings, logs):
+    """The live calculator failure (07:04, audit C-1/C-7): «افتحي الآلة الحاسبة
+    على جهازي» + router miss -> launch carries the CLEAN app name (device clause
+    stripped); the owner notification comes from the coordinator itself."""
+    registry = FakeRegistry(result=None)
+    script = _Scripted(
+        httpx.Response(200, content=_sse(_router_json("direct", DEFAULT_ACK_AR))),
+    )
+    async with _gateway(script) as client:
+        out = await _collect(
+            FrontDoorDispatcher(client, make_settings()).handle(
+                "افتحي الآلة الحاسبة على جهازي", tools=registry
+            )
+        )
+    assert registry.calls == [("launch", "الآلة الحاسبة")]
+    assert out == [DEFAULT_ACK_AR]
+    assert any("keyword net" in str(m) for m in logs)
+
+
+async def test_unknown_router_tool_string_coerced_loudly_not_silent(make_settings, logs):
+    """Red (ج): the router emits an UNKNOWN tool string -> never silent: the
+    unknown-tool coercion logs loudly, then the net recovers the real intent."""
+    registry = FakeRegistry(result=None)
+    script = _Scripted(
+        httpx.Response(200, content=_sse(_tool_router("spotify", DEFAULT_ACK_AR))),
+    )
+    async with _gateway(script) as client:
+        out = await _collect(
+            FrontDoorDispatcher(client, make_settings()).handle("شغّل سبوتيفاي", tools=registry)
+        )
+    assert registry.calls == [("launch", "سبوتيفاي")]
+    assert out == [DEFAULT_ACK_AR]
+    assert any("unknown tool" in str(m) for m in logs)
+    assert any("keyword net" in str(m) for m in logs)
+
+
+async def test_keyword_net_silent_on_plain_chat(make_settings, logs):
+    """Plain chat with no tool words: the net stays silent — no coercion, no log,
+    the answer streams on the FAST conversation lane."""
+    script = _Scripted(
+        httpx.Response(200, content=_sse(_router_json("direct", "من عيوني"))),
+        httpx.Response(200, content=_sse(_chunk("تمام"))),
+    )
+    async with _gateway(script) as client:
+        out = await _collect(FrontDoorDispatcher(client, make_settings()).handle("كيفك اليوم؟"))
+    assert out == ["من عيوني", "تمام"]
+    assert script.models() == [FAST_PIN, FAST_PIN]
+    assert not any("keyword net" in str(m) for m in logs)

@@ -580,6 +580,20 @@ product.)
       Speech pool 429 rate-limited at probe time (morning) — recovery watch
       ran; free-pool burstiness is the cause, not a code defect.
 
+      ### REMEDIATION EXECUTION RUN (2026-09-03, owner mandate «اكمل ولا تتوقف»)
+      Owner ordered continuous 2.1→3.6 execution — no «التالي» halts, retries
+      on any failure. **2.1 DONE**: `_keyword_net` deterministic intent net in
+      dispatcher.py (gmail/calendar/tasks/telemetry/brief/launch patterns incl.
+      colloquial variants; `(?<!ال)` keeps الشغل-noun out of launch; launch arg
+      strips trailing «على جهازي/لو سمحت» clauses) — fires ONLY behind a
+      router-miss (tool="none"), never overrides a valid verdict; unknown
+      router tool strings now logged loudly in _parse_router (was silent);
+      every coercion logged. 6 new tests (unit maps+guards, gmail rescue,
+      telemetry rescue, launch clean-name, unknown-tool loud coercion, silent
+      on plain chat). Gate: 456 passed / 86.30% / security+docs green. Fixes
+      audit C-1 (live «افتحي الآلة الحاسبة» → «ما بقدر» root cause #1).
+      Next: 2.2 Arabic app aliases (pc_actions.py).
+
 ## Open items / blockers
 
 - **ACTIVE BLOCKER (2026-08-31, owner pausing for today)**: Oracle signup declined the

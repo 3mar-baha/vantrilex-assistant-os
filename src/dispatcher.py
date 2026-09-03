@@ -54,6 +54,45 @@ _VALID_ROUTES: Final = ("direct", "tier2", "tier3")
 _VALID_TOOLS: Final = ("none", "gmail", "calendar", "tasks", "telemetry", "launch", "brief")
 _JSON_RE: Final = re.compile(r"\{.*\}", re.DOTALL)
 
+# Remediation 2.1 (owner directive 2026-09-03, audit C-1): deterministic
+# anti-hallucination keyword net — a defense line BEHIND the router. When the
+# router misses (tool="none") or emits an unknown tool while the text clearly
+# names one, the net forces the real tool path and logs the coercion loudly.
+_TOOL_NET: Final[tuple[tuple[str, re.Pattern[str]], ...]] = (
+    # gmail — colloquial mail words (شغّل/افتح never match mail)
+    ("gmail", re.compile(r"جيميل|بريدي|ايميل|إيميل|الايميل|الإيميل|البريد|بريد")),
+    # calendar
+    ("calendar", re.compile(r"مواعيد|تقويم|مواعيدي|موعد")),
+    # tasks
+    ("tasks", re.compile(r"مهام|المهام|مهامي|شي مستحق|مستحق")),
+    # telemetry — device state words
+    ("telemetry", re.compile(r"وضع الجهاز|وضع الجسر|الرام|الشاشة|المعالج|حالة الجهاز|تيليمتري")),
+    # brief
+    ("brief", re.compile(r"الإحاطة|احاطة|إحاطة|النشرة اليومية")),
+    # launch — imperative open/start verbs; the app name follows the verb,
+    # stripped of trailing device clauses («على جهازي», «بجهازي», «لو سمحت»...)
+    # (?<!ال) keeps the noun الشغل out — bare شغل substring-matches inside it.
+    ("launch", re.compile(r"(?<!ال)(?:افتحي|افتحيلي|افتحيلي |شغّل|شغل|شغّلي|شغيلي)\s+(.+)")),
+)
+_LAUNCH_STRIP_RE: Final = re.compile(
+    r"\s+(?:على\s+جهاز\w*|على\s+الجهاز|بجهاز\w*|على\s+الحاسوب|لو\s+سمحت|بليز|منشان\s+الله).*$"
+)
+
+
+def _keyword_net(text: str) -> tuple[str, str]:
+    """Return (tool, arg) the deterministic net detects, ("none", "") on no match."""
+    clean = " ".join(text.split()).strip()
+    for tool, pattern in _TOOL_NET:
+        match = pattern.search(clean)
+        if match is None:
+            continue
+        if tool == "launch":
+            raw_name = match.group(1).strip()
+            arg = _LAUNCH_STRIP_RE.sub("", raw_name).strip(" .!؟?،,")
+            return ("launch", arg) if arg else ("launch", raw_name)
+        return tool, ""
+    return ("none", "")
+
 
 def _parse_router(reply: str) -> tuple[str, str, str, str] | None:
     """Extract the {route, tool, arg, ack} verdict; None when not a valid routing."""
@@ -70,6 +109,7 @@ def _parse_router(reply: str) -> tuple[str, str, str, str] | None:
         return None
     tool = str(verdict.get("tool") or "none").strip().lower()
     if tool not in _VALID_TOOLS:
+        logger.warning("dispatcher unknown tool {!r} from router", tool)
         tool = "none"
     if len(ack) > MAX_ACK_CHARS:  # router drift: a mini-answer, not an acknowledgment
         ack = DEFAULT_ACK_AR
@@ -131,6 +171,16 @@ class FrontDoorDispatcher:
                 )
             else:
                 route, ack, tool, arg = parsed
+        if tool == "none":
+            net_tool, net_arg = _keyword_net(user_text)
+            if net_tool != "none":
+                logger.warning(
+                    "dispatcher keyword net coerced router-miss -> tool={!r} arg={!r} text={!r}",
+                    net_tool,
+                    net_arg,
+                    user_text[:80],
+                )
+                tool, arg = net_tool, net_arg
         yield ack
         if tool != "none":
             async for delta in self._tool_lane(tool, arg, route, user_text, system, history, tools):

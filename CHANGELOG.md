@@ -8,6 +8,19 @@ product release tags start independently at v1.0.0.)
 
 ## [Unreleased]
 
+### Added
+- **Anti-hallucination keyword net (remediation 2.1, audit C-1)**: a
+  deterministic intent net in the dispatcher now runs BEHIND the router —
+  colloquial tool words (جيميل/بريد → gmail، مواعيد/تقويم → calendar، مهام →
+  tasks، وضع الجهاز/الرام/المعالج → telemetry، إحاطة → brief، افتحي/شغّل +
+  اسم البرنامج → launch) force the REAL tool path whenever the router misses
+  (`tool="none"`) or emits an unknown tool string. A valid router verdict is
+  never overridden; every coercion is logged loudly (unknown tool strings too —
+  previously sanitized silently). The launch pattern captures the clean app
+  name (trailing «على جهازي/لو سمحت» clauses stripped) and keeps the noun
+  الشغل out of the imperative match. 6 new tests; fixes the live
+  «افتحي الآلة الحاسبة على جهازي» → «ما بقدر» failure class.
+
 ### Changed
 - **Fish is Sara's ONLY voice — Microsoft fallback removed (owner directive
   2026-09-03 07:03, live retest)**: the 07:03 voice note came back in the
