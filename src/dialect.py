@@ -83,6 +83,10 @@ _LAUGHTER_TOKEN_RE: Final = re.compile(r"^[هخhHaA]{2,}[،.!؟?…]*$")
 # علامات التنصيص (توجيه 2026-09-03): المحرك يقرأ الكلمات لا الترقيم — تُحذف كلها.
 _QUOTE_RE: Final = re.compile("[\"«»“”„‟‹›'‘’]+")
 _SEED_TTS_LEXICON: Final[dict[str, str]] = {
+    # pass-3: the original ten + the frequent live-transcript words the MSA
+    # G2P mangles. Deliberately NOT: شوف/مرحبا/كيف — the shaping contract
+    # (tests/test_dialect.py) pins them plain; the owner's «تعلمي:» notes
+    # remain the live override for any word, always.
     "هسا": "هسَّا",
     "هلق": "هَلَق",
     "هيك": "هَيك",
@@ -93,6 +97,17 @@ _SEED_TTS_LEXICON: Final[dict[str, str]] = {
     "بدك": "بِدَّك",
     "ابعت": "إبْعَت",
     "شغلة": "شُغْلة",
+    # greeting / acknowledgment family (she says these constantly)
+    "هلا": "هَلا",
+    "اهلا": "أهلاً",
+    # the daily verbs of her live replies
+    "بعرف": "بَعْرِف",
+    "بقدر": "بَقْدِر",
+    "رح": "رَح",
+    "شوي": "شْوَي",
+    "هلأ": "هلَّأ",
+    "وين": "وين",
+    "حكي": "حَكي",
 }
 
 
