@@ -311,13 +311,47 @@ async def test_new_owner_message_cancels_inflight_stream(fake_bot, make_shell):
     await shell.dp.feed_update(bot, make_update(2, OWNER_ID, "سؤال ثاني"))
     task2, _ = _STREAMS[OWNER_ID]
     gate.set()
-    await asyncio.gather(task1, task2)
+    await wait_until(lambda: task1.cancelled())  # remediation 1.7: hard-cancelled, not just flagged
+    await asyncio.gather(task2)
 
     final_edits = [c.method.text for c in bot.session.sent("EditMessageText")]
     assert "أول" in final_edits  # partial answer preserved in the bubble
     assert not any("تمأول" in t for t in final_edits)  # the ack was replaced, never glued
     assert not any("تالٍ" in t for t in final_edits)  # never consumed the late delta
     assert any("جواب ثاني" in c.method.text for c in bot.session.sent("EditMessageText"))
+
+
+async def test_interjection_cancels_a_blocked_midstream_task(fake_bot, make_shell):
+    """Remediation 1.7 (audit V-3): the cancel Event only takes effect BETWEEN
+    deltas — a stream blocked mid-flight (slow model delta) stayed alive as a
+    zombie that could fire late edits/voice from a dead turn. The interjection
+    must task.cancel() the abandoned turn at its await point."""
+    gate = asyncio.Event()  # never released while turn 1 lives — blocked mid-stream
+    shell = make_shell(
+        router_replies=[_router("tier2", "تم"), _router("tier2", "جواب")],
+        stream_programs=[
+            StreamProgram(deltas=("أول", "متأخر جداً"), gate=gate),
+            StreamProgram(deltas=("ثاني",)),
+        ],
+    )
+    bot = fake_bot()
+    await shell.dp.feed_update(bot, make_update(1, OWNER_ID, "سؤال أول"))
+    task1, _ = _STREAMS[OWNER_ID]
+    await wait_until(
+        lambda: any(c.method.text == "أول" for c in bot.session.sent("EditMessageText"))
+    )
+
+    await shell.dp.feed_update(bot, make_update(2, OWNER_ID, "سؤال ثاني"))  # interject
+    task2, _ = _STREAMS[OWNER_ID]
+    await wait_until(lambda: task1.cancelled())  # the zombie dies NOW, not at the next delta
+
+    gate.set()  # the late delta arrives — but nobody is listening anymore
+    await asyncio.gather(task2)
+    late = [c for c in bot.session.sent("EditMessageText") if "متأخر" in c.method.text]
+    assert late == []  # no edit from the abandoned turn ever lands
+    # Remediation 1.7: the abandoned task is CANCELLED, not just signalled — its
+    # gateway stream generator is closed, no zombie edits/voice can fire late.
+    assert task1.cancelled() or task1.done()
 
 
 async def test_unhandled_exception_apologizes_and_marks_handled(fake_bot, make_shell):

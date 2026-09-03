@@ -188,7 +188,12 @@ def build_dispatcher(
     def _spawn_stream(message: Message, bot: Bot, text: str, *, voice_origin: bool = False) -> None:
         previous = _STREAMS.get(message.chat.id)
         if previous is not None:
-            previous[1].set()  # owner interjection: cancel the in-flight stream
+            # Owner interjection: signal the in-flight stream AND hard-cancel its
+            # task (remediation 1.7 / audit V-3 — the Event only lands between
+            # deltas, so a mid-flight block would otherwise live on as a zombie
+            # firing late edits/voice from a dead turn).
+            previous[1].set()
+            previous[0].cancel()
         cancel = asyncio.Event()
         task = asyncio.create_task(
             _stream_answer(

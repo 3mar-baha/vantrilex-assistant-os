@@ -9,6 +9,12 @@ product release tags start independently at v1.0.0.)
 ## [Unreleased]
 
 ### Added
+- **Real stream cancellation on interjection (remediation 1.7, 2026-09-03)**: a newer
+  owner message now sets the cancel Event AND `task.cancel()`s the in-flight stream —
+  the Event alone only landed between deltas, so a turn blocked mid-flight (slow model
+  delta) lived on as a zombie able to fire late edits/voice from a dead turn (audit
+  V-3 closed). The blocked-midstream test proves the abandoned task dies at its await
+  point and its late delta never reaches the bubble.
 - **Hardcoded-line cleanup + string contract (remediation 1.5/1.6, 2026-09-03)**: every
   owner-facing Arabic constant rewritten in Sara's register, mechanically enforced by a
   new AST-based contract test (`tests/test_persona_lines.py`) scanning EVERY string
