@@ -33,17 +33,27 @@ def test_version_matches_changelog():
 
 
 def test_no_live_call_stack_in_artifacts_and_source():
-    """AC2 — scope lock, complete exclusion set: pytgcalls/telethon/pyrogram absent
-    from the deploy artifacts AND every runtime import; mem0/firestore likewise
-    (the settled v1.0 exclusion set, locked)."""
-    forbidden = re.compile(r"pytgcalls|telethon|pyrogram|mem0|firestore", re.IGNORECASE)
+    """AC2 — v1.0's scope lock AMENDED (owner directive 2026-09-03, the v1.1
+    intelligence-suite mission): the SCAFFOLD modules (live_calls.py,
+    telegram_login.py) are now part of the tree — but they keep the deploy
+    artifacts clean: pytgcalls/telethon stay OUT of Dockerfile and
+    requirements (lazy imports only; the lane runs mock without them), and
+    no runtime module imports them at import time. mem0/firestore stay
+    excluded entirely."""
+    forbidden_artifacts = re.compile(r"pytgcalls|telethon|pyrogram|mem0|firestore", re.IGNORECASE)
     for name in ("Dockerfile", "requirements.txt"):
-        assert not forbidden.search((REPO / name).read_text(encoding="utf-8")), (
+        assert not forbidden_artifacts.search((REPO / name).read_text(encoding="utf-8")), (
             f"excluded stack leaked into {name}"
         )
+    # runtime trees: mem0/firestore never; telethon/pyrogram only inside the
+    # documented lazy-call bodies of the two scaffold modules
+    runtime_forbidden = re.compile(r"mem0|firestore", re.IGNORECASE)
+    lazy_allowed = {"src/skills/live_calls.py", "src/telegram_login.py"}
+    lazy_re = re.compile(r"telethon|pyrogram|pytgcalls", re.IGNORECASE)
     for tree in ("src", "bridge", "common"):
         for path in (REPO / tree).rglob("*.py"):
             module = ast.parse(path.read_text(encoding="utf-8"))
+            rel = path.relative_to(REPO).as_posix()
             for node in ast.walk(module):
                 if isinstance(node, ast.Import):
                     imported = [alias.name for alias in node.names]
@@ -52,7 +62,10 @@ def test_no_live_call_stack_in_artifacts_and_source():
                 else:
                     continue
                 for name in imported:
-                    assert not forbidden.search(name), f"{path}: import {name}"
+                    if runtime_forbidden.search(name):
+                        raise AssertionError(f"{path}: import {name}")
+                    if lazy_re.search(name) and rel not in lazy_allowed:
+                        raise AssertionError(f"{path}: import {name} (only the scaffold may)")
 
 
 def test_v100_documents_scope_deferrals():
