@@ -34,6 +34,7 @@ from src.fish_voice import FishFirstVoice, FishVoice
 from src.gateway import GatewayError, OmniRouteClient, Tier
 from src.memory import (
     LONG_TERM_HEADER_AR,
+    AffectiveStateTracker,
     ConversationMemory,
     DailySummarizer,
     VaultMemoryWriter,
@@ -140,6 +141,7 @@ def build_dispatcher(
     coordinator=None,
     decide_modality=None,
     initial_prompt_terms=None,
+    affect=None,
 ) -> Dispatcher:
     """gateway: the OmniRouteClient; wrapped here in the ADR-18 front door.
     transcriber: injectable for tests; production builds the local Whisper one.
@@ -329,6 +331,7 @@ def build_dispatcher(
                 voice_origin=voice_origin,
                 media=media,
                 transcriber=transcriber,
+                affect=affect,
             )
         )
         _STREAMS[message.chat.id] = (task, cancel)
@@ -385,6 +388,7 @@ async def _stream_answer(
     voice_origin: bool = False,
     media: list[dict] | None = None,
     transcriber=None,
+    affect=None,
 ) -> None:
     chat_id = message.chat.id
     streamer = ChatStreamer(bot, chat_id, edit_interval_ms=settings.stream_edit_interval_ms)
@@ -409,6 +413,17 @@ async def _stream_answer(
             if long_term:
                 system = f"{system}\n\n{LONG_TERM_HEADER_AR}\n{long_term}"
         history = memory.history(chat_id) if memory is not None else None
+        # Feature 2 (v1.1): the affect guide rides the envelope — ONE FAST
+        # micro-verdict reading the recent turns + the profile baseline;
+        # any failure injects nothing (the chat never blocks on empathy).
+        # affect: injectable tracker (tests); run_bot builds the real one.
+        if affect is not None and not media:
+            try:
+                guide = await affect.guide(text)
+                if guide:
+                    system = f"{system}\n\n{guide}"
+            except Exception:  # noqa: BLE001 — empathy is best-effort
+                logger.warning("affect guide failed; continuing without it")
         # Owner directives 2026-09-03 (round 2): the reply surface — his EXPLICIT
         # request («رد صوتي/نصي») always wins; otherwise the ROUTER's voice_reply
         # (the model picks the channel in the same FAST verdict — zero extra
@@ -714,6 +729,9 @@ async def run_bot(settings: Settings, bridge=None) -> None:
         tools=tools,
         coordinator=coordinator,
         initial_prompt_terms=boot_terms,  # 2.6: Whisper bias seeded from boot
+        affect=AffectiveStateTracker(
+            brain=gateway, history=[], baseline=""
+        ),  # f2: per-turn tracker reads live history
     )
     summarizer = DailySummarizer(vault, gateway, tz=ZoneInfo(settings.tz))
     # 3.1: the owner-promised loops, all through one testable stitch point —
