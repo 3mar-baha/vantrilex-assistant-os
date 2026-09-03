@@ -640,6 +640,7 @@ def start_background_loops(
     classifier,
     settings: Settings,
     outreach=None,
+    evolution=None,
 ) -> list[asyncio.Task]:
     """Remediation 3.1: the owner-promised background loops, ONE stitch point
     (testable without polling). Brief suppressed by BRIEF_ENABLED=false; gmail
@@ -653,6 +654,10 @@ def start_background_loops(
         tasks.append(asyncio.create_task(journaler.run_forever()))
     if outreach is not None:
         tasks.append(asyncio.create_task(outreach.run_forever()))
+    if evolution is not None:
+        # f4 (v1.1): the nightly self-improvement reflection (~23:40 local,
+        # after the daily summarizer's window — proposals only, never silent)
+        tasks.append(asyncio.create_task(evolution.run_forever()))
     if inbox is not None:
         tasks.append(asyncio.create_task(gmail_poll(inbox, dispatcher, classifier, settings)))
     return tasks
@@ -750,6 +755,7 @@ async def run_bot(settings: Settings, bridge=None) -> None:
     from src.gmail import run_gmail_poll
     from src.skills.evening_journaler import EveningJournaler
     from src.skills.proactive_outreach import ProactiveOutreach
+    from src.skills.self_evolution import SelfEvolutionWorker
 
     journaler = (
         EveningJournaler(
@@ -789,6 +795,7 @@ async def run_bot(settings: Settings, bridge=None) -> None:
         classifier=TriageClassifier(settings, gateway),
         settings=settings,
         outreach=outreach,
+        evolution=SelfEvolutionWorker(brain=gateway, vault=vault, tz=ZoneInfo(settings.tz)),
     )
     try:
         await dp.start_polling(bot, skip_updates=True)
