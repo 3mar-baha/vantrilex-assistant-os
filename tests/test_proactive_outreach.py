@@ -374,3 +374,35 @@ async def test_model_recovery_ends_backoff(tmp_path):
     after = t0 + timedelta(minutes=31)
     assert await engine.fire_once(after) is True  # recovered — sends
     assert bot.sent == ["هلا عمر"]
+
+
+# --- pass-2: stress edges -----------------------------------------------------------
+
+
+async def test_midnight_rollover_resets_daily_cap(tmp_path):
+    """The 3/day cap rolls with the LOCAL day — a new day resets the count
+    (the frozen-date lesson, applied to the outreach state)."""
+    engine, _brain, bot = _rig(
+        tmp_path,
+        brain_reply='{"should": true, "message": "هلا"}',
+        PROACTIVE_COOLDOWN_MIN="0",
+    )
+    day1_evening = datetime(2026, 9, 1, 17, 0, tzinfo=UTC)  # 1 Sep 20:00 Amman
+    for _ in range(3):
+        assert await engine.fire_once(day1_evening) is True
+    assert await engine.fire_once(day1_evening) is False  # cap
+    day2_morning = datetime(2026, 9, 2, 5, 0, tzinfo=UTC)  # 2 Sep 08:00 Amman
+    assert await engine.fire_once(day2_morning) is True  # new local day — reset
+    assert len(bot.sent) == 4
+
+
+async def test_window_boundary_edges(tmp_path):
+    """Exactly 08:00 opens the window; exactly 22:30 still inside — the
+    boundary belongs to the owner's day, not off-by-one."""
+    engine, brain, _bot = _rig(tmp_path, brain_reply='{"should": false}')
+    at_open = datetime(2026, 9, 1, 5, 0, tzinfo=UTC)  # 08:00 Amman sharp
+    at_close = datetime(2026, 9, 1, 19, 30, tzinfo=UTC)  # 22:30 Amman sharp
+    assert await engine.fire_once(at_open) is False  # consulted (window open)
+    assert len(brain.calls) == 1
+    assert await engine.fire_once(at_close) is False  # still inside
+    assert len(brain.calls) == 2

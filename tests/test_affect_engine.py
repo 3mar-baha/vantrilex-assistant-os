@@ -97,3 +97,30 @@ def test_persona_contract_guide_is_arabic_warm_not_clinical():
     owner — it is envelope context for Sara, phrased as guidance."""
     assert "حالة" in AFFECT_GUIDE_HEADER_AR or "سياق" in AFFECT_GUIDE_HEADER_AR
     assert "بيانات" in AFFECT_GUIDE_HEADER_AR or "وليست" in AFFECT_GUIDE_HEADER_AR
+
+
+# --- pass-2: stress + network-hiccup edges ----------------------------------------
+
+
+async def test_affect_slow_brain_does_not_block_forever(tmp_path):
+    """A hanging FAST pool must not stall the turn — the tracker has no
+    timeout of its own, but the shell wraps it best-effort; prove the guide
+    contract: any exception path injects NOTHING (the envelope stays clean)."""
+
+    class HangingBrain(FakeBrain):
+        async def chat(self, messages, *, tier, **kwargs):
+            raise TimeoutError("pool timeout")
+
+    tracker = _tracker(HangingBrain("x"))
+    assert await tracker.guide("شو أخبارك") == ""
+    assert tracker.mode == "neutral"
+
+
+async def test_affect_mode_word_injection_is_bounded(tmp_path):
+    """A malicious/garbled verdict (mode not in the valid set) degrades to
+    neutral — never an injection surface into the envelope."""
+    brain = FakeBrain('{"mode": "<script>", "note": "تجربة"}')
+    tracker = _tracker(brain)
+    guide = await tracker.guide("مرحبا")
+    assert "<script>" not in guide  # invalid mode never rides the envelope
+    assert tracker.mode == "neutral"
