@@ -22,7 +22,6 @@ from src.bot import (
     ENROLL_PROMPT_AR,
     HELP_AR,
     SYSTEM_PROMPT_AR,
-    VOICE_ACK_AR,
     WELCOME_AR,
 )
 from src.gateway import GatewayError
@@ -117,11 +116,24 @@ async def test_brain_failure_sends_apology_and_logs(fake_bot, make_shell, logs):
     assert any("brain" in str(record).lower() for record in logs)
 
 
-async def test_voice_note_acknowledged_without_brain_call(fake_bot, make_shell):
-    """AC11: owner voice note -> static ack, zero gateway calls."""
-    shell, bot = make_shell(), fake_bot()
+async def test_voice_note_acknowledged_without_brain_call(
+    fake_bot, make_shell, monkeypatch, tmp_path
+):
+    """Unenrolled trust level (remediation 1.4): NO static ack lie — the note flows
+    to transcription like any owner note; an empty transcript answers with ONE
+    honest voice note, and the brain is never consulted."""
+    monkeypatch.chdir(tmp_path)
+    shell, bot = make_shell(transcriber=_EmptyTranscriber()), fake_bot()
+
+    async def fake_download(file, destination=None, **kwargs):
+        destination.write(b"FAKE-OGG")
+
+    monkeypatch.setattr(bot, "download", fake_download)
     await shell.dp.feed_update(bot, make_update(1, OWNER_ID, voice=True))
-    assert bot.session.sent("SendMessage")[0].method.text == VOICE_ACK_AR
+    texts = [c.method.text for c in bot.session.sent("SendMessage")]
+    assert texts == []  # no static ack lie, no duplicate — the voice surface speaks
+    voices = bot.session.sent("SendVoice")
+    assert len(voices) == 1  # one honest voice note, single modality
     assert shell.gateway.router_calls == []
     assert shell.gateway.stream_calls == []
 
@@ -138,8 +150,8 @@ class _EmptyTranscriber:
 
 
 async def test_silent_voice_note_gets_honest_voice_reply(fake_bot, make_shell, monkeypatch):
-    """Live 2026-09-01 22:03: a 6-second silent note transcribed empty and the owner
-    was left hanging on a static ack. Sara must answer with an honest VOICE note."""
+    """Live 2026-09-01 22:03 + remediation 1.4: a silent note gets ONE honest
+    surface — a VOICE note (no text duplicate). The memo is still filed."""
     empty = _EmptyTranscriber()
     shell, bot = make_shell(transcriber=empty), fake_bot()
 
@@ -149,11 +161,30 @@ async def test_silent_voice_note_gets_honest_voice_reply(fake_bot, make_shell, m
     monkeypatch.setattr(bot, "download", fake_download)
     await shell.dp.feed_update(bot, make_update(1, OWNER_ID, voice=True))
     assert empty.notes and empty.notes[0]["text"] == ""  # memo still filed
-    texts = [c.method.text for c in bot.session.sent("SendMessage")]
-    assert EMPTY_VOICE_AR in texts
     voices = bot.session.sent("SendVoice")
-    assert len(voices) == 1 and len(voices[0].method.voice.data) > 0
+    assert len(voices) == 1 and len(voices[0].method.voice.data) > 0  # voice surface...
+    assert bot.session.sent("SendMessage") == []  # ...with no text duplicate
+    assert shell.voice.calls == [EMPTY_VOICE_AR]  # the spoken line is the honest one
     assert shell.gateway.stream_calls == []
+
+
+async def test_silent_voice_note_synthesis_dead_falls_back_to_text(
+    fake_bot, make_shell, monkeypatch
+):
+    """Remediation 1.4 fallback: the honest voice note fails to synthesize -> the
+    single text line lands — never silence, never double surfaces."""
+    empty = _EmptyTranscriber()
+    shell = make_shell(transcriber=empty, voice_error=RuntimeError("engine dead"))
+    bot = fake_bot()
+
+    async def fake_download(file, destination=None, **kwargs):
+        destination.write(b"FAKE-OGG")
+
+    monkeypatch.setattr(bot, "download", fake_download)
+    await shell.dp.feed_update(bot, make_update(1, OWNER_ID, voice=True))
+    assert bot.session.sent("SendVoice") == []
+    texts = [c.method.text for c in bot.session.sent("SendMessage")]
+    assert texts == [EMPTY_VOICE_AR]  # one honest text surface
 
 
 async def test_enroll_voice_flow_and_biometric_gate(fake_bot, make_shell, monkeypatch, tmp_path):
@@ -177,8 +208,12 @@ async def test_enroll_voice_flow_and_biometric_gate(fake_bot, make_shell, monkey
         assert (tmp_path / "vault" / "State" / "owner_voiceprint.enc").exists()
 
         await _run(shell, bot, make_update(3, OWNER_ID, voice=True))
-        # Real Whisper rejects FAKE-OGG -> honest empty-voice line (2026-09-01 fix).
-        assert bot.session.sent("SendMessage")[-1].method.text == EMPTY_VOICE_AR
+        # Real Whisper rejects FAKE-OGG -> honest EMPTY_VOICE voice note (remediation
+        # 1.4: single modality — no text duplicate beside it).
+        assert (
+            bot.session.sent("SendMessage")[-1].method.text == ENROLL_DONE_AR
+        )  # nothing text-new after the enroll line
+        assert len(bot.session.sent("SendVoice")) == 1
 
         monkeypatch.setattr(VoiceBiometrics, "_embed_sync", lambda self, ogg: [0.8, -0.6, 0.0])
         await _run(shell, bot, make_update(4, OWNER_ID, voice=True))
@@ -404,8 +439,9 @@ async def test_exchange_persisted_and_learned_after_stream(fake_bot, make_shell)
 async def test_voice_origin_reply_arrives_as_voice_note(
     fake_bot, make_shell, monkeypatch, tmp_path
 ):
-    """Voice in, voice out: an enrolled owner voice note gets the streamed text reply
-    AND an ar-JO Ogg Opus voice note of the same reply."""
+    """Voice in, VOICE out only (remediation 1.4): an enrolled owner voice note gets
+    the streamed answer as ONE voice note — zero duplicated answer text bubble
+    (audit C-3: the old text+voice double delivery died here)."""
     monkeypatch.chdir(tmp_path)
     transcriber = FakeTranscriber()
     shell = make_shell(
@@ -430,6 +466,53 @@ async def test_voice_origin_reply_arrives_as_voice_note(
         voices = bot.session.sent("SendVoice")
         assert len(voices) == 1  # enroll path sends no voice reply; the answer does
         assert b"OGGOPUS-FAKE-BYTES" in voices[0].method.voice.data
+
+        # remediation 1.4: the answer lands ONCE, as the voice note itself — no
+        # placeholder bubble, no edits, no answer-text SendMessage (audit C-3).
+        answer_text_bubbles = [
+            c.method.text
+            for c in bot.session.sent("SendMessage")
+            if c.method.text not in (ENROLL_PROMPT_AR, ENROLL_DONE_AR, "…")
+        ]
+        assert answer_text_bubbles == []
+        assert bot.session.sent("EditMessageText") == []
+        assert shell.voice.calls == ["رتبت لك الموضوع"]  # synthesis input = answer only, ack-free
+    finally:
+        _ENROLL_PENDING.clear()
+
+
+async def test_voice_origin_synthesis_failure_falls_back_to_text(
+    fake_bot, make_shell, monkeypatch, tmp_path
+):
+    """Voice origin + synthesis dead -> the answer still arrives as ONE text bubble
+    (the honest fallback branch of remediation 1.4) — never silence."""
+    monkeypatch.chdir(tmp_path)
+    transcriber = FakeTranscriber()
+    shell = make_shell(
+        VAULT_ENC_KEY=Fernet.generate_key().decode(),
+        voice_error=RuntimeError("voice engine down"),
+        router_replies=[_router("tier2", "تم")],
+        stream_programs=[StreamProgram(deltas=("الجواب الصوتي",))],
+        transcriber=transcriber,
+    )
+    bot = fake_bot()
+
+    async def fake_download(file, destination=None, **kwargs):
+        destination.write(b"FAKE-OGG")
+
+    monkeypatch.setattr(bot, "download", fake_download)
+    monkeypatch.setattr(VoiceBiometrics, "_embed_sync", lambda self, ogg: [0.6, 0.8, 0.0])
+    try:
+        await _run(shell, bot, make_update(1, OWNER_ID, "/enroll-voice", command=True))
+        await _run(shell, bot, make_update(2, OWNER_ID, voice=True))
+        await _run(shell, bot, make_update(3, OWNER_ID, voice=True))
+        assert bot.session.sent("SendVoice") == []  # synthesis dead -> no voice note
+        texts = [
+            c.method.text
+            for c in bot.session.sent("SendMessage")
+            if c.method.text not in (ENROLL_PROMPT_AR, ENROLL_DONE_AR, "…")
+        ]
+        assert texts[-1] == "الجواب الصوتي"  # ...but the answer text arrives
     finally:
         _ENROLL_PENDING.clear()
 

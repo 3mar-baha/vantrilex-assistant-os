@@ -66,7 +66,6 @@ HELP_AR: Final[str] = (
     "أفحص بريدك وتقويمك ومهامك، أطلعلك حالة جهازك من الجسر، وأفتحلك أي برنامج "
     "عالكمبيوتر (بتأكيدك). ابعتلي رسالة صوتية وبجاوبك صوت."
 )
-VOICE_ACK_AR: Final[str] = "سمعت الملاحظة الصوتية، لسأ أعالجها وأرجعلك."
 EMPTY_VOICE_AR: Final[str] = "ما سمعت شي واضح بالملاحظة، جرب ابعتها مرة ثانية وهسا القريب من الميك."
 APOLOGY_AR: Final[str] = "سامحني، صار خلل تقني بسيط. جرب مرة ثانية."
 EMPTY_REPLY_AR: Final[str] = "وصلتني رسالتك بس ما قدرت أجيب رد مناسب. جرب صياغة ثانية."
@@ -139,8 +138,6 @@ def build_dispatcher(
     @dp.message(F.voice)
     async def on_voice(message: Message, bot: Bot) -> None:
         enrolling = message.chat.id in _ENROLL_PENDING
-        if not (enrolling or bio.enrolled):
-            await message.answer(VOICE_ACK_AR)  # unenrolled trust level: static ack only
         ogg = await _download_voice(bot, message)
         if enrolling:
             _ENROLL_PENDING.discard(message.chat.id)
@@ -229,16 +226,19 @@ async def _download_voice(bot: Bot, message: Message) -> bytes:
 
 
 async def _voice_fail_reply(message: Message, bot: Bot, voice) -> None:
-    """Silent/failed transcription: an honest voice note back — the owner is never
-    left hanging on a static ack (live 2026-09-01: a 6s silent note got two acks)."""
-    await message.answer(EMPTY_VOICE_AR)
+    """Silent/failed transcription: ONE honest surface (remediation 1.4) — a voice
+    note begets a voice note; only when synthesis itself dies does the text line
+    land. The owner is never left hanging (live 2026-09-01: a 6s silent note got
+    two static acks)."""
     if voice is None:
+        await message.answer(EMPTY_VOICE_AR)
         return
     try:
         ogg = await voice.synthesize(EMPTY_VOICE_AR)
         await bot.send_voice(message.chat.id, BufferedInputFile(ogg, filename="sara.ogg"))
-    except Exception:  # noqa: BLE001 — the text line already landed
-        logger.warning("voice fail-note synthesis failed; text reply already delivered")
+    except Exception:  # noqa: BLE001 — synthesis dead: the honest text line is the fallback
+        logger.warning("voice fail-note synthesis failed; honest text fallback lands")
+        await message.answer(EMPTY_VOICE_AR)
 
 
 async def _stream_answer(
@@ -259,7 +259,7 @@ async def _stream_answer(
     chat_id = message.chat.id
     streamer = ChatStreamer(bot, chat_id, edit_interval_ms=settings.stream_edit_interval_ms)
     try:
-        await bot.send_chat_action(chat_id, "typing")
+        await bot.send_chat_action(chat_id, "record_voice" if voice_origin else "typing")
         system = SYSTEM_PROMPT_AR
         if vault is not None:
             try:
@@ -272,11 +272,36 @@ async def _stream_answer(
             if long_term:
                 system = f"{system}\n\n{LONG_TERM_HEADER_AR}\n{long_term}"
         history = memory.history(chat_id) if memory is not None else None
-        reply = await streamer.stream_reply(
-            front.handle(text, system=system, history=history, tools=tools),
-            cancel,
-            transient_ack=True,
-        )
+        if voice_origin:
+            # Remediation 1.4: a voice note begets ONE surface — a voice note. The
+            # stream is consumed off the wire (no text bubble at all); the answer
+            # lands as a single voice note, or as a single honest text fallback
+            # when synthesis dies (audit C-3 double delivery is dead).
+            ack, answer, spoke = "", "", False
+            async for delta in front.handle(text, system=system, history=history, tools=tools):
+                if cancel.is_set():
+                    break
+                if not ack:
+                    ack = delta  # dispatcher contract: first delta is the transient ack
+                    continue
+                answer += delta
+            spoken = answer.strip() or ack  # silent tool turn: the ack is the speech
+            if voice is not None:
+                try:
+                    ogg = await voice.synthesize(spoken)
+                    await bot.send_voice(chat_id, BufferedInputFile(ogg, filename="sara.ogg"))
+                    spoke = True
+                except Exception:  # noqa: BLE001 — synthesis dead -> honest text fallback
+                    logger.warning("voice reply synthesis failed; text fallback lands")
+            if not spoke and spoken.strip():
+                await message.answer(spoken)  # one text surface, never a duplicate
+            reply = answer
+        else:
+            reply = await streamer.stream_reply(
+                front.handle(text, system=system, history=history, tools=tools),
+                cancel,
+                transient_ack=True,
+            )
     except GatewayError as error:
         logger.error("brain stream failed: {}", error)
         await message.answer(APOLOGY_AR)
@@ -286,22 +311,16 @@ async def _stream_answer(
         await message.answer(APOLOGY_AR)
         return
     if not reply.strip():
-        if streamer.ack_consumed is None:
+        if not voice_origin and streamer.ack_consumed is None:
             await message.answer(EMPTY_REPLY_AR)
-        # else: the bubble already carries the transient ack (silent tool lane —
-        # the tool spoke to the owner directly); never add a fake line after it.
+        # voice-origin silent turns spoke their ack; text-origin silent tool lanes
+        # keep the transient ack bubble — never a fake "empty reply" line after it.
         return
     if memory is not None:
         memory.remember(chat_id, "user", text)
         memory.remember(chat_id, "assistant", reply)
     if writer is not None:
         _persist_exchange(writer, text, reply)
-    if voice_origin and voice is not None:
-        try:
-            ogg = await voice.synthesize(reply)
-            await bot.send_voice(chat_id, BufferedInputFile(ogg, filename="sara.ogg"))
-        except Exception:  # noqa: BLE001 — voice-out is a bonus; the text reply already landed
-            logger.warning("voice reply synthesis failed; text reply already delivered")
 
 
 def _persist_exchange(writer, user_text: str, reply_text: str) -> None:

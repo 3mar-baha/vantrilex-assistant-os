@@ -9,6 +9,16 @@ product release tags start independently at v1.0.0.)
 ## [Unreleased]
 
 ### Added
+- **Voice-origin single modality (remediation 1.4, 2026-09-03)**: a voice note now
+  begets exactly ONE surface. The voice-origin turn consumes the stream off the wire
+  (record_voice action, NO text bubble) and delivers the answer as a single voice note;
+  only when synthesis dies does the answer land as a single honest text fallback
+  (audit C-3 closed: the text-bubble-plus-voice-note double delivery is dead).
+  `_voice_fail_reply` (silent/failed transcription) is single-modality too — voice first,
+  text only on synthesis failure. The stray unenrolled `VOICE_ACK_AR` static line
+  («سمعت الملاحظة الصوتية، لسأ أعالجها...» — a lie: nothing was processed, and the
+  comment claimed "ack only" with no return) is deleted; the unenrolled note flows to
+  transcription under middleware-only trust like any owner note.
 - **Transient ack, never glued (remediation 1.3, 2026-09-03)**: the Tier-1 ack now lives
   exactly as the owner demanded — it shows instantly in the bubble for reassurance, then
   is DELETED from the text the moment answer deltas start streaming. Memory, the daily
