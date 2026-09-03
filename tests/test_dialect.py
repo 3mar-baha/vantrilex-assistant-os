@@ -91,3 +91,22 @@ def test_shape_for_tts_owner_notes_override_seed():
 
 def test_shape_for_tts_plain_text_untouched():
     assert shape_for_tts("مرحبا كيف حالك اليوم") == "مرحبا كيف حالك اليوم"
+
+
+def test_shape_for_tts_strips_theatrical_laughter():
+    """Owner live-retest 2026-09-03: «هههه» reached the TTS engine and rendered
+    as an audible laugh that fits no context. Laughter tokens are dropped whole;
+    ordinary words (هلا، هيك، هذا) with single/embedded ه survive untouched."""
+    assert shape_for_tts("هههه من عيوني") == "من عيوني"
+    assert shape_for_tts("ههه خخخ يا عمي") == "يا عمي"
+    assert shape_for_tts("haha تمام") == "تمام"
+    # embedded ه is a letter, not laughter — a whole word never vanishes
+    assert shape_for_tts("هلا عمي") != ""
+
+
+def test_shape_for_tts_strips_quotation_marks():
+    """Owner directive 2026-09-03 (Fish calm-tone filter): excess quote marks
+    are removed before the wire — the engine reads the words, never punctuation."""
+    assert shape_for_tts("«من عيوني» يا عمر") == "من عيوني يا عمر"
+    assert shape_for_tts('قال "تمام" وخرج') == "قال تمام وخرج"
+    assert shape_for_tts("««كثير اقتباس»»") == "كثير اقتباس"

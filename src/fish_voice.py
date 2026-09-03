@@ -13,6 +13,7 @@ already in .env — the voice lane borrows it; the brain still routes via OmniRo
 import httpx
 from loguru import logger
 
+from src.dialect import shape_for_tts
 from src.voice import transcode_mp3_to_opus
 
 FISH_SPEECH_URL = "https://openrouter.ai/api/v1/audio/speech"
@@ -46,7 +47,11 @@ class FishVoice:
         )
 
     async def synthesize(self, text: str) -> bytes:
-        text = text.strip()
+        # Owner live-retest 2026-09-03: the Fish lane fed RAW text to the wire —
+        # «هههه» became an out-of-context laugh, emoji/tanween mangled the
+        # dialect. Shape exactly like the Edge lane; if shaping empties the
+        # string (pure emoji), pass the original through — never blank.
+        text = (shape_for_tts(text) or text).strip()
         if not text:
             raise ValueError("blank text — nothing to synthesize")
         if not self.available:

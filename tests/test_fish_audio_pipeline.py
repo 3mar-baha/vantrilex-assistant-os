@@ -73,7 +73,32 @@ async def test_speech_request_shape_and_model():
     payload = req.read()
     assert b"fish-audio/s2.1-pro-free:free" in payload
     assert b"56c2f0c23924449781863ff20aceb5fa" in payload
-    assert "أهلاً عمر".encode() in payload
+    assert "أهلا عمر".encode() in payload  # shaped like the Edge lane (تسكين strips the tanween)
+
+
+async def test_speech_input_is_dialect_shaped_like_edge():
+    """Owner live-retest 2026-09-03 04:16: Fish received RAW text (emoji, هههه,
+    tanween) while the Edge lane shapes — so سمسم laughed out of context and
+    mangled dialect words. The Fish lane must feed shape_for_tts output to the
+    wire, exactly like the Edge lane does."""
+    rec = _Recorder(body=MP3)
+    fish = FishVoice(model="m", voice_ref="r", api_key="k", transport=rec)
+    await fish.synthesize("هسا بدي أفتح 🐱 كتير")
+    payload = rec.requests[0].read()
+    assert "أفتح".encode() in payload  # lexicon + emoji strip applied on the Fish lane
+    assert "🐱".encode() not in payload
+
+
+async def test_speech_input_strips_theatrical_laughter():
+    """«هههه» in Sara's prose becomes audible laughter out of context (owner
+    live-retest 04:16). The TTS shaper must drop laughter tokens entirely —
+    the words carry the warmth; a synthesized laugh never fits the context."""
+    rec = _Recorder(body=MP3)
+    fish = FishVoice(model="m", voice_ref="r", api_key="k", transport=rec)
+    await fish.synthesize("هههه من عيوني هسا أجهزها")
+    payload = rec.requests[0].read()
+    assert "هههه".encode() not in payload
+    assert "من عيوني هسَّا".encode() in payload
 
 
 async def test_empty_text_raises_before_any_request():

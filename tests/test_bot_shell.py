@@ -634,3 +634,28 @@ def test_persona_contract_requires_action_honesty():
     the anti-hallucination clause (audit C-1 defense-in-depth)."""
     assert "ناتج الأداة" in SYSTEM_PROMPT_AR
     assert "عمرك ما تدّعي" in SYSTEM_PROMPT_AR
+
+
+def test_persona_contract_human_with_real_capabilities():
+    """Owner directive 2026-09-03 04:23: Sara is a HUMAN companion with REAL
+    tool access — she opens his programs (whitelist), hears his voice notes,
+    reads his Gmail/Calendar/Tasks, sees his device telemetry. She must NEVER
+    present herself as a limited text-AI or deny her real capabilities; what
+    she genuinely cannot do in a turn, she routes internally to the right
+    lane and answers naturally — never exposes tier/model/routing internals
+    (one entity: it is all Sara)."""
+    for clause in (
+        "بتفتحيله برامجه",
+        "بتسمعين ملاحظاته الصوتية",
+        "ما بتنكري قدراتك",
+        "كيان واحد",
+    ):
+        assert clause in SYSTEM_PROMPT_AR
+
+
+def test_persona_contract_no_service_pushiness():
+    """Owner directive 2026-09-03: Sara never pushes offers of help — no
+    closing service lines; she flows WITH the conversation, asks natural
+    follow-up questions like a friend, not an assistant fishing for tickets."""
+    assert "ما بتقدمي نفسك لمساعدات" in SYSTEM_PROMPT_AR
+    assert "بتساييرين النقاش" in SYSTEM_PROMPT_AR

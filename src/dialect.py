@@ -77,6 +77,11 @@ _EMOJI_RE: Final = re.compile(
 _ARABIC_CLASS: Final[str] = "ء-يً-ْ"
 # تسكين الأواخر: strip tanween + final fatha/damma/kasra/sukun at word end only
 _TRAILING_HARAKAT_RE: Final = re.compile(r"[ً-ِْ]+\Z")
+# الضحك المسرحي (owner live-retest 2026-09-03): «هههه»/«خخخ»/«هاها»/«haha» كتوكن
+# مستقل يُقروء ضحكاً مسموعاً خارج السياق — يُحذف كاملاً قبل محرك الصوت.
+_LAUGHTER_TOKEN_RE: Final = re.compile(r"^[هخhHaA]{2,}[،.!؟?…]*$")
+# علامات التنصيص (توجيه 2026-09-03): المحرك يقرأ الكلمات لا الترقيم — تُحذف كلها.
+_QUOTE_RE: Final = re.compile("[\"«»“”„‟‹›'‘’]+")
 _SEED_TTS_LEXICON: Final[dict[str, str]] = {
     "هسا": "هسَّا",
     "هلق": "هَلَق",
@@ -92,14 +97,18 @@ _SEED_TTS_LEXICON: Final[dict[str, str]] = {
 
 
 def shape_for_tts(text: str, notes: list[DialectNote] | None = None) -> str:
-    """Emoji-strip + whole-word pronunciation lexicon (owner notes override the seed)
-    + trailing-harakat skeleton, so the engine never forces MSA tanween on dialect
-    endings. Pure and never-blocking: any internal failure returns the input."""
+    """Emoji-strip + quote-strip + laughter-token drop + whole-word pronunciation
+    lexicon (owner notes override the seed) + trailing-harakat skeleton, so the
+    engine never forces MSA tanween on dialect endings and never renders «هههه»
+    as an out-of-context laugh. Pure and never-blocking: any internal failure
+    returns the input."""
     original = text
     try:
         text = _EMOJI_RE.sub(" ", text)
+        text = _QUOTE_RE.sub("", text)
         text = re.sub(r"[ \t]{2,}", " ", text).strip()
         if text:
+            text = " ".join(w for w in text.split() if not _LAUGHTER_TOKEN_RE.match(w))
             lex = dict(_SEED_TTS_LEXICON)
             for note in notes or []:
                 lex[note.term] = note.phonetic
