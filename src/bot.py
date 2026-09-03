@@ -199,6 +199,13 @@ def build_dispatcher(
             )
             await _voice_fail_reply(message, bot, voice)
             return
+        # 2.3 (audit C-2, sacred floor): mirror on_text — a pending PC
+        # confirmation answered by VOICE «نعم» is consumed by the coordinator,
+        # never streamed to the brain.
+        if coordinator is not None and coordinator.pending_active():
+            consumed = await coordinator.handle_owner_reply(text)
+            if consumed is not None:
+                return
         _spawn_stream(message, bot, text, voice_origin=True)
 
     @dp.message(F.text)

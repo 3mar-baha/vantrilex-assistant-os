@@ -606,7 +606,15 @@ product.)
       untouched (daemon still guards). Gate: 461 passed / 86.50%. Fixes
       audit C-7 (live «افتحي الآلة الحاسبة» → «ما بقدر» root cause #2 —
       the Arabic name never matched the English whitelist key).
-      Next: 2.3 voice-confirmation guard (bot.py on_voice).
+
+      **2.3 DONE**: on_voice now mirrors on_text's pending check AFTER
+      successful transcription (bot.py): a pending PC confirmation answered
+      with a VOICE «نعم» is consumed by the coordinator, never streamed to
+      the brain. 1 new test (pending + voice «نعم» → consumed, router+stream
+      untouched). Gate: 462 passed / 86.54% / security+docs green. Fixes
+      audit C-2 (sacred floor: a voice «نعم» used to sail past the
+      coordinator into a chat answer while the launch silently never fired).
+      Next: 2.4 confirmation memory (coordinator exchanges → memory.remember).
 
 ## Open items / blockers
 

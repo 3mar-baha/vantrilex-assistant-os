@@ -9,6 +9,12 @@ product release tags start independently at v1.0.0.)
 ## [Unreleased]
 
 ### Added
+- **Voice-confirmation guard (remediation 2.3, audit C-2, sacred floor)**:
+  a pending PC confirmation answered with a VOICE «نعم» is now consumed by
+  the coordinator right after transcription — mirroring on_text's pending
+  check inside on_voice. Previously a voice «نعم» sailed past the
+  coordinator into a normal chat answer while the confirmed launch silently
+  never fired. The brain is never consulted for a confirmation reply.
 - **Arabic app aliases (remediation 2.2, audit C-7)**: the owner can now launch
   apps by their natural Arabic names — «الآلة الحاسبة» resolves to `calculator`,
   «أوبسيديان» to `obsidian`, «المفكرة» to `Notepad` (+ الكروم، سبوتيفاي، واتساب،

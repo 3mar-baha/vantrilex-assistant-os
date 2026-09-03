@@ -545,6 +545,41 @@ async def test_pending_launch_reply_consumed_by_coordinator(fake_bot, make_shell
     assert shell.gateway.router_calls == []  # brain never consulted
 
 
+async def test_pending_launch_voice_yes_consumed_by_coordinator(
+    fake_bot, make_shell, monkeypatch, tmp_path
+):
+    """Remediation 2.3 (audit C-2, sacred floor): a pending PC confirmation
+    answered with a VOICE note «نعم» is consumed by the coordinator after
+    transcription — never streamed to the brain, the launch executes."""
+    monkeypatch.chdir(tmp_path)  # hermetic: never the real ./vault voiceprint
+    coordinator = _CoordinatorDouble()
+    transcriber = FakeTranscriber(text="نعم")
+    shell = make_shell(
+        VAULT_ENC_KEY=Fernet.generate_key().decode(),
+        coordinator=coordinator,
+        transcriber=transcriber,
+        router_replies=[_router("direct", "ما رح نفذ شي")],
+    )
+    bot = fake_bot()
+
+    async def fake_download(file, destination=None, **kwargs):
+        destination.write(b"FAKE-OGG")
+
+    monkeypatch.setattr(bot, "download", fake_download)
+    monkeypatch.setattr(VoiceBiometrics, "_embed_sync", lambda self, ogg: [0.6, 0.8, 0.0])
+    try:
+        await _run(shell, bot, make_update(1, OWNER_ID, "/enroll-voice", command=True))
+        await _run(shell, bot, make_update(2, OWNER_ID, voice=True))
+        coordinator.replies.clear()
+
+        await _run(shell, bot, make_update(3, OWNER_ID, voice=True))
+        assert coordinator.replies == ["نعم"]  # consumed as the confirmation
+        assert shell.gateway.router_calls == []  # brain never consulted
+        assert shell.gateway.stream_calls == []  # no stream spawned
+    finally:
+        _ENROLL_PENDING.clear()
+
+
 async def test_streams_carry_history_and_long_term_envelope(fake_bot, make_shell):
     """Dual-tier memory: system block carries the vault profile excerpt; the second
     turn streams with the first exchange as rolling history; both turns remembered."""
