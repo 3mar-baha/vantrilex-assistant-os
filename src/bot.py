@@ -538,16 +538,20 @@ def start_background_loops(
     dispatcher,
     classifier,
     settings: Settings,
+    outreach=None,
 ) -> list[asyncio.Task]:
     """Remediation 3.1: the owner-promised background loops, ONE stitch point
     (testable without polling). Brief suppressed by BRIEF_ENABLED=false; gmail
-    poll suppressed by a degraded Google boot (inbox None); every task is the
-    caller's to cancel (run_bot's finally reaps them all)."""
+    poll suppressed by a degraded Google boot (inbox None); outreach (3.2, the
+    proactive engine) suppressed by PROACTIVE_ENABLED=false inside its own
+    loop; every task is the caller's to cancel (run_bot's finally reaps them)."""
     tasks: list[asyncio.Task] = [asyncio.create_task(summarizer.run_forever())]
     if settings.brief_enabled and brief is not None:
         tasks.append(asyncio.create_task(brief.run_forever()))
     if settings.journaler_enabled and journaler is not None:
         tasks.append(asyncio.create_task(journaler.run_forever()))
+    if outreach is not None:
+        tasks.append(asyncio.create_task(outreach.run_forever()))
     if inbox is not None:
         tasks.append(asyncio.create_task(gmail_poll(inbox, dispatcher, classifier, settings)))
     return tasks
@@ -641,6 +645,7 @@ async def run_bot(settings: Settings, bridge=None) -> None:
     from src.email_triage import Dispatcher, TriageClassifier
     from src.gmail import run_gmail_poll
     from src.skills.evening_journaler import EveningJournaler
+    from src.skills.proactive_outreach import ProactiveOutreach
 
     journaler = (
         EveningJournaler(
@@ -658,6 +663,17 @@ async def run_bot(settings: Settings, bridge=None) -> None:
     triage_dispatcher = (
         Dispatcher(bot, settings.authorized_user_id, voice, settings) if inbox is not None else None
     )
+    # 3.2: Sara INITIATES — the proactive engine (HEAVY-judged check-ins
+    # within the safety window; every gate lives inside its own loop).
+    outreach = ProactiveOutreach(
+        brain=gateway,
+        bot=bot,
+        chat_id=settings.authorized_user_id,
+        vault=vault,
+        suite=suite,
+        settings=settings,
+        state_path=Path(settings.vault_local_path) / "State" / "proactive.json",
+    )
     loop_tasks = start_background_loops(
         brief=composer,
         journaler=journaler,
@@ -667,6 +683,7 @@ async def run_bot(settings: Settings, bridge=None) -> None:
         dispatcher=triage_dispatcher,
         classifier=TriageClassifier(settings, gateway),
         settings=settings,
+        outreach=outreach,
     )
     try:
         await dp.start_polling(bot, skip_updates=True)

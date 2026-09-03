@@ -65,6 +65,13 @@ ENV_EXAMPLE: dict[str, str] = {
     "JOURNALER_WINDOW_START": "18:00",
     "JOURNALER_WINDOW_END": "19:30",
     "DAILY_LOGS_DIR": "Daily_Logs",
+    # Proactive outreach (remediation 3.2) — ENV_EXAMPLE mirror contract
+    "PROACTIVE_ENABLED": "true",
+    "PROACTIVE_INTERVAL_MIN": "45",
+    "PROACTIVE_MAX_PER_DAY": "3",
+    "PROACTIVE_WINDOW_START": "08:00",
+    "PROACTIVE_WINDOW_END": "22:30",
+    "PROACTIVE_COOLDOWN_MIN": "45",
     "VOICEPRINT_THRESHOLD": "0.60",
     "VOICEPRINT_MODEL": "speechbrain/spkrec-ecapa-voxceleb",
     "WHISPER_MODEL_SIZE": "small",

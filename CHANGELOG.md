@@ -8,7 +8,23 @@ product release tags start independently at v1.0.0.)
 
 ## [Unreleased]
 
-### Changed
+### Added
+- **Proactive outreach engine (remediation 3.2 — Sara INITIATES, the heart of
+  the initiative axis)**: a new ~45-min smart loop
+  (`src/skills/proactive_outreach.py`) gathers real context (today's
+  Daily_Logs tail + User_Info excerpt + local time) and asks the HEAVY model
+  (nemotron) ONE question — does the state deserve a proactive message to
+  the owner? A yes lands as ONE warm Jordanian check-in. Safety gates, all
+  BEFORE any model call: `PROACTIVE_ENABLED`, window 08:00–22:30 local,
+  cooldown between sends, hard cap 3/day, calendar-conflict guard (a booked
+  owner is not pinged, the §2.6 pattern). Model failure or an unparsable
+  verdict = a silent skip (free pools are bursty; silence is never wrong).
+  The verdict prompt FORBIDS claiming actions — outreach is a check-in,
+  never a fabricated accomplishment. Cadence state persists in
+  `State/proactive.json` (the journaler pattern). Wired into
+  `start_background_loops` as the fifth loop. New settings:
+  `PROACTIVE_ENABLED/INTERVAL_MIN/MAX_PER_DAY/WINDOW_START/WINDOW_END/
+  COOLDOWN_MIN` (+ .env.example + conftest mirror).
 - **The three absent loops now run (remediation 3.1)**: `start_background_loops`
   — one testable stitch point in bot.py — launches the 07:30 morning brief
   (`BriefComposer.run_forever`), the evening check-in

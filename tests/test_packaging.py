@@ -210,6 +210,7 @@ def test_durable_state_only_in_vault():
         "src/google_auth.py": "OAuth token cache (ADR-15 explicit allowlist member)",
         "src/app_indexer.py": "config/whitelist.json merge — git-tracked owner config (v1.0.2), not durable state",
         "src/skills/evening_journaler.py": "journal state + Daily_Logs ledger (vault mirror)",
+        "src/skills/proactive_outreach.py": "outreach cadence state (cooldown/cap) — same vault-mirror State/ pattern as the journaler (remediation 3.2)",
         "src/skills/social_enrollment.py": "sealed voiceprint vectors + dossiers (encrypted at rest)",
         "src/skills/voice_biometric_auth.py": "sealed owner voiceprint (ADR-17) + tempfile model cache",
         "src/skills/voice_to_vault_transcriber.py": "Voice_Memos notes — this IS the vault",

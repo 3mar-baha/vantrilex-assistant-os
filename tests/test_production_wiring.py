@@ -127,3 +127,29 @@ async def test_no_gmail_stack_degrades_to_three_loops(make_settings):
         for t in tasks:
             t.cancel()
         await asyncio.gather(*tasks, return_exceptions=True)
+
+
+async def test_outreach_engine_joins_the_loops(make_settings):
+    """3.2: the proactive engine rides the same stitch — five loops with it,
+    and PROACTIVE_ENABLED=false is enforced INSIDE the engine's own gating
+    (the loop task still exists, fire_once stays silent)."""
+    loops, poll, settings = _rig(make_settings)
+    tasks = start_background_loops(
+        brief=loops["brief"],
+        journaler=loops["journaler"],
+        summarizer=loops["summarizer"],
+        gmail_poll=poll,
+        inbox=None,
+        dispatcher=object(),
+        classifier=object(),
+        settings=settings,
+        outreach=_LoopSpy(),  # 3.2 engine double — a run_forever loop
+    )
+    try:
+        await asyncio.sleep(0.05)
+        assert len(tasks) == 4  # summary + brief + journaler + outreach
+        assert _LoopSpy.launched == 4  # outreach entered its loop too
+    finally:
+        for t in tasks:
+            t.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)

@@ -674,6 +674,21 @@ product.)
       (vault/State empty — audit §14) to actually deliver; journaler+summary
       work without it. Next: 3.2 proactive outreach engine.
 
+      **3.2 DONE (Sara INITIATES — the initiative axis lives)**: new
+      `src/skills/proactive_outreach.py`: a ~45-min loop gathers today's
+      Daily_Logs tail + User_Info tail excerpt + local time, then ONE HEAVY
+      (nemotron) JSON verdict `{"should", "message"}` — a yes sends ONE warm
+      Jordanian check-in to the owner. All gates BEFORE the model call:
+      PROACTIVE_ENABLED, window 08:00-22:30 local, cooldown, cap 3/day,
+      calendar-conflict guard (§2.6 pattern; degraded calendar = free).
+      Model/parse failures = silent skip; the prompt forbids claiming
+      actions; cadence state persists in State/proactive.json (journaler
+      pattern, justified in the packaging AC6 allowlist). Wired as the
+      FIFTH loop in start_background_loops. 7 new settings
+      PROACTIVE_* (+.env.example +conftest mirror). 13 new engine tests +
+      1 wiring test. Gate: 492 passed / 86.51% / security+docs green.
+      Next: 3.3 pruning batch 1 (dead code deletion).
+
 ## Open items / blockers
 
 - **ACTIVE BLOCKER (2026-08-31, owner pausing for today)**: Oracle signup declined the

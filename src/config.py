@@ -57,6 +57,14 @@ class Settings(BaseSettings):
     journaler_enabled: bool = True  # JOURNALER_ENABLED (evening check-in, §2.6)
     journaler_window_start: str = "18:00"  # JOURNALER_WINDOW_START (HH:MM, Amman)
     journaler_window_end: str = "19:30"  # JOURNALER_WINDOW_END (HH:MM, Amman local)
+    # Proactive outreach engine (remediation 3.2, owner directive 3): Sara
+    # INITIATES — a ~45-min HEAVY-judged check-in loop within safe bounds.
+    proactive_enabled: bool = True  # PROACTIVE_ENABLED
+    proactive_interval_min: int = 45  # PROACTIVE_INTERVAL_MIN (loop cadence)
+    proactive_max_per_day: int = 3  # PROACTIVE_MAX_PER_DAY (hard cap)
+    proactive_window_start: str = "08:00"  # PROACTIVE_WINDOW_START (HH:MM, local)
+    proactive_window_end: str = "22:30"  # PROACTIVE_WINDOW_END (HH:MM, local)
+    proactive_cooldown_min: int = 45  # PROACTIVE_COOLDOWN_MIN (between sends)
     daily_logs_dir: str = "Daily_Logs"  # DAILY_LOGS_DIR (ADR-21 mandatory directory)
     voiceprint_threshold: float = 0.60  # VOICEPRINT_THRESHOLD (ADR-17; live-calibrated 2026-09-03: owner-intra 0.76, impostor 0.11)
     voiceprint_model: str = "speechbrain/spkrec-ecapa-voxceleb"  # VOICEPRINT_MODEL (ECAPA-TDNN)
