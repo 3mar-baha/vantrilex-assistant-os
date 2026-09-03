@@ -155,3 +155,23 @@ whitelist merge on owner machine: 223 discovered / 154 added / 63 system-skipped
 HANDOFF component row + README badge). Release sequence: full gate green (294 passed /
 1 skipped / 85.73% branch) → dry-run green → annotated tag `v1.0.2` pushed → GitHub
 Release published (temp-file notes pattern). Record: `docs/PROJECT-JOURNEY.md` §14.
+
+## Remediation arc — 2026-09-02→03: forensic audit + phases 1–2 (+3.1)
+
+Skill rotation: **none ingested** (owner-directed remediation run, closed loop on `main`).
+Forensic audit (6 axes × 43 agents + adversarial verify) → `docs/AUDIT_REPORT.md` (10
+CONFIRMED findings C-1..C-10) → owner-approved `docs/REMEDIATION_PLAN.md` (3 phases).
+**Phase 1** (voice/persona/consent, steps 1.1–1.9, commits `ad042dd`…`9e5a63e` class):
+transient ack, single-modality voice, string purity + AST contract, task.cancel zombie
+kill, standalone-affirmative consent, Fish Audio primary voice. **Phase 2** (2.1–2.7,
+CLOSED 2026-09-03): keyword net `aac5e41` (C-1) · Arabic app aliases + honest unknown
+line `5d939b1` (C-7) · voice-confirmation consumption `4ebefcd` (C-2, sacred floor) ·
+confirmation memory + orphan yes/no guard `3e41560` (C-8) · live dialect learning loop
+`b903921` («تعلمي:» → vault + live lexicon) · Whisper pinned to Jordanian Arabic
+`d2e2bcf` · envelope tail-slice `91b5531`. **Phase 3 opened same day**: 3.1 absent
+loops live `9bdb3a4` (brief 07:30 + journaler 18:00–19:30 + gmail watch + daily
+summary through one testable `start_background_loops` stitch). Gate at Phase-2 close:
+**478 passed / 1 skipped / 86.47% branch / security + docs green**; sacred floors
+(owner-middleware, whitelist-guardrail, guest-lockdown, consent-grammar) **43/43**.
+Records: `docs/REMEDIATION_PLAN.md` per-step ✅ blocks · `.claude/PHASE-STATE.md` ·
+`docs/PROJECT-JOURNEY.md` (audit + remediation sections).
