@@ -17,10 +17,10 @@ from tests.test_omniroute_gateway import _chunk, _collect, _Scripted, _sse
 # Owner architecture update (2026-09-01): two strong models only — the conversation
 # lane (minimax, fb gpt-oss-120b) is Sara's exclusive speaker; the tool lane
 # (nemotron-3-ultra) executes every Gmail/Calendar/Tasks/bridge call.
-FAST_PIN = "openrouter/minimax/minimax-m2.7:free"
+FAST_PIN = "openrouter/minimax/minimax-m3:free"
 FAST_FB1 = "groq/openai/gpt-oss-120b"
 MEDIUM_PIN = "groq/openai/gpt-oss-120b"
-MEDIUM_FB1 = "openrouter/minimax/minimax-m2.7:free"
+MEDIUM_FB1 = "openrouter/minimax/minimax-m3:free"
 HEAVY_PIN = "openrouter/nvidia/nemotron-3-ultra-550b-a55b:free"
 HEAVY_FB1 = "groq/openai/gpt-oss-120b"
 

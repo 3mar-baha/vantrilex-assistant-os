@@ -546,6 +546,19 @@ product.)
       «نعم بس استنى» launches nothing. Phase-2 owner prerequisites still
       pending: /enroll-voice + one-time Google OAuth bootstrap (vault/State
       empty — the LOCAL cause of live Gmail failures per audit §14).
+      RETEST RESULT (2026-09-03, owner session 03:57–04:06): PASS = voice→one
+      voice note (Fish/سمسم) · identity «انتي بوابة؟» refused correctly · honest
+      failure on «افتحي الآلة الحاسبة» (launch fell to 2.2 aliases — «انسي»).
+      FAIL = (a) biometric gate locked out the OWNER's own notes right after
+      /enroll-voice (two guest lockdowns at 04:05/04:06) — real ECAPA measure:
+      owner intra-speaker 0.7637 vs TTS impostor 0.1071, threshold 0.75 sat in
+      the owner's variance band → calibrated to 0.60; (b) m2.7 conversation
+      lane garble («معكcepted», leaked «[سارة تضيف…]» stage direction) → owner
+      directive: FAST swapped to minimax-m3:free (live-probed via OmniRoute:
+      200, clean Arabic, ~4.8s TTFT; also MEDIUM fallback). Both fixes landed
+      same day (config + tests + docs synced); owner re-run needed after restart.
+      NOTE: enroll note was 24KB opus; keep /enroll-voice notes ≥5s for a
+      stronger print.
 
 ## Open items / blockers
 

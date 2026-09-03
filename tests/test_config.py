@@ -23,7 +23,7 @@ def test_settings_accept_all_env_example_vars(make_settings):
     s = make_settings()
     assert s.omniroute_base_url == "http://localhost:20128/v1"
     assert s.omniroute_api_key == "sk-omniroute-local-key"
-    assert s.fast_model == "openrouter/minimax/minimax-m2.7:free"
+    assert s.fast_model == "openrouter/minimax/minimax-m3:free"
     assert s.medium_model == "groq/openai/gpt-oss-120b"
     assert s.heavy_model == "openrouter/nvidia/nemotron-3-ultra-550b-a55b:free"
     assert s.telegram_bot_token.startswith("1234567890:")
@@ -58,3 +58,13 @@ def test_settings_fail_fast_on_missing_core_vars(make_settings, field):
 def test_owner_id_coerced_from_string(make_settings):
     """AC3: AUTHORIZED_USER_ID coerces from its env string form."""
     assert make_settings(authorized_user_id="987654321").authorized_user_id == 987654321
+
+
+def test_voiceprint_threshold_calibrated_2026_09_03(make_settings):
+    """Live-calibrated threshold (owner retest feedback, 2026-09-03): the sealed
+    owner print vs the owner's own notes measures ~0.76 cosine across utterances
+    (real ECAPA measurement); the TTS impostor control measures 0.11. The old
+    0.75 default sat ABOVE natural intra-speaker variance — genuine owner voice
+    notes scored just under it and were locked out as guests. 0.60 keeps every
+    measured impostor 0.49 below while leaving the owner's voice room to vary."""
+    assert make_settings().voiceprint_threshold == 0.60

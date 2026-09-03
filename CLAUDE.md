@@ -12,7 +12,7 @@ strictly-zero-cost executive AI assistant named **Sara (سارة)**.
 - **Brain Engine (3-tier, ADR-16 amended 2026-09-01 — two strong models)**: OmniRoute
   Gateway (`http://localhost:20128/v1`, co-located with the core) routes through three
   tiers behind the **Fast Front-Door Dispatcher** (ADR-18). CONVERSATION LANE (Sara's
-  exclusive speaker): TIER 1 `FAST_MODEL=openrouter/minimax/minimax-m2.7:free`
+  exclusive speaker): TIER 1 `FAST_MODEL=openrouter/minimax/minimax-m3:free`
   (fallback `groq/openai/gpt-oss-120b`) — router, instant Jordanian ack «من عيوني هسا
   ببدأ...», direct chat, memory narration, fact extraction; TIER 2
   `MEDIUM_MODEL=groq/openai/gpt-oss-120b` (fallback minimax) — conversation depth /

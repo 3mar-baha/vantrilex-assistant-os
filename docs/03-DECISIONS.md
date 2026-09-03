@@ -165,6 +165,16 @@ Supersedes draft preference for Google Cloud Run deployment.
   The router now classifies + acks only; EVERY chat path (direct → Tier.FAST,
   tier2 → MEDIUM, tier3 → HEAVY) streams through `_plain_messages` with the full
   envelope. Rolling buffer widened 15 → 50 messages (owner directive).
+- **Amendment (owner directive 2026-09-03 — minimax m3 for the conversation lane)**: the
+  owner's live retest judged m2.7's Jordanian too weak (mixed-language garble like
+  «معكcepted», leaked stage directions). `minimax-m3:free` — live-probed via OmniRoute
+  (HTTP 200, clean Arabic, ~4.8s first token) — replaces m2.7 as FAST pin and MEDIUM
+  fallback; m2.7 fully retired from all chains.
+- **Amendment (live-calibration 2026-09-03 — voiceprint threshold)**: real ECAPA
+  measurement on the owner's enrolled print vs his own later notes scored ~0.76 cosine
+  (intra-speaker variance), while the TTS impostor control scored 0.11. The ADR-17
+  default 0.75 sat above genuine owner notes — the biometric gate locked out the owner
+  himself. Threshold lowered to 0.60: every measured impostor stays 0.49 below.
 - **Rejected on evidence**: gemma-4 (owner: «لغته ركيكة كعربية» — weak Arabic prose);
   nemotron-3-super + ling-3.0-flash (role inversion — addressed the owner as Sara);
   glm-5.2/gemma-26b/inkling (reasoning burned the whole budget → empty replies).

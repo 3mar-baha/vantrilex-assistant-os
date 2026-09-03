@@ -58,7 +58,7 @@ class Settings(BaseSettings):
     journaler_window_start: str = "18:00"  # JOURNALER_WINDOW_START (HH:MM, Amman)
     journaler_window_end: str = "19:30"  # JOURNALER_WINDOW_END (HH:MM, Amman local)
     daily_logs_dir: str = "Daily_Logs"  # DAILY_LOGS_DIR (ADR-21 mandatory directory)
-    voiceprint_threshold: float = 0.75  # VOICEPRINT_THRESHOLD (ADR-17 owner-voice match)
+    voiceprint_threshold: float = 0.60  # VOICEPRINT_THRESHOLD (ADR-17; live-calibrated 2026-09-03: owner-intra 0.76, impostor 0.11)
     voiceprint_model: str = "speechbrain/spkrec-ecapa-voxceleb"  # VOICEPRINT_MODEL (ECAPA-TDNN)
     whisper_model_size: str = "small"  # WHISPER_MODEL_SIZE (local faster-whisper, §2.5)
     whisper_compute_type: str = "int8"  # WHISPER_COMPUTE_TYPE (CPU int8 quantization)

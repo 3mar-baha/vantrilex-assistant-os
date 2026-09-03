@@ -155,9 +155,16 @@ class _EmptyTranscriber:
         self.notes.append({"text": text, "duration_s": duration_s})
 
 
-async def test_silent_voice_note_gets_honest_voice_reply(fake_bot, make_shell, monkeypatch):
+async def test_silent_voice_note_gets_honest_voice_reply(
+    fake_bot, make_shell, monkeypatch, tmp_path
+):
     """Live 2026-09-01 22:03 + remediation 1.4: a silent note gets ONE honest
-    surface — a VOICE note (no text duplicate). The memo is still filed."""
+    surface — a VOICE note (no text duplicate). The memo is still filed.
+    Hermetic (2026-09-03 power-cut lesson): ./vault in the repo root now holds
+    the owner's REAL sealed voiceprint (live /enroll-voice) — without chdir the
+    test reads it, FAKE-OGG fails the biometric decode and the turn locks down
+    as guest instead of answering. Every on_voice test must own a tmp vault."""
+    monkeypatch.chdir(tmp_path)  # never the real ./vault with its live voiceprint
     empty = _EmptyTranscriber()
     shell, bot = make_shell(transcriber=empty), fake_bot()
 
@@ -175,10 +182,12 @@ async def test_silent_voice_note_gets_honest_voice_reply(fake_bot, make_shell, m
 
 
 async def test_silent_voice_note_synthesis_dead_falls_back_to_text(
-    fake_bot, make_shell, monkeypatch
+    fake_bot, make_shell, monkeypatch, tmp_path
 ):
     """Remediation 1.4 fallback: the honest voice note fails to synthesize -> the
-    single text line lands — never silence, never double surfaces."""
+    single text line lands — never silence, never double surfaces. Hermetic:
+    tmp vault (the repo ./vault carries the owner's real live voiceprint)."""
+    monkeypatch.chdir(tmp_path)
     empty = _EmptyTranscriber()
     shell = make_shell(transcriber=empty, voice_error=RuntimeError("engine dead"))
     bot = fake_bot()

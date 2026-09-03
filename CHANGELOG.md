@@ -8,6 +8,25 @@ product release tags start independently at v1.0.0.)
 
 ## [Unreleased]
 
+### Changed
+- **FAST model upgraded to minimax-m3 (owner directive 2026-09-03, live-retest feedback)**:
+  the owner's live Phase-1 retest caught m2.7's conversation lane producing
+  mixed-language garble («معكcepted», «بتقدرتفتحها») and leaked stage directions
+  («[سارة تضيف معلومة تفضيل جديدة]» printed verbatim into the chat). `FAST_MODEL` is
+  now `openrouter/minimax/minimax-m3:free` (also the MEDIUM fallback) — live-probed
+  through OmniRoute before pinning: HTTP 200, clean Arabic «جاهزة», ~4.8s first token.
+  Pins synced across `.env.example`, conftest mirror, test_config/test_dispatcher
+  pins, CLAUDE.md §1, ARCHITECTURE §3 diagram, RUNBOOK probe row, OWNER-NEXT-STEPS
+  env block, DECISIONS ADR-16 amendment (2026-09-03). m2.7 fully retired.
+- **Voiceprint threshold live-calibrated 0.75 → 0.60 (2026-09-03)**: the same retest
+  exposed the ADR-17 gate rejecting the OWNER's own voice notes right after a
+  successful `/enroll-voice` (two consecutive guest lockdowns). Real ECAPA measurement
+  on the sealed print: owner intra-speaker cosine 0.7637 vs TTS impostor control
+  0.1071 — the old 0.75 default sat inside the owner's natural variance band and
+  locked him out. 0.60 keeps every measured impostor 0.49 below while giving the
+  owner's voice normal range. `VOICEPRINT_THRESHOLD` in `.env.example`/conftest +
+  `config.py` default + RUNBOOK enrollment row + DECISIONS ADR-17 amendment synced.
+
 ### Added
 - **Consent grammar hardening (remediation 1.8, 2026-09-03)**: an affirmative is a
   STANDALONE short yes — at most 3 tokens, opening with an affirmative, carrying no

@@ -364,7 +364,8 @@ and stops ledger writes.
 1. Send `/enroll-voice` to Sara, then ONE short voice note — she seals your
    ECAPA-TDNN voiceprint to `{VAULT_LOCAL_PATH}/State/owner_voiceprint.enc`
    (Fernet-encrypted with `VAULT_ENC_KEY`). Every later voice note is then
-   biometrically verified (<50 ms CPU, `VOICEPRINT_THRESHOLD=0.75`).
+   biometrically verified (<50 ms CPU, `VOICEPRINT_THRESHOLD=0.60` — live-calibrated
+   2026-09-03: owner intra-speaker cosine ~0.76, TTS impostor 0.11).
 2. Non-owner voices: a recognized contact (enrolled in `State/voiceprints/`)
    gets the warm message-taking reply only; anyone unknown lands in Guest
    Mode — one staging note under `Voice_Memos/Pending_Speakers/` (encrypted
@@ -422,7 +423,7 @@ state (no local cache to invalidate).
 | Voice note fails to send | ffmpeg missing/mispath | Re-run preflight; check `ffmpeg -version` inside the venv shell |
 | `GatewayError: all models exhausted (<tier chain>)` | A whole tier's chain down/quota — pools drained or OmniRoute offline | Check OmniRoute dashboard pools + `curl -m 5 http://localhost:20128/v1/models`; the log line names the last cause per model in the chain |
 | `GatewayError: fatal HTTP 401/403 on <model>` | Bad/missing gateway key | Verify `OMNIROUTE_API_KEY` in `.env`; never appears in logs (only status + body snippet) |
-| `dispatcher ... -> default tier2` (warning) | Tier-1 router failed or replied non-JSON (ADR-18 degradation) | Service continues at Tier 2; inspect the logged router reply; persistent repeats -> probe the `openrouter/minimax/minimax-m2.7:free` pool |
+| `dispatcher ... -> default tier2` (warning) | Tier-1 router failed or replied non-JSON (ADR-18 degradation) | Service continues at Tier 2; inspect the logged router reply; persistent repeats -> probe the `openrouter/minimax/minimax-m3:free` pool |
 | Container restart-looping / supervisor exits 2 | `OMNIROUTE_CMD` missing or a child fails to spawn | The image ships `ENV OMNIROUTE_CMD="omniroute run"`; if the build ran before cloning `scripts/omniroute`, rebuild — the log line names the failing child |
 | `GET /health` returns 404/426 | Hitting a non-public path, or core not up yet | Only `/health` answers HTTP (200); the WSS endpoint is auth-gated — wait for the supervisor's two start lines then re-probe |
 | Caddy serves no TLS / no cert | DuckDNS record stale or port 80 blocked in the VNIC security list | Update the DuckDNS record to the VM's Public IP; re-check Ingress Rules (guide §2.5) |

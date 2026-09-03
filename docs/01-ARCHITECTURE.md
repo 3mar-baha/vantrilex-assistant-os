@@ -43,7 +43,7 @@ graph TD
     subgraph VM [Oracle Always-Free Docker - 24/7, Caddy TLS, restart unless-stopped]
         Core <--> Disp[Fast Front-Door Dispatcher ADR-18]
         Disp <--> Omni[OmniRoute :20128 - 3-tier ADR-16]
-        Omni <--> T1[Tier1 FAST: minimax-m2.7 - talker]
+        Omni <--> T1[Tier1 FAST: minimax-m3 - talker]
         Omni <--> T2[Tier2 MEDIUM: gpt-oss-120b - depth]
         Omni <--> T3[Tier3 HEAVY: nemotron-3-ultra-550b - tool lane]
         Core <--> TTS[Edge-TTS -> BytesIO -> ffmpeg -> Ogg Opus]
