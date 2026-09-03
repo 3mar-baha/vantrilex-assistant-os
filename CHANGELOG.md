@@ -8,6 +8,14 @@ product release tags start independently at v1.0.0.)
 
 ## [Unreleased]
 
+### Fixed
+- **Proactive failure backoff (live-test finding 2026-09-03 21:52–22:00)**:
+  when the brain is unreachable (gateway down), the outreach loop no longer
+  retries the full model chain every ~30 s tick — a verdict failure parks
+  the engine for 30 minutes (`last_failure_at` in the state file); a
+  recovered gateway ends the backoff on the next attempt. The live run
+  burned 9 minutes × 6 calls/cycle against a dead OmniRoute.
+
 ### Removed
 - **Dead code pruned (remediation 3.3, ~2,515 lines)**: `config/agents_config.json`
   (zero consumers, stale Gemini/Sana pins), `src/expansion.py`, `src/syllabus.py`

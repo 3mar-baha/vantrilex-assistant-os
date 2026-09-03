@@ -730,6 +730,35 @@ product.)
       (08:00-22:30, max 3/day) arrive unprompted. Docker build pending
       owner-side (WSL off).
 
+      ### LIVE-TEST ROUND 1 (2026-09-03 21:51–22:00, owner) — findings + fixes
+      Context: the owner ran ONLY the core (`python -m src.main`) — OmniRoute
+      was NOT running; Google OAuth never bootstrapped. RESULTS: the three
+      remediated loops all FIRED (brief + journaler arrived 21:51, proactive
+      cycled — first live proof of 3.1/3.2), sections degraded honestly
+      («غير متوفر حالياً»), memos counted (2). FAILURES, all explained:
+      (a) every chat turn died to APOLOGY — gateway transport failures
+      (OmniRoute not running; owner confirmed). NO code defect.
+      (b) proactive retried the FULL chain every ~30s tick for 9 min (6
+      calls/cycle) — design flaw in MY 3.2: FIXED — verdict failure now
+      parks the engine 30 min (`last_failure_at`), recovery ends the
+      backoff; 2 new tests (hammer-parked, recovery-sends). Gate 447/87.15%.
+      (c) «Google refresh grant failed: HTTP 400» on brief/journaler —
+      NOT a refresh defect: there is NO token file at all
+      (vault/State/google_token.json.enc absent); empty-bearer requests
+      surface as the 400 label. The loops correctly degraded. Fix is the
+      owner-side OAuth bootstrap (`py -3.12 -m src.google_auth`, RUNBOOK §6).
+      (d) brief arrived 21:51 not 07:30 — correct catch-up behavior
+      (due() = past fire time + not-sent-today; idempotent, no spam).
+      (e) journaler arrived 21:51 outside its 18:00-19:30 window — the
+      slot gate fires on `now < slot` but a boot AFTER the window keeps
+      `fire_once` eligible (state had no last_ledger_date) — ACCEPTED
+      first-boot catch-up; if the owner wants window-strict behavior (skip
+      the day entirely on late boot), one line in fire_once. Not changed
+      without a ruling.
+      OWNER RUN ORDER (the actual gap): terminal 1 = OmniRoute (sara.ps1
+      starts it / `omniroute run`), terminal 2 = core. `python -m src.main`
+      alone is the core child only.
+
 ## Open items / blockers
 
 - **ACTIVE BLOCKER (2026-08-31, owner pausing for today)**: Oracle signup declined the

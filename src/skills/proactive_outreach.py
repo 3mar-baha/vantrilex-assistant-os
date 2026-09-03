@@ -29,6 +29,10 @@ from src.gateway import Tier
 from src.vault import split_frontmatter
 
 POLL_TICK_SECONDS = 30
+# Live 2026-09-03 21:52-22:00: a dead gateway turned the 30s tick into a
+# 6-call/cycle retry storm. A verdict failure parks the outreach for this
+# window — the initiative axis must be quiet when the brain is unreachable.
+FAILURE_BACKOFF = timedelta(minutes=30)
 LEDGER_TAIL_LINES = 25
 PROFILE_EXCERPT_CHARS = 600
 _VERDICT_JSON_RE = re.compile(r"\{.*\}", re.DOTALL)
@@ -86,7 +90,8 @@ class ProactiveOutreach:
             return False
 
     def _gated_by_state(self, now: datetime, state: dict) -> bool:
-        """All state gates BEFORE any model call: cooldown, daily cap, window."""
+        """All state gates BEFORE any model call: cooldown, daily cap, window,
+        and the failure backoff (a dead brain parks the outreach quietly)."""
         if not self._settings.proactive_enabled:
             return True
         if not self._in_window(now):
@@ -98,9 +103,8 @@ class ProactiveOutreach:
                 return True
         if state.get("sent_today_count", 0) >= self._settings.proactive_max_per_day:
             return True
-        if state.get("sent_date") == now.astimezone(self._tz).date().isoformat():
-            pass  # count already carries the day; kept for clarity
-        return False
+        failed = state.get("last_failure_at")
+        return failed is not None and now - datetime.fromisoformat(failed) < FAILURE_BACKOFF
 
     # --- context --------------------------------------------------------------
 
@@ -178,8 +182,13 @@ class ProactiveOutreach:
                 temperature=0.2,
                 max_tokens=300,
             )
-        except Exception:  # noqa: BLE001 — free pools are bursty; silence is fine
-            logger.warning("proactive verdict call failed (silent skip)")
+        except Exception:  # noqa: BLE001 — park the outreach; retry after backoff
+            state["last_failure_at"] = now.isoformat()
+            self._save_state(state)
+            logger.warning(
+                "proactive verdict call failed — parked {}min",
+                FAILURE_BACKOFF // timedelta(minutes=1),
+            )
             return False
         match = _VERDICT_JSON_RE.search(reply)
         if not match:

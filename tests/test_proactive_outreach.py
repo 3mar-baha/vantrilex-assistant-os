@@ -7,7 +7,7 @@ NEVER claims actions."""
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from src.config import Settings
@@ -251,3 +251,67 @@ def test_prompt_forbids_action_claims(tmp_path):
     engine, _brain, _bot = _rig(tmp_path)
     prompt = engine._verdict_prompt("ctx", "13:00")
     assert "ما تدّعي" in prompt or "لا تدّعي" in prompt or "لا تعتادي تنفيذ" in prompt
+
+
+async def test_model_failure_backs_off_not_hammer(tmp_path):
+    """Live 2026-09-03 21:52-22:00: a dead gateway made the loop retry the FULL
+    chain every ~30s for 9 minutes (6 model calls/cycle). A failure must park
+    the outreach for a backoff window — the next ticks inside it never consult
+    the model."""
+    calls: list = []
+
+    class DeadBrain(FakeBrain):
+        async def chat(self, messages, *, tier, **kwargs):
+            calls.append(1)
+            raise RuntimeError("gateway down")
+
+    brain = DeadBrain("x")
+    bot = FakeBot()
+    engine = ProactiveOutreach(
+        brain=brain,
+        bot=bot,
+        chat_id=OWNER_ID,
+        vault=FakeVault(fail=True),
+        suite=FakeSuite(),
+        settings=_settings(tmp_path),
+        state_path=tmp_path / "State" / "proactive.json",
+    )
+    t0 = TUE_2026_09_01
+    assert await engine.fire_once(t0) is False  # first failure: one call, backoff starts
+    assert len(calls) == 1
+    for _ in range(5):  # five more ticks inside the backoff window
+        assert await engine.fire_once(t0) is False
+    assert len(calls) == 1  # parked — no hammering
+    after = t0 + timedelta(minutes=31)  # past the 30-min backoff
+    assert await engine.fire_once(after) is False  # one more attempt (still down)...
+    assert len(calls) == 2  # ...and parks again
+
+
+async def test_model_recovery_ends_backoff(tmp_path):
+    """After the backoff, a healthy verdict flows normally."""
+
+    class HalfDead(FakeBrain):
+        fail = True
+
+        async def chat(self, messages, *, tier, **kwargs):
+            if self.fail:
+                self.fail = False
+                raise RuntimeError("gateway down")
+            return await super().chat(messages, tier=tier, **kwargs)
+
+    brain = HalfDead('{"should": true, "message": "هلا عمر"}')
+    bot = FakeBot()
+    engine = ProactiveOutreach(
+        brain=brain,
+        bot=bot,
+        chat_id=OWNER_ID,
+        vault=FakeVault(fail=True),
+        suite=FakeSuite(),
+        settings=_settings(tmp_path),
+        state_path=tmp_path / "State" / "proactive.json",
+    )
+    t0 = TUE_2026_09_01
+    assert await engine.fire_once(t0) is False  # fails, parks
+    after = t0 + timedelta(minutes=31)
+    assert await engine.fire_once(after) is True  # recovered — sends
+    assert bot.sent == ["هلا عمر"]
