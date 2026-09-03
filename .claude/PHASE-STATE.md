@@ -641,6 +641,15 @@ product.)
       gains custom_voice injection. Gate: 472 passed / 86.66% / security+docs
       green. Next: 2.6 Whisper Arabic pinning.
 
+      **2.6 DONE**: `_infer_sync` pins Whisper to `language="ar"` +
+      `beam_size=5` + `initial_prompt` seeded with the dialect context (owner
+      name + Jordanian marker + the boot «تعلمي:» pairs); `update_prompt_terms`
+      refreshes the transcription bias live when the owner teaches a new pair
+      (the 2.5 loop extended to the receiving side); run_bot seeds BOTH lanes
+      (voice lexicon + whisper prompt) from Dialect_Notes at boot. 2 new tests
+      (kwargs pinning + learned-pairs ride). Gate: 474 passed / 86.59% /
+      security+docs green. Next: 2.7 memory tail-slice.
+
 ## Open items / blockers
 
 - **ACTIVE BLOCKER (2026-08-31, owner pausing for today)**: Oracle signup declined the

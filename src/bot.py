@@ -42,7 +42,7 @@ from src.pc_actions import PCActionCoordinator
 from src.skills.social_enrollment import VoiceprintRegistry
 from src.skills.telegram_chat_streamer import ChatStreamer
 from src.skills.voice_biometric_auth import VoiceBiometrics, verify_or_lockdown
-from src.skills.voice_to_vault_transcriber import VoiceToVault
+from src.skills.voice_to_vault_transcriber import _DEFAULT_PROMPT_TERMS, VoiceToVault
 from src.telemetry import TelemetryClient
 from src.tools import ToolRegistry
 from src.vault import VaultClient
@@ -121,13 +121,15 @@ def build_dispatcher(
     tools=None,
     coordinator=None,
     decide_modality=None,
+    initial_prompt_terms=None,
 ) -> Dispatcher:
     """gateway: the OmniRouteClient; wrapped here in the ADR-18 front door.
     transcriber: injectable for tests; production builds the local Whisper one.
     vault/memory/writer/tools/coordinator: dual-tier memory + tool-lane wiring;
     None keeps the legacy bare-chat behavior (tests, degraded boots).
     decide_modality: the reply-surface chooser (owner 2026-09-03: 70/30 mirror
-    + explicit request); None falls back to the shipped skill."""
+    + explicit request); None falls back to the shipped skill.
+    initial_prompt_terms: 2.6 — the Whisper Arabic bias seed (boot pairs)."""
     dp = Dispatcher()
     dp.update.outer_middleware(OwnerOnlyMiddleware(settings.authorized_user_id))
     front = FrontDoorDispatcher(gateway, settings)
@@ -137,12 +139,16 @@ def build_dispatcher(
 
         decide = decide_reply_modality
     if transcriber is None:
+        trans_kwargs = {}
+        if initial_prompt_terms is not None:
+            trans_kwargs["initial_prompt_terms"] = initial_prompt_terms
         transcriber = VoiceToVault(
             model_size=settings.whisper_model_size,
             compute_type=settings.whisper_compute_type,
             executor=ThreadPoolExecutor(max_workers=1, thread_name_prefix="whisper"),
             vault_dir=Path(settings.vault_local_path) / settings.voice_memos_dir,
             tz=ZoneInfo(settings.tz),
+            **trans_kwargs,
         )
     bio = VoiceBiometrics(
         embedding_path=Path(settings.vault_local_path) / "State" / "owner_voiceprint.enc",
@@ -304,6 +310,7 @@ def build_dispatcher(
                 tools=tools,
                 voice_origin=voice_origin,
                 media=media,
+                transcriber=transcriber,
             )
         )
         _STREAMS[message.chat.id] = (task, cancel)
@@ -359,12 +366,15 @@ async def _stream_answer(
     tools=None,
     voice_origin: bool = False,
     media: list[dict] | None = None,
+    transcriber=None,
 ) -> None:
     chat_id = message.chat.id
     streamer = ChatStreamer(bot, chat_id, edit_interval_ms=settings.stream_edit_interval_ms)
     if vault is not None:
         # 2.5 (dead-loop fix): «تعلمي:» — background, never blocks the reply
-        task = asyncio.create_task(_learn_dialect(vault, text, voice, ZoneInfo(settings.tz)))
+        task = asyncio.create_task(
+            _learn_dialect(vault, text, voice, ZoneInfo(settings.tz), transcriber)
+        )
         _PERSIST_TASKS.add(task)
         task.add_done_callback(_PERSIST_TASKS.discard)
     try:
@@ -459,11 +469,11 @@ def _persist_exchange(writer, user_text: str, reply_text: str) -> None:
 DIALECT_NOTES_PATH: Final[str] = "02_Areas/Profile/Dialect_Notes.md"
 
 
-async def _learn_dialect(vault, text: str, voice, tz: ZoneInfo) -> None:
+async def _learn_dialect(vault, text: str, voice, tz: ZoneInfo, transcriber=None) -> None:
     """Remediation 2.5 (dead learning loop): «تعلمي: term -> phonetic» —
     read Dialect_Notes → dialect.learn merge → vault upsert → refresh the LIVE
-    voice lexicon. Best-effort: any failure logs and skips, the reply is never
-    blocked (M1 contract)."""
+    voice lexicon AND the transcription bias. Best-effort: any failure logs and
+    skips, the reply is never blocked (M1 contract)."""
     try:
         from src.dialect import learn, parse_notes
 
@@ -475,9 +485,17 @@ async def _learn_dialect(vault, text: str, voice, tz: ZoneInfo) -> None:
         if updated is None:
             return
         await vault.upsert(DIALECT_NOTES_PATH, updated, message="sara: dialect learning")
+        parsed = parse_notes(updated)
         update = getattr(voice, "update_notes", None)
         if callable(update):
-            update(parse_notes(updated))  # the live lexicon (Edge + Fish), no reboot
+            update(parsed)  # the live lexicon (Edge + Fish), no reboot
+        refresh_prompt = getattr(transcriber, "update_prompt_terms", None)
+        if callable(refresh_prompt):  # 2.6: the learned pairs bias transcription too
+            refresh_prompt(
+                (f"{n.term} -> {n.phonetic}" for n in parsed)
+                if parsed
+                else tuple(_DEFAULT_PROMPT_TERMS)
+            )
         logger.info("dialect learning: vault updated + live lexicon refreshed")
     except Exception:  # noqa: BLE001 — teaching is best-effort, never blocks the reply
         logger.warning("dialect learning failed (non-blocking)")
@@ -529,9 +547,13 @@ async def run_bot(settings: Settings, bridge=None) -> None:
     try:  # 2.5: seed the live voice lexicon from the vault at boot (best-effort)
         from src.dialect import parse_notes
 
-        voice.update_notes(parse_notes(await vault.read(DIALECT_NOTES_PATH)))
+        boot_notes = parse_notes(await vault.read(DIALECT_NOTES_PATH))
+        voice.update_notes(boot_notes)
     except Exception as error:  # noqa: BLE001 — no notes = no lexicon, the bot still boots
         logger.warning("boot dialect notes load skipped: {}", error)
+        boot_notes = []
+    # 2.6: the same pairs bias Whisper's Arabic transcription from boot
+    boot_terms = tuple(f"{n.term} -> {n.phonetic}" for n in boot_notes) or None
     memory = ConversationMemory()
     writer = VaultMemoryWriter(vault, gateway, tz=ZoneInfo(settings.tz))
     bot = Bot(token=settings.telegram_bot_token)
@@ -586,6 +608,7 @@ async def run_bot(settings: Settings, bridge=None) -> None:
         writer=writer,
         tools=tools,
         coordinator=coordinator,
+        initial_prompt_terms=boot_terms,  # 2.6: Whisper bias seeded from boot
     )
     summarizer = DailySummarizer(vault, gateway, tz=ZoneInfo(settings.tz))
     summary_task = asyncio.create_task(summarizer.run_forever())

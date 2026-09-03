@@ -31,15 +31,49 @@ class FakeWhisper:
     def __init__(self, segments=None):
         self.segments = list(_DEFAULT_SEGMENTS if segments is None else segments)
         self.audios: list = []
+        self.kwargs: list[dict] = []
 
     def transcribe(self, audio, **kwargs):
         self.audios.append(audio)
+        self.kwargs.append(kwargs)
         return list(self.segments), object()
 
 
-def _make(tmp_path, model=None, loader=None) -> VoiceToVault:
+class FakeWhisperSpy(FakeWhisper):
+    """Records nothing beyond kwargs — used by remediation 2.6 contract tests."""
+
+
+async def test_transcribe_pinned_to_arabic_dialect_context(tmp_path):
+    """Remediation 2.6 (audit mishear class): Whisper must be pinned to Arabic
+    with the Jordanian dialect context as the initial_prompt and beam_size=5 —
+    the «كفيك»-style mishears are choked at the source."""
+    model = FakeWhisper()
+    vv = _make(tmp_path, model)
+    await vv.transcribe(_real_ogg(tmp_path))
+    kwargs = model.kwargs[0]
+    assert kwargs.get("language") == "ar"
+    assert kwargs.get("beam_size") == 5
+    prompt = kwargs.get("initial_prompt") or ""
+    assert prompt.strip(), "initial_prompt must carry the dialect context"
+    # the prompt leans Jordanian colloquial + carries the owner's name
+    assert any(w in prompt for w in ("عمر", "أردني", "عامية"))
+
+
+async def test_transcribe_prompt_rides_learned_notes(tmp_path):
+    """2.5+2.6 loop: notes injected into the transcriber ride the initial_prompt
+    — the owner's learned pairs bias transcription too, not just synthesis."""
+    model = FakeWhisper()
+    vv = _make(tmp_path, model, initial_prompt_terms=("كفيك -> كفايك",))
+    await vv.transcribe(_real_ogg(tmp_path))
+    assert "كفيك" in model.kwargs[0]["initial_prompt"]
+
+
+def _make(tmp_path, model=None, loader=None, initial_prompt_terms=None) -> VoiceToVault:
     if loader is None:
         loader = (lambda size, compute: model) if model is not None else None
+    kwargs = {}
+    if initial_prompt_terms is not None:
+        kwargs["initial_prompt_terms"] = initial_prompt_terms
     return VoiceToVault(
         model_size="small",
         compute_type="int8",
@@ -47,6 +81,7 @@ def _make(tmp_path, model=None, loader=None) -> VoiceToVault:
         vault_dir=tmp_path / "Voice_Memos",
         model_loader=loader,
         tz=AMMAN,
+        **kwargs,
     )
 
 

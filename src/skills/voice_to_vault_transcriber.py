@@ -24,6 +24,12 @@ from loguru import logger
 
 AMMAN: Final[ZoneInfo] = ZoneInfo("Asia/Amman")
 
+# Remediation 2.6 (audit mishear class): pin faster-whisper to Jordanian
+# colloquial Arabic — language + beam + an initial_prompt seeded with the
+# dialect context (and the owner's learned pairs when provided) so
+# «كفيك»-class mishears are choked at the source.
+_DEFAULT_PROMPT_TERMS: Final[tuple[str, ...]] = ("عمر، مالك سارة، يحكي عربي عامي أردني.",)
+
 
 class TranscriberError(RuntimeError):
     """ffmpeg decode or whisper model failure — callers degrade, never hang."""
@@ -75,6 +81,7 @@ class VoiceToVault:
         vault_dir: Path,
         model_loader: Callable[[str, str], object] | None = None,
         tz: ZoneInfo = AMMAN,
+        initial_prompt_terms: tuple[str, ...] = _DEFAULT_PROMPT_TERMS,
     ) -> None:
         self._model_size = model_size
         self._compute_type = compute_type
@@ -82,7 +89,12 @@ class VoiceToVault:
         self._vault_dir = Path(vault_dir)
         self._load = model_loader or _load_model
         self._tz = tz
+        self._prompt_terms = initial_prompt_terms
         self._whisper: object | None = None
+
+    def update_prompt_terms(self, terms: tuple[str, ...]) -> None:
+        """2.5/2.6 loop: «تعلمي:» refreshes the transcription bias live (no reboot)."""
+        self._prompt_terms = terms
 
     def _model(self) -> object:
         if self._whisper is None:
@@ -97,7 +109,14 @@ class VoiceToVault:
 
     def _infer_sync(self, pcm: bytes) -> tuple[list, object]:
         audio = np.frombuffer(pcm, dtype=np.int16).astype(np.float32) / 32768.0
-        segments, info = self._model().transcribe(audio)  # type: ignore[attr-defined]
+        # 2.6: Arabic pinned + beam 5 + the dialect context as initial_prompt —
+        # the model leans Jordanian colloquial instead of MSA-guessing.
+        segments, info = self._model().transcribe(  # type: ignore[attr-defined]
+            audio,
+            language="ar",
+            beam_size=5,
+            initial_prompt=" ".join(self._prompt_terms),
+        )
         return list(segments), info
 
     async def transcribe(self, ogg_opus: bytes) -> str:

@@ -9,6 +9,14 @@ product release tags start independently at v1.0.0.)
 ## [Unreleased]
 
 ### Added
+- **Whisper pinned to Jordanian Arabic (remediation 2.6, mishear fix)**:
+  every voice-note transcription now calls faster-whisper with
+  `language="ar"`, `beam_size=5`, and an `initial_prompt` seeded with the
+  dialect context (owner name + Jordanian colloquial marker + the learned
+  «تعلمي:» pairs from boot) — the «كفيك»-class mishears are choked at the
+  source instead of MSA-guessing. The prompt bias refreshes live when the
+  owner teaches a new pair (`update_prompt_terms`), matching the 2.5
+  synthesis-side loop; `run_bot` seeds both lanes from Dialect_Notes at boot.
 - **Live dialect learning loop (remediation 2.5, audit dead-loop fix)**: «تعلمي:
   مصطلح -> نطق» now actually does something — a background task reads
   Dialect_Notes.md, merges the teaching (dedupe by term), upserts the vault,
