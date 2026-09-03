@@ -248,7 +248,12 @@ def build_dispatcher(
                 return
             if is_bare_confirmation_token(text):
                 return  # 2.4 (C-8): a bare «نعم»/«لا» orphan never reaches the brain
-        _spawn_stream(message, bot, text, voice_origin=True)
+        # Feature 3 (v1.1): the acoustic texture of HOW he spoke rides the
+        # envelope — deterministic local DSP, best-effort, never breaks the turn.
+        from src.skills.acoustic_nuance import ogg_paralinguistic_block
+
+        acoustic = ogg_paralinguistic_block(ogg)
+        _spawn_stream(message, bot, text, voice_origin=True, acoustic=acoustic)
 
     @dp.message(F.text)
     async def on_text(message: Message, bot: Bot) -> None:
@@ -304,6 +309,7 @@ def build_dispatcher(
         *,
         voice_origin: bool = False,
         media: list[dict] | None = None,
+        acoustic: str = "",
     ) -> None:
         previous = _STREAMS.get(message.chat.id)
         if previous is not None:
@@ -332,6 +338,7 @@ def build_dispatcher(
                 media=media,
                 transcriber=transcriber,
                 affect=affect,
+                acoustic=acoustic,
             )
         )
         _STREAMS[message.chat.id] = (task, cancel)
@@ -389,6 +396,7 @@ async def _stream_answer(
     media: list[dict] | None = None,
     transcriber=None,
     affect=None,
+    acoustic: str = "",
 ) -> None:
     chat_id = message.chat.id
     streamer = ChatStreamer(bot, chat_id, edit_interval_ms=settings.stream_edit_interval_ms)
@@ -424,6 +432,8 @@ async def _stream_answer(
                     system = f"{system}\n\n{guide}"
             except Exception:  # noqa: BLE001 — empathy is best-effort
                 logger.warning("affect guide failed; continuing without it")
+        if acoustic:  # f3: the paralinguistic block (voice turns only)
+            system = f"{system}\n\n{acoustic}"
         # Owner directives 2026-09-03 (round 2): the reply surface — his EXPLICIT
         # request («رد صوتي/نصي») always wins; otherwise the ROUTER's voice_reply
         # (the model picks the channel in the same FAST verdict — zero extra
