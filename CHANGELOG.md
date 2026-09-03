@@ -9,6 +9,16 @@ product release tags start independently at v1.0.0.)
 ## [Unreleased]
 
 ### Added
+- **Confirmation memory (remediation 2.4, audit C-8)**: every PC-action
+  exchange — the coordinator's prompt, the owner's «نعم»/«لا», the execution
+  result or refusal line — now enters `memory.remember` under the owner's chat
+  id (optional `memory=` injection; a dead memory never breaks a launch).
+  The brain reads the real confirmation conversation in its rolling history,
+  never a context-free orphan. Complement: after a rejected/failed
+  confirmation, a BARE short consent/refusal token («نعم»/«لا»/«مش هلق»…,
+  ≤3 tokens, no real content) no longer falls through to the brain — the
+  blind contextual-reply class («نعم» → «أكيد سويتها!») is dead; real chat
+  during a pending window streams normally.
 - **Voice-confirmation guard (remediation 2.3, audit C-2, sacred floor)**:
   a pending PC confirmation answered with a VOICE «نعم» is now consumed by
   the coordinator right after transcription — mirroring on_text's pending

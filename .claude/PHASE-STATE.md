@@ -614,7 +614,18 @@ product.)
       untouched). Gate: 462 passed / 86.54% / security+docs green. Fixes
       audit C-2 (sacred floor: a voice «نعم» used to sail past the
       coordinator into a chat answer while the launch silently never fired).
-      Next: 2.4 confirmation memory (coordinator exchanges → memory.remember).
+
+      **2.4 DONE**: PCActionCoordinator accepts optional `memory=` — every
+      prompt/outcome/confirm/reject exchange enters memory.remember under
+      the owner's chat id (from the notifier; dead memory = silent skip,
+      never breaks a launch; run_bot wires the shell's memory in). Complement
+      guard in on_text/on_voice: after a rejected/failed confirmation a BARE
+      short consent/refusal token (≤3 words, نعم/لا/مش هلق/بعدين/لأ…) never
+      falls through to the brain as an orphan (the blind «أكيد سويتها!»
+      class); real chat in the pending window streams normally. 6 new tests
+      (4 pc_actions: roundtrip/reject/no-memory/mem-fail + 2 shell: orphan
+      + memory). Gate: 468 passed / 86.64% / security+docs green. Fixes
+      audit C-8. Next: 2.5 learning loop (Dialect_Notes header + «تعلمي:»).
 
 ## Open items / blockers
 

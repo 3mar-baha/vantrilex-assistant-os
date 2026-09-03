@@ -37,6 +37,8 @@ class FakeBridge:
 
 
 class FakeNotifier:
+    _chat_id = 111  # mirrors _BotNotifier — the 2.4 memory hook keys off it
+
     def __init__(self) -> None:
         self.sent: list[str] = []
 
@@ -156,3 +158,110 @@ async def test_no_guard_injected_behaves_like_before():
     coordinator, bridge, _notifier = _rig()
     await coordinator.request_launch("whatever", origin="owner_chat")
     assert bridge.commands[0][1]["name"] == "whatever"
+
+
+# --- remediation 2.4 (audit C-8): coordinator exchanges enter memory -------------
+
+
+class _MemoryDouble:
+    def __init__(self) -> None:
+        self.buffers: dict[int, list[dict]] = {}
+
+    def remember(self, chat_id: int, role: str, content: str) -> None:
+        self.buffers.setdefault(chat_id, []).append({"role": role, "content": content})
+
+    def history(self, chat_id: int) -> list[dict]:
+        return list(self.buffers.get(chat_id, []))
+
+
+async def test_confirmation_roundtrip_enters_memory(tmp_path):
+    """«افتح X» → prompt lands in memory; the owner's «نعم» and the execution
+    result land too — the brain sees the real confirmation conversation, never
+    an orphan yes (C-8)."""
+    bridge = FakeBridge()
+    notifier = FakeNotifier()
+    memory = _MemoryDouble()
+
+    async def fake_send(cmd, args, *, timeout_s=20.0):
+        bridge.commands.append((cmd, dict(args)))
+        # first call: non-whitelisted refusal -> confirmation required
+        if "confirmation_id" not in args:
+            return {"status": "error", "detail": "not whitelisted", "audit_code": "PC-3"}
+        return {"status": "ok", "detail": "executed", "audit_code": "PC-3"}
+
+    coordinator = PCActionCoordinator(bridge, FakeVault(), notifier, memory=memory)
+    coordinator._send = fake_send  # type: ignore[method-assign]
+
+    # prompt: the owner asked, the coordinator demanded confirmation
+    assert await coordinator.request_launch("obsidian", origin="owner_chat") == (
+        LaunchStatus.CONFIRMATION_REQUIRED
+    )
+    # owner says yes — consumed, executed
+    assert await coordinator.handle_owner_reply("نعم") == "obsidian"
+
+    history = memory.history(111)
+    roles = [m["role"] for m in history]
+    assert "user" in roles and "assistant" in roles  # the conversation is two-sided
+    assert any("obsidian" in m["content"] for m in history)  # the ask/prompt is there
+    assert any("نعم" in m["content"] for m in history)  # the confirmation is there
+    assert any("نفّذت" in m["content"] for m in history)  # the RESULT is there
+
+
+async def test_rejected_confirmation_enters_memory_not_orphan(tmp_path):
+    """«لا» after a prompt: the refusal + «تمام، ما نفذت شي» land in memory —
+    no orphan reply for the brain to trip over."""
+    bridge = FakeBridge()
+    notifier = FakeNotifier()
+    memory = _MemoryDouble()
+
+    async def fake_send(cmd, args, *, timeout_s=20.0):
+        return {"status": "ok", "detail": "never called", "audit_code": "PC-4"}
+
+    coordinator = PCActionCoordinator(bridge, FakeVault(), notifier, memory=memory)
+    coordinator._send = fake_send  # type: ignore[method-assign]
+
+    await coordinator.request_power("shutdown", origin="owner_chat")
+    await coordinator.handle_owner_reply("لا")
+
+    history = memory.history(111)
+    assert any("لا" in m["content"] for m in history)  # the refusal is remembered
+    assert any("ما نفذت شي" in m["content"] for m in history)
+    assert bridge.commands == []  # nothing executed — refusal honored
+
+
+async def test_no_memory_injected_behaves_like_before():
+    """Default construction (no memory) keeps legacy behavior — the coordinator
+    works alone, existing callers/tests untouched."""
+    coordinator, _bridge, _notifier = _rig()
+    status = await coordinator.request_launch("whatever", origin="owner_chat")
+    assert status is not None  # flows through, no crash without memory
+
+
+class _MemoryFailDouble(_MemoryDouble):
+    def remember(self, chat_id: int, role: str, content: str) -> None:
+        raise RuntimeError("memory dead")
+
+
+async def test_memory_failure_never_breaks_the_coordinator(tmp_path):
+    """A dead memory is a degraded boot, not a dead coordinator — the launch flow
+    (prompt → confirm → execute → notify) survives untouched."""
+    import json as _json
+
+    wl = tmp_path / "whitelist.json"
+    wl.write_text(_json.dumps(WHITELIST), encoding="utf-8")
+    bridge = FakeBridge()
+    notifier = FakeNotifier()
+    memory = _MemoryFailDouble()
+
+    async def fake_send(cmd, args, *, timeout_s=20.0):
+        bridge.commands.append((cmd, dict(args)))
+        return {"status": "ok", "detail": "executed", "audit_code": "PC-5"}
+
+    coordinator = PCActionCoordinator(bridge, FakeVault(), notifier, memory=memory)
+    coordinator._send = fake_send  # type: ignore[method-assign]
+
+    status = await coordinator.request_launch("obsidian", origin="owner_chat")
+    assert status == LaunchStatus.EXECUTED  # no crash — memory is best-effort
+    await coordinator.handle_owner_reply("نعم")
+    assert bridge.commands  # the flow completed
+    assert any("شغّلت" in m for m in notifier.sent)  # owner notified regardless

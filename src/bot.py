@@ -25,6 +25,7 @@ from aiogram.types import BufferedInputFile, ErrorEvent, Message
 from loguru import logger
 
 from bridge.guard import Guard
+from common.consent import AFFIRMATIVES
 from src.config import Settings
 from src.dispatcher import FrontDoorDispatcher
 from src.fish_voice import FishFirstVoice, FishVoice
@@ -93,6 +94,19 @@ _MEDIA_MAX_BYTES: Final[int] = 10 * 1024 * 1024  # raw bytes; base64 inflates ~4
 _STREAMS: Final[dict[int, tuple[asyncio.Task, asyncio.Event]]] = {}
 _ENROLL_PENDING: Final[set[int]] = set()
 _PERSIST_TASKS: Final[set[asyncio.Task]] = set()
+# Remediation 2.4 (audit C-8): bare refusal markers — a short «لا» left after a
+# rejected/failed PC confirmation must not fall through to the brain as an orphan.
+_REFUSALS: Final[tuple[str, ...]] = ("لا", "مش هلق", "بعدين", "لأ")
+_ORPHAN_MAX_TOKENS: Final[int] = 3
+
+
+def is_bare_confirmation_token(text: str) -> bool:
+    """A bare short consent/refusal reply — the ONLY shape guarded by the 2.4
+    orphan net. Real chat («شو رأيك بهالموضوع؟») keeps flowing to the brain."""
+    tokens = text.strip().casefold().split()
+    if not tokens or len(tokens) > _ORPHAN_MAX_TOKENS:
+        return False
+    return tokens[0] in AFFIRMATIVES or tokens[0] in _REFUSALS
 
 
 def build_dispatcher(
@@ -206,6 +220,8 @@ def build_dispatcher(
             consumed = await coordinator.handle_owner_reply(text)
             if consumed is not None:
                 return
+            if is_bare_confirmation_token(text):
+                return  # 2.4 (C-8): a bare «نعم»/«لا» orphan never reaches the brain
         _spawn_stream(message, bot, text, voice_origin=True)
 
     @dp.message(F.text)
@@ -214,6 +230,8 @@ def build_dispatcher(
             target = await coordinator.handle_owner_reply(message.text)
             if target is not None:
                 return  # consumed as the launch confirmation/rejection
+            if is_bare_confirmation_token(message.text):
+                return  # 2.4 (C-8): a bare «نعم»/«لا» orphan never reaches the brain
         # Reply-awareness (owner 2026-09-03): when the owner replies to a specific
         # message, Sara must KNOW it — the quote reaches the brain as context.
         text = message.text
@@ -504,6 +522,7 @@ async def run_bot(settings: Settings, bridge=None) -> None:
             vault,
             _BotNotifier(bot, settings.authorized_user_id),
             guard=Guard("config/whitelist.json"),  # 2.2: alias no-hit honesty
+            memory=memory,  # 2.4: confirmation exchanges enter the rolling buffer
         )
         if bridge is not None
         else None

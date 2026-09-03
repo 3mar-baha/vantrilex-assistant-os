@@ -1,7 +1,9 @@
 """Owner-side PC action coordinator (sprint-3 3.4): the ONLY core-side surface that may
 send PC commands. Origin is checked first (untrusted content never mints intent), every
 confirmed action gets ONE audit code shared by the Confirmations note, the tunnel command,
-and the result message, and every event lands in the append-only audit ledger."""
+and the result message, and every event lands in the append-only audit ledger.
+Remediation 2.4 (audit C-8): every prompt/outcome/confirm/reject exchange also enters
+memory.remember — the brain never meets a confirmation turn it can't see."""
 
 from __future__ import annotations
 
@@ -21,6 +23,11 @@ PENDING_TTL = timedelta(minutes=10)
 LEDGER_PATH = f"{AUDIT_DIR}/pc-ledger.md"
 
 UNKNOWN_APP_AR = "«{}» مش موجود بالقائمة المعتمدة — اسمه مش مسجّل عندي."
+
+# 2.4: fallback chat id when the notifier carries none (tests/plain coordinators) —
+# in production the notifier's _chat_id IS the owner's real chat, so confirmation
+# turns land in the SAME rolling buffer the brain reads.
+OWNER_MEMORY_CHAT_ID = 111
 
 # Remediation 2.2 (owner directive 2026-09-03, audit C-7): Arabic colloquial
 # app aliases → whitelist keys. The owner says «الآلة الحاسبة», the bridge
@@ -96,12 +103,25 @@ class _Pending:
 
 
 class PCActionCoordinator:
-    def __init__(self, bridge, vault: VaultClient, notifier, guard=None):
+    def __init__(self, bridge, vault: VaultClient, notifier, guard=None, memory=None):
         self._bridge = bridge
         self._vault = vault
         self._notifier = notifier
         self._guard = guard  # None = legacy pass-through (guard lives on the daemon)
+        self._memory = memory  # 2.4: None = legacy, exchanges never enter memory
         self._pending: _Pending | None = None
+
+    def _remember(self, role: str, content: str) -> None:
+        """2.4 (audit C-8): the confirmation conversation enters memory — the
+        OWNER's chat id (Sara is owner-only, one chat), best-effort; a dead
+        memory never breaks a launch."""
+        if self._memory is None:
+            return
+        chat_id = getattr(self._notifier, "_chat_id", None) or OWNER_MEMORY_CHAT_ID
+        try:
+            self._memory.remember(chat_id, role, content)
+        except Exception:  # noqa: BLE001 — memory is context, not a dependency
+            logger.warning("coordinator memory write failed (best-effort skip)")
 
     def pending_active(self) -> bool:
         if self._pending is None:
@@ -119,13 +139,16 @@ class PCActionCoordinator:
             # confirmation round-trip for a name that can never resolve.
             verdict = self._guard.check_app(resolved)
             if verdict.reason == "not whitelisted" and resolved == name:
-                await self._notifier.notify(UNKNOWN_APP_AR.format(name))
+                line = UNKNOWN_APP_AR.format(name)
+                await self._notifier.notify(line)
+                self._remember("assistant", line)
                 return LaunchStatus.REFUSED
         result = await self._send("exec.launch", {"name": resolved})
         code = result["audit_code"]
         if result["status"] == "ok":
             await self._ledger(code, "launch", "executed", resolved)
             await self._notifier.notify(f"✅ شغّلت {resolved}. رمز التدقيق: {code}")
+            self._remember("assistant", f"شغّلت {resolved} (رمز التدقيق: {code})")
             return LaunchStatus.EXECUTED
         if "confirmation" in result["detail"] or "not whitelisted" in result["detail"]:
             prompt = (
@@ -135,9 +158,11 @@ class PCActionCoordinator:
             self._pending = _Pending("launch", resolved, datetime.now(UTC))
             await self._ledger(code, "launch", "refused", result["detail"])
             await self._notifier.notify(prompt)
+            self._remember("assistant", prompt)
             return LaunchStatus.CONFIRMATION_REQUIRED
         await self._ledger(code, "launch", "error", result["detail"])
         await self._notifier.notify(f"⚠️ ما قدرت أشغّل {resolved}: {result['detail']}")
+        self._remember("assistant", f"ما قدرت أشغّل {resolved}: {result['detail']}")
         return LaunchStatus.REFUSED
 
     async def request_power(self, action: str, *, origin: str) -> LaunchStatus:
@@ -145,15 +170,18 @@ class PCActionCoordinator:
         prompt = f"أمر {action} على الجهاز بيتطلب تأكيد صريح — رد بـ«نعم» للمتابعة."
         self._pending = _Pending("power", action, datetime.now(UTC))
         await self._notifier.notify(prompt)
+        self._remember("assistant", prompt)
         return LaunchStatus.CONFIRMATION_REQUIRED
 
     async def handle_owner_reply(self, text: str) -> str | None:
         if not self.pending_active():
             return None
         pending = self._pending
+        self._remember("user", text)
         if not is_affirmative(text):
             self._pending = None
             await self._notifier.notify("تمام، ما نفذت شي.")
+            self._remember("assistant", "تمام، ما نفذت شي.")
             return None
         self._pending = None
         return await self._confirm_and_execute(pending.kind, pending.target)
@@ -199,8 +227,10 @@ class PCActionCoordinator:
         await self._ledger(audit_code, kind, "executed" if ok else "error", result["detail"])
         if ok:
             await self._notifier.notify(f"✅ نفّذت {target}. رمز التدقيق: {audit_code}")
+            self._remember("assistant", f"نفّذت {target} (رمز التدقيق: {audit_code})")
             return target
         await self._notifier.notify(f"⚠️ فشل تنفيذ {target}: {result['detail']}")
+        self._remember("assistant", f"فشل تنفيذ {target}: {result['detail']}")
         return None
 
     async def _send(self, cmd: str, args: dict) -> dict:

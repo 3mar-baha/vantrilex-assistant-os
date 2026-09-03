@@ -519,15 +519,21 @@ class _WriterDouble:
 
 
 class _CoordinatorDouble:
-    def __init__(self, target="calc.exe"):
+    def __init__(self, target="calc.exe", memory=None):
         self.target = target
         self.replies = []
+        self.memory = memory  # 2.4: run_bot wires the shell's memory into the coordinator
 
     def pending_active(self):
         return True
 
     async def handle_owner_reply(self, text):
         self.replies.append(text)
+        # 2.4 mirror of the real coordinator: the confirmation conversation
+        # lands in memory under the owner's chat id
+        if self.memory is not None:
+            self.memory.remember(OWNER_ID, "user", text)
+            self.memory.remember(OWNER_ID, "assistant", f"نفّذت {self.target}")
         return self.target
 
 
@@ -578,6 +584,77 @@ async def test_pending_launch_voice_yes_consumed_by_coordinator(
         assert shell.gateway.stream_calls == []  # no stream spawned
     finally:
         _ENROLL_PENDING.clear()
+
+
+# --- remediation 2.4 (audit C-8): no orphan yes/no; coordinator memory wired --------
+
+
+class _RejectionCoordinatorDouble:
+    """Pending active, but the owner's reply gets REJECTED (bridge failure) —
+    handle_owner_reply returns None, the old flow fell through to the brain."""
+
+    def __init__(self) -> None:
+        self.replies: list[str] = []
+
+    def pending_active(self) -> bool:
+        return True
+
+    async def handle_owner_reply(self, text: str) -> str | None:
+        self.replies.append(text)
+        return None  # rejected/failed — the orphan-guard must catch this
+
+
+async def test_orphan_yes_after_rejected_confirmation_never_reaches_brain(fake_bot, make_shell):
+    """Remediation 2.4 (audit C-8): the coordinator returns None after a
+    rejected/failed confirmation — the bare «نعم» must NOT fall through to the
+    brain as an orphan (the blind «أكيد سويتها!» reply). Only a bare short
+    consent/refusal token is guarded; real chat keeps flowing."""
+    coordinator = _RejectionCoordinatorDouble()
+    shell = make_shell(
+        coordinator=coordinator,
+        router_replies=[_router("direct", "تمام، ببدأ")],
+    )
+    bot = fake_bot()
+    # bare yes — the orphan case
+    await _run(shell, bot, make_update(1, OWNER_ID, "نعم"))
+    assert coordinator.replies == ["نعم"]
+    assert shell.gateway.router_calls == []  # brain NEVER consulted for the orphan
+    assert shell.gateway.stream_calls == []
+
+    # bare refusal — guarded too
+    await _run(shell, bot, make_update(2, OWNER_ID, "لا"))
+    assert coordinator.replies == ["نعم", "لا"]
+    assert shell.gateway.stream_calls == []
+
+    # real chat during the pending window — NOT guarded, streams normally
+    await _run(shell, bot, make_update(3, OWNER_ID, "شو رأيك بهالموضوع؟"))
+    assert coordinator.replies == ["نعم", "لا", "شو رأيك بهالموضوع؟"]
+    assert shell.gateway.router_calls  # brain consulted
+    assert shell.gateway.router_calls[-1][-1]["content"] == "شو رأيك بهالموضوع؟"
+
+
+async def test_pending_confirmation_turns_enter_memory(fake_bot, make_shell):
+    """Remediation 2.4 (audit C-8): a consumed «افتح X → نعم» turn lands in
+    memory — the next turn's history carries the confirmation line and the
+    result, so the brain knows what actually happened."""
+    from src.memory import ConversationMemory
+
+    memory = ConversationMemory()
+    coordinator = _CoordinatorDouble(target="calculator", memory=memory)
+    shell = make_shell(
+        coordinator=coordinator,
+        memory=memory,
+        router_replies=[_router("tier2", "تم")],
+        stream_programs=[StreamProgram(deltas=("رد",))],
+    )
+    bot = fake_bot()
+    await _run(shell, bot, make_update(1, OWNER_ID, "نعم"))  # consumed confirmation
+    await _run(shell, bot, make_update(2, OWNER_ID, "شو فتحتلي؟"))
+
+    history = memory.history(OWNER_ID)
+    contents = [m["content"] for m in history]
+    assert any("نعم" in c for c in contents)  # the confirmation line entered
+    assert any("calculator" in c for c in contents)  # the RESULT entered
 
 
 async def test_streams_carry_history_and_long_term_envelope(fake_bot, make_shell):
