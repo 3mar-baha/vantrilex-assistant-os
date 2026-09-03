@@ -9,6 +9,29 @@ product release tags start independently at v1.0.0.)
 ## [Unreleased]
 
 ### Fixed
+- **Round-3 live fixes (owner test 2026-09-03 22:51–22:58)**:
+  - **The owner's own ~2s voice note locked him out as a guest** (his note
+    scored 0.388 vs his print; his genuine band is 0.67–0.72): clips shorter
+    than ~2 s of PCM are now INCONCLUSIVE — they proceed on middleware
+    trust (the Telegram-ID gate is the hard security boundary) with a loud
+    log, never a guest lockdown. Enrollment requires a decisive-length note
+    and RE-ENROLLMENT BLENDS with the existing print (running centroid) so
+    every genuine note strengthens it. RUNBOOK: enroll with 8+ s of natural
+    speech.
+  - **A transient Fish rate-limit became «ما بقدرش ابعتلك صوت»**: voice
+    synthesis now retries once after a 2 s burst window before falling back
+    to text — a rate limit is never narrated as a capability loss (persona
+    bans the phrasing by name).
+  - **Tool results became support-desk lectures** («الجسر مو متصل» grew into
+    a Windows/Mac/Linux manual): the tool-lane narration instructions now
+    pin the tool result as the complete ground truth — a one-or-two-line
+    warm relay, never steps, alternatives, or other-OS instructions.
+  - **Long text replies are re-split into 2-3 short chat bubbles**: after
+    streaming, a long multi-paragraph answer is edited down to its first
+    paragraph and the rest arrive as short follow-up messages (the
+    22:56 climate lecture class is dead).
+
+### Fixed (earlier today)
 - **Round-2 live fixes (owner test 2026-09-03 22:14–22:17)**:
   - **The router picks the reply channel**: `voice_reply` rides the same FAST
     verdict — the MODEL decides whether a turn deserves her voice (zero extra

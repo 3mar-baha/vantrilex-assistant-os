@@ -178,14 +178,16 @@ async def test_contact_mode_zero_privileged_calls(fake_bot, make_shell, monkeypa
 
     monkeypatch.setattr(bot, "download", fake_download)
     monkeypatch.setattr("src.skills.voice_biometric_auth.subprocess.run", _no_subprocess)
-    monkeypatch.setattr(VoiceBiometrics, "_embed_sync", lambda self, ogg: list(OWNER_VEC))
+    monkeypatch.setattr(VoiceBiometrics, "_embed_pcm_sync", lambda self, pcm: list(OWNER_VEC))
+    monkeypatch.setattr(VoiceBiometrics, "_decode_pcm", lambda self, ogg: b"0" * 64000)
     try:
         await shell.dp.feed_update(bot, make_update(1, OWNER_ID, "/enroll-voice", command=True))
         await shell.dp.feed_update(
             bot, make_update(2, OWNER_ID, voice=True)
         )  # seal owner voiceprint
 
-        monkeypatch.setattr(VoiceBiometrics, "_embed_sync", lambda self, ogg: list(AHMAD_VEC))
+        monkeypatch.setattr(VoiceBiometrics, "_embed_pcm_sync", lambda self, pcm: list(AHMAD_VEC))
+        monkeypatch.setattr(VoiceBiometrics, "_decode_pcm", lambda self, ogg: b"0" * 64000)
         await shell.dp.feed_update(bot, make_update(3, OWNER_ID, voice=True))
         assert bot.session.sent("SendMessage")[-1].method.text == CONTACT_MODE_AR
         assert shell.gateway.router_calls == []

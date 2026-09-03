@@ -438,17 +438,34 @@ async def _stream_answer(
             spoken = answer.strip() or ack
             spoke = False
             if voice is not None and spoken:
-                try:
-                    ogg = await voice.synthesize(spoken)
-                    await bot.send_voice(chat_id, BufferedInputFile(ogg, filename="sara.ogg"))
-                    spoke = True
-                except Exception:  # noqa: BLE001 — synthesis dead -> honest text fallback
-                    logger.warning("voice reply synthesis failed; text fallback lands")
+                # Round-3 22:53: a transient Fish 429 became «ما بقدرش
+                # ابعتلك صوت» in her own words — a rate limit is NOT a
+                # capability loss. One quick retry (free pools burst), then
+                # the honest text lands WITHOUT any voice-denial phrasing.
+                for attempt in (1, 2):
+                    try:
+                        ogg = await voice.synthesize(spoken)
+                        await bot.send_voice(chat_id, BufferedInputFile(ogg, filename="sara.ogg"))
+                        spoke = True
+                        break
+                    except Exception:  # noqa: BLE001 — retry once, then text
+                        logger.warning(
+                            "voice synthesis attempt {} failed; {}",
+                            attempt,
+                            "retrying" if attempt == 1 else "text fallback",
+                        )
+                        if attempt == 1:
+                            await asyncio.sleep(2.0)  # free-pool burst window
             if not spoke and spoken.strip():
                 await send_split(message, spoken)
             reply = answer
         else:
             reply = await streamer.stream_reply(_prepend(ack, stream), cancel, transient_ack=True)
+            # Round-3 22:56: a long streamed answer (the climate lecture) must
+            # land as 2-3 SHORT chat bubbles, not one formal essay — the first
+            # bubble is edited down to the first part, the rest arrive as
+            # short follow-up messages the way friends text.
+            await _split_streamed_bubble(bot, chat_id, streamer, reply)
     except GatewayError as error:
         logger.error("brain stream failed: {}", error)
         await message.answer(APOLOGY_AR)
@@ -480,6 +497,24 @@ async def send_split(message: Message, text: str, *, max_bubbles: int = 3) -> No
         return
     for paragraph in paragraphs[:max_bubbles]:
         await message.answer(paragraph)
+
+
+async def _split_streamed_bubble(bot: Bot, chat_id: int, streamer, reply: str) -> None:
+    """Round-3: re-shape an already-streamed long bubble into 2-3 short ones:
+    the bubble is edited down to the first paragraph; the remaining short
+    paragraphs arrive as separate chat messages. No-op for short replies."""
+    if streamer.message_id is None or not reply.strip() or len(reply) <= 160:
+        return
+    paragraphs = [p.strip() for p in re.split(r"\n\s*\n", reply) if p.strip()]
+    if len(paragraphs) <= 1:
+        return
+    head, tail = paragraphs[0], paragraphs[1:3]
+    try:
+        await bot.edit_message_text(head, chat_id=chat_id, message_id=streamer.message_id)
+        for part in tail:
+            await bot.send_message(chat_id, part)
+    except Exception:  # noqa: BLE001 — the full bubble already stands; never lose it
+        logger.warning("post-split of a long bubble failed; the original stands")
 
 
 async def _prepend(first: str, stream) -> AsyncIterator[str]:

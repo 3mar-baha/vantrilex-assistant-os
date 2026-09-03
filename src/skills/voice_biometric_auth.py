@@ -30,6 +30,13 @@ GUEST_TRANSCRIPT_PLACEHOLDER: Final[str] = (
     "[رسالة صوتية من متحدث غير معروف — بانتظار التفريغ عند اعتماد المتحدث]"
 )
 _PCM_SAMPLE_RATE: Final[int] = 16000
+# Live round-3 2026-09-03 22:58: the owner's own 2-second note scored 0.388
+# against his print (his genuine same-day notes: 0.67-0.72) — ECAPA vectors
+# from very short clips are unstable. A note shorter than this is INCONCLUSIVE:
+# it can never lock the owner out (the Telegram-ID gate is the security
+# boundary); it proceeds on middleware trust with a loud log. Real guests on
+# an owner-ID hijacked account remain caught whenever they speak longer.
+_MIN_DECISIVE_PCM_BYTES: Final[int] = _PCM_SAMPLE_RATE * 2 * 2  # ≥2 s of 16-bit mono
 
 
 class VoiceprintError(RuntimeError):
@@ -170,9 +177,21 @@ class VoiceBiometrics:
         return await loop.run_in_executor(self._executor, self._embed_sync, ogg_opus)
 
     async def enroll(self, ogg_opus: bytes) -> None:
-        """Embed one owner voice note and Fernet-seal it to the vault State."""
+        """Embed one owner voice note and Fernet-seal it to the vault State.
+        Round-3 lesson: re-enrollment BLENDS with the existing print (running
+        centroid) when there is one — every genuine note strengthens the
+        print instead of replacing it with a single possibly-short clip."""
         loop = asyncio.get_running_loop()
-        vector = await loop.run_in_executor(self._executor, self._embed_sync, ogg_opus)
+        vector = await loop.run_in_executor(self._executor, self._embed_note_sync, ogg_opus)
+        if self._owner_vector is not None and len(self._owner_vector) == len(vector):
+            n = getattr(self, "_print_count", 0) + 1
+            blended = [
+                (a * (n - 1) + b) / n for a, b in zip(self._owner_vector, vector, strict=True)
+            ]
+            vector, self._print_count = blended, n
+            logger.info("owner voiceprint blended ({} notes in the centroid)", n)
+        else:
+            self._print_count = 1
         sealed = _fernet(self._enc_key).encrypt(
             json.dumps({"model": self._model_id, "vector": vector}).encode()
         )
@@ -191,13 +210,25 @@ class VoiceBiometrics:
 
     async def verify(self, ogg_opus: bytes) -> bool:
         """True = owner voice (or unenrolled -> middleware-only trust). Fail-closed:
-        enrolled + below threshold or any verification error routes Guest Mode."""
+        enrolled + below threshold or any verification error routes Guest Mode —
+        EXCEPT an inconclusive clip: shorter than ~2 s cannot decide, so the
+        note proceeds on middleware trust (the Telegram-ID gate is the hard
+        boundary) with a loud log. Live round-3: the owner's own «اهلا انا
+        المستخدم» (~2 s) scored 0.388 and locked him out as a guest."""
         if not self.enrolled:
             logger.info("voiceprint unenrolled — middleware-only trust for voice notes")
             return True
         try:
             loop = asyncio.get_running_loop()
-            vector = await loop.run_in_executor(self._executor, self._embed_sync, ogg_opus)
+            pcm = await loop.run_in_executor(self._executor, self._decode_pcm, ogg_opus)
+            if len(pcm) < _MIN_DECISIVE_PCM_BYTES:
+                logger.warning(
+                    "voice note too short for a decisive voiceprint ({} bytes) — "
+                    "middleware trust; guest lockdown skipped",
+                    len(pcm),
+                )
+                return True
+            vector = await loop.run_in_executor(self._executor, self._embed_pcm_sync, pcm)
         except Exception:  # noqa: BLE001 — any verification error fails closed to Guest Mode
             logger.exception("voice verification failed while enrolled — failing closed")
             return False
@@ -223,9 +254,24 @@ class VoiceBiometrics:
 
     def _embed_sync(self, ogg_opus: bytes) -> list[float]:
         """CPU-bound: ffmpeg decode + ECAPA embedding. Always runs in an executor."""
+        return self._embed_pcm_sync(self._decode_pcm(ogg_opus))
+
+    def _embed_note_sync(self, ogg_opus: bytes) -> list[float]:
+        """Enrollment hook (round-3): decode + embed with a short-note guard —
+        a note shorter than the decisive floor cannot mint a print; the owner
+        is told to re-enroll longer (the sealed print stays authoritative)."""
+        pcm = self._decode_pcm(ogg_opus)
+        if len(pcm) < _MIN_DECISIVE_PCM_BYTES:
+            raise VoiceprintError(
+                "enrollment note too short (<2 s) — send a note of 8+ seconds "
+                "of natural speech (RUNBOOK /enroll-voice)"
+            )
+        return self._embed_pcm_sync(pcm)
+
+    def _embed_pcm_sync(self, pcm: bytes) -> list[float]:
+        """CPU-bound: ECAPA embedding of decoded PCM. Always runs in an executor."""
         import torch
 
-        pcm = self._decode_pcm(ogg_opus)
         if self._model is None:
             self._model = self._load_model()
         wav = torch.frombuffer(bytearray(pcm), dtype=torch.int16).float() / 32768.0

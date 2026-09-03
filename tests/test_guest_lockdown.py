@@ -37,9 +37,10 @@ class GatewaySpy:
 
 async def test_guest_voice_note_lockdown_zero_privileged_effects(tmp_path, monkeypatch, fake_bot):
     bio = VoiceBiometrics(embedding_path=tmp_path / "State" / "owner_voiceprint.enc", enc_key=KEY)
-    monkeypatch.setattr(bio, "_embed_sync", lambda ogg: list(OWNER_VEC))
+    monkeypatch.setattr(bio, "_embed_note_sync", lambda ogg: list(OWNER_VEC))
     await bio.enroll(b"owner-ogg")
-    monkeypatch.setattr(bio, "_embed_sync", lambda ogg: list(GUEST_VEC))
+    monkeypatch.setattr(bio, "_embed_pcm_sync", lambda pcm: list(GUEST_VEC))
+    monkeypatch.setattr(bio, "_decode_pcm", lambda ogg: b"0" * 64000)  # decisive length
 
     subprocess_calls: list[object] = []
     monkeypatch.setattr(subprocess, "run", lambda *a, **k: subprocess_calls.append(a))
@@ -79,9 +80,10 @@ async def test_guest_voice_note_lockdown_zero_privileged_effects(tmp_path, monke
 
 async def test_guest_staging_failure_still_locks_down(tmp_path, monkeypatch, fake_bot):
     bio = VoiceBiometrics(embedding_path=tmp_path / "State" / "owner_voiceprint.enc", enc_key=KEY)
-    monkeypatch.setattr(bio, "_embed_sync", lambda ogg: list(OWNER_VEC))
+    monkeypatch.setattr(bio, "_embed_note_sync", lambda ogg: list(OWNER_VEC))
     await bio.enroll(b"owner-ogg")
-    monkeypatch.setattr(bio, "_embed_sync", lambda ogg: list(GUEST_VEC))
+    monkeypatch.setattr(bio, "_embed_pcm_sync", lambda pcm: list(GUEST_VEC))
+    monkeypatch.setattr(bio, "_decode_pcm", lambda ogg: b"0" * 64000)  # decisive length
     monkeypatch.setattr(
         "src.skills.voice_biometric_auth.stage_guest_note",
         lambda *a, **k: (_ for _ in ()).throw(OSError("vault disk full")),

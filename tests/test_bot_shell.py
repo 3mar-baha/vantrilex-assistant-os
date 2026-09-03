@@ -329,7 +329,10 @@ async def test_enroll_voice_flow_and_biometric_gate(fake_bot, make_shell, monkey
         destination.write(b"FAKE-OGG")
 
     monkeypatch.setattr(bot, "download", fake_download)
-    monkeypatch.setattr(VoiceBiometrics, "_embed_sync", lambda self, ogg: [0.6, 0.8, 0.0])
+    monkeypatch.setattr(VoiceBiometrics, "_embed_pcm_sync", lambda self, pcm: [0.6, 0.8, 0.0])
+    monkeypatch.setattr(
+        VoiceBiometrics, "_decode_pcm", lambda self, ogg: b"0" * 64000
+    )  # decisive length (round-3 short-clip floor)
     try:
         await _run(shell, bot, make_update(1, OWNER_ID, "/enroll-voice", command=True))
         assert bot.session.sent("SendMessage")[-1].method.text == ENROLL_PROMPT_AR
@@ -346,7 +349,8 @@ async def test_enroll_voice_flow_and_biometric_gate(fake_bot, make_shell, monkey
         )  # nothing text-new after the enroll line
         assert len(bot.session.sent("SendVoice")) == 1
 
-        monkeypatch.setattr(VoiceBiometrics, "_embed_sync", lambda self, ogg: [0.8, -0.6, 0.0])
+        monkeypatch.setattr(VoiceBiometrics, "_embed_pcm_sync", lambda self, pcm: [0.8, -0.6, 0.0])
+        monkeypatch.setattr(VoiceBiometrics, "_decode_pcm", lambda self, ogg: b"0" * 64000)
         await _run(shell, bot, make_update(4, OWNER_ID, voice=True))
         assert bot.session.sent("SendMessage")[-1].method.text == GUEST_LOCKDOWN_AR
         assert shell.gateway.stream_calls == []
@@ -392,7 +396,10 @@ async def test_owner_voice_transcribed_filed_and_streamed(
         destination.write(b"FAKE-OGG")
 
     monkeypatch.setattr(bot, "download", fake_download)
-    monkeypatch.setattr(VoiceBiometrics, "_embed_sync", lambda self, ogg: [0.6, 0.8, 0.0])
+    monkeypatch.setattr(VoiceBiometrics, "_embed_pcm_sync", lambda self, pcm: [0.6, 0.8, 0.0])
+    monkeypatch.setattr(
+        VoiceBiometrics, "_decode_pcm", lambda self, ogg: b"0" * 64000
+    )  # decisive length (round-3 short-clip floor)
     try:
         await _run(shell, bot, make_update(1, OWNER_ID, "/enroll-voice", command=True))
         await _run(shell, bot, make_update(2, OWNER_ID, voice=True))
@@ -407,7 +414,8 @@ async def test_owner_voice_transcribed_filed_and_streamed(
         assert any(transcriber.text in m["content"] for m in brain_messages)
 
         # Guest containment: below-threshold voice never reaches the transcriber.
-        monkeypatch.setattr(VoiceBiometrics, "_embed_sync", lambda self, ogg: [0.8, -0.6, 0.0])
+        monkeypatch.setattr(VoiceBiometrics, "_embed_pcm_sync", lambda self, pcm: [0.8, -0.6, 0.0])
+        monkeypatch.setattr(VoiceBiometrics, "_decode_pcm", lambda self, ogg: b"0" * 64000)
         await _run(shell, bot, make_update(4, OWNER_ID, voice=True))
         assert bot.session.sent("SendMessage")[-1].method.text == GUEST_LOCKDOWN_AR
         assert len(transcriber.ogg_calls) == 1
@@ -596,7 +604,10 @@ async def test_pending_launch_voice_yes_consumed_by_coordinator(
         destination.write(b"FAKE-OGG")
 
     monkeypatch.setattr(bot, "download", fake_download)
-    monkeypatch.setattr(VoiceBiometrics, "_embed_sync", lambda self, ogg: [0.6, 0.8, 0.0])
+    monkeypatch.setattr(VoiceBiometrics, "_embed_pcm_sync", lambda self, pcm: [0.6, 0.8, 0.0])
+    monkeypatch.setattr(
+        VoiceBiometrics, "_decode_pcm", lambda self, ogg: b"0" * 64000
+    )  # decisive length (round-3 short-clip floor)
     try:
         await _run(shell, bot, make_update(1, OWNER_ID, "/enroll-voice", command=True))
         await _run(shell, bot, make_update(2, OWNER_ID, voice=True))
@@ -810,7 +821,10 @@ async def test_voice_origin_reply_arrives_as_voice_note(
         destination.write(b"FAKE-OGG")
 
     monkeypatch.setattr(bot, "download", fake_download)
-    monkeypatch.setattr(VoiceBiometrics, "_embed_sync", lambda self, ogg: [0.6, 0.8, 0.0])
+    monkeypatch.setattr(VoiceBiometrics, "_embed_pcm_sync", lambda self, pcm: [0.6, 0.8, 0.0])
+    monkeypatch.setattr(
+        VoiceBiometrics, "_decode_pcm", lambda self, ogg: b"0" * 64000
+    )  # decisive length (round-3 short-clip floor)
     try:
         await _run(shell, bot, make_update(1, OWNER_ID, "/enroll-voice", command=True))
         await _run(shell, bot, make_update(2, OWNER_ID, voice=True))
@@ -855,7 +869,10 @@ async def test_voice_origin_synthesis_failure_falls_back_to_text(
         destination.write(b"FAKE-OGG")
 
     monkeypatch.setattr(bot, "download", fake_download)
-    monkeypatch.setattr(VoiceBiometrics, "_embed_sync", lambda self, ogg: [0.6, 0.8, 0.0])
+    monkeypatch.setattr(VoiceBiometrics, "_embed_pcm_sync", lambda self, pcm: [0.6, 0.8, 0.0])
+    monkeypatch.setattr(
+        VoiceBiometrics, "_decode_pcm", lambda self, ogg: b"0" * 64000
+    )  # decisive length (round-3 short-clip floor)
     try:
         await _run(shell, bot, make_update(1, OWNER_ID, "/enroll-voice", command=True))
         await _run(shell, bot, make_update(2, OWNER_ID, voice=True))

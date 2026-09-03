@@ -32,6 +32,7 @@ class ChatStreamer:
         self._chat_id = chat_id
         self._interval = edit_interval_ms / 1000
         self.ack_consumed: str | None = None  # set when the first delta was the transient ack
+        self.message_id: int | None = None  # the streamed bubble (round-3: post-split edits it)
 
     async def stream_reply(
         self, deltas: AsyncIterator[str], cancel: asyncio.Event, *, transient_ack: bool = False
@@ -42,6 +43,7 @@ class ChatStreamer:
             # Placeholder failed -> Sprint-1 aggregate behavior: one send, full text.
             logger.warning("streamer placeholder failed -> aggregate fallback: {}", error)
             return await self._aggregate(deltas, transient_ack=transient_ack)
+        self.message_id = message.message_id  # round-3: the shell may re-split this bubble
 
         pending = ""
         answer = ""  # the durable text: ack-free once answer deltas arrive

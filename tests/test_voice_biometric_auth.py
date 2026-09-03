@@ -21,7 +21,14 @@ def make_bio(tmp_path, *, threshold: float = 0.75, enc_key: str = KEY) -> VoiceB
 
 
 def patch_embed(monkeypatch, bio: VoiceBiometrics, vector: list[float]) -> None:
-    monkeypatch.setattr(bio, "_embed_sync", lambda ogg: list(vector))
+    monkeypatch.setattr(bio, "_embed_pcm_sync", lambda pcm: list(vector))
+    # round-3: verify() decodes PCM first (the short-clip floor) — the double
+    # serves a decisive-length PCM so the flow reaches the embedding.
+    monkeypatch.setattr(
+        bio,
+        "_decode_pcm",
+        lambda ogg: b"\x00" * 64000,  # 2 s of 16 kHz s16le mono
+    )
 
 
 async def test_unenrolled_falls_back_to_middleware_trust(tmp_path):
@@ -37,6 +44,44 @@ async def test_below_threshold_routes_guest(tmp_path, monkeypatch):
     patch_embed(monkeypatch, bio, GUEST_VEC)
     assert await bio.verify(b"guest-ogg") is False
     assert bio.last_similarity == 0.0
+
+
+async def test_short_clip_is_inconclusive_never_locks_owner_out(tmp_path, monkeypatch):
+    """Live round-3 2026-09-03 22:58: the owner's own ~2s note scored 0.388
+    (his genuine band: 0.67-0.72) and locked him out as a guest. A clip too
+    short for a decisive embedding proceeds on middleware trust — the
+    Telegram-ID gate is the security boundary; a real guest speaking longer
+    is still caught."""
+    from src.skills.voice_biometric_auth import _MIN_DECISIVE_PCM_BYTES
+
+    bio = make_bio(tmp_path)
+    patch_embed(monkeypatch, bio, OWNER_VEC)
+    await bio.enroll(b"owner-ogg")
+    patch_embed(monkeypatch, bio, GUEST_VEC)  # would fail decisively if embedded
+    # a decoded PCM shorter than the decisive floor → inconclusive → trust
+    monkeypatch.setattr(bio, "_decode_pcm", lambda ogg: b"\x00" * (_MIN_DECISIVE_PCM_BYTES - 1))
+    assert await bio.verify(b"short-ogg") is True
+    assert bio.last_similarity == 0.0  # never embedded, never judged
+
+
+async def test_reenroll_blends_running_centroid(tmp_path, monkeypatch):
+    """Round-3 protocol: every genuine re-enroll BLENDS with the print (running
+    centroid) — short real notes strengthen the print instead of replacing it."""
+    import json as _json
+
+    bio = make_bio(tmp_path)
+    v1 = [1.0, 0.0]
+    v2 = [0.0, 1.0]
+    patch_embed(monkeypatch, bio, v1)
+    await bio.enroll(b"note-1")
+    patch_embed(monkeypatch, bio, v2)
+    await bio.enroll(b"note-2")
+    from cryptography.fernet import Fernet as _F
+
+    sealed = bio._embedding_path.read_bytes()
+    payload = _json.loads(_F(KEY.encode()).decrypt(sealed))
+    # centroid of [1,0] and [0,1] = [0.5, 0.5]
+    assert payload["vector"] == pytest.approx([0.5, 0.5])
 
 
 async def test_owner_match_latency_under_50ms(tmp_path, monkeypatch):
