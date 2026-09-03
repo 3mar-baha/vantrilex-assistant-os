@@ -530,13 +530,22 @@ product.)
       2 refuted, 68 passthrough; every live symptom mechanically explained).
       Owner approved **`docs/REMEDIATION_PLAN.md`** (3 phases, 21 steps, each:
       target/red-test/AC) and said «التالي» 2026-09-03.
-      ← **current: PHASE 1 EXECUTION (persona & modality)**. 1.1 DONE: Path A
-      unfrozen — feat(voice)+fix(tools)+docs synced (CLAUDE §1/§3, ARCH §1/§3/§7,
-      TEST-PLAN, CHANGELOG [Unreleased]). NEXT: 1.2 creator-recognition persona
-      (عمر الفياض + service-language bans), then 1.3 ack purification (transient
-      ack — rewrites the enshrined tests), 1.4-1.8 per the plan. Phase-2 owner
-      prerequisites still pending: /enroll-voice + one-time Google OAuth bootstrap
-      (vault/State empty — the LOCAL cause of live Gmail failures per audit §14).
+      ← **current: PHASE 1 COMPLETE — awaiting owner live retest + «التالي» to Phase 2**.
+      All 9 steps executed 2026-09-03 (8 commits, all pushed): 1.1 unfreeze · 1.2
+      creator-persona contract (عمر الفياض، 5 tests) · 1.3 transient ack (streamer
+      drops it at answer start; dispatcher content+length guards; router prompt
+      de-gatewayed; enshrined glue tests rewritten) · 1.4 voice-origin single
+      modality (stream off-wire → one voice note / one honest text fallback;
+      VOICE_ACK_AR lie deleted) · 1.5/1.6 string cleanup + AST contract test ·
+      1.7 task.cancel() zombie kill · 1.8 standalone-affirmative consent (≤3
+      tokens, no بس/لا/مش…) · 1.9 Fish Audio primary via OpenRouter speech API
+      (سمسم ref, Salma transparent fallback; live-probed 200/~2s; A/B samples in
+      D:\Downloads). Final gate: 417 passed / 85.94% / security+docs green.
+      Owner live-retest list: sara.bat → voice note = ONE Fish/سمسم voice note;
+      text = ack shown then replaced by answer; «أنا بوابة سارة» impossible;
+      «نعم بس استنى» launches nothing. Phase-2 owner prerequisites still
+      pending: /enroll-voice + one-time Google OAuth bootstrap (vault/State
+      empty — the LOCAL cause of live Gmail failures per audit §14).
 
 ## Open items / blockers
 

@@ -9,6 +9,12 @@ product release tags start independently at v1.0.0.)
 ## [Unreleased]
 
 ### Added
+- **Consent grammar hardening (remediation 1.8, 2026-09-03)**: an affirmative is a
+  STANDALONE short yes — at most 3 tokens, opening with an affirmative, carrying no
+  negation/reservation word (لا/بس/مش/مو/لسا/بعد شوي/بعدين/يمكن/وقف/ألغها). Sprint-3's
+  first-token rule let «نعم بس استنى» launch guarded actions — a reservation is now
+  structurally unable to execute (audit S-4 closed; 28-case contract test). The
+  whitelist-guardrail sacred floor stays green («ايه سوّيها» remains a clean 2-token yes).
 - **Real stream cancellation on interjection (remediation 1.7, 2026-09-03)**: a newer
   owner message now sets the cancel Event AND `task.cancel()`s the in-flight stream —
   the Event alone only landed between deltas, so a turn blocked mid-flight (slow model
