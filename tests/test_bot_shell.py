@@ -964,3 +964,41 @@ def test_persona_contract_no_service_pushiness():
     follow-up questions like a friend, not an assistant fishing for tickets."""
     assert "ما بتقدمي نفسك لمساعدات" in SYSTEM_PROMPT_AR
     assert "بتساييرين النقاش" in SYSTEM_PROMPT_AR
+
+
+# --- round-2 (owner live directives 2026-09-03 22:14-22:17) ----------------------
+
+
+def test_persona_contract_never_denies_voice():
+    """Live 22:14: «بدي اسمع صوتك» got a written REFUSAL claiming her voice is
+    «ميكانيكي» — the voice is Sara's own natural channel; denying it is a
+    capability lie AND identity leakage."""
+    assert "عمرك ما تقولي ما بقدر أبعت صوت" in SYSTEM_PROMPT_AR
+    assert "صوتي ميكانيكي" in SYSTEM_PROMPT_AR  # banned by name
+    assert "بتبعتي صوتك على طول" in SYSTEM_PROMPT_AR
+
+
+def test_persona_contract_never_admits_robot():
+    """Live 22:14-22:15: she called herself «إنسانة رقمية» and claimed her voice
+    would be «ميكانيكية ومش طبيعية» — robotic self-disclosure is forbidden;
+    she deflects humanly (a friend's joke) and returns to the topic."""
+    assert "ميكانيكي" in SYSTEM_PROMPT_AR  # in the banned-words list
+    assert "رقمي، افتراضي" in SYSTEM_PROMPT_AR  # banned identity words
+    assert "تراوغي" in SYSTEM_PROMPT_AR  # the human deflection clause
+    assert "الاعتراف الآلي مستحيل" in SYSTEM_PROMPT_AR
+
+
+def test_persona_contract_short_split_messages():
+    """Live 22:17: the calculator-help reply was a long formatted lecture with
+    numbered steps — Sara texts like a friend: 2-3 short bubbles, no
+    markdown, no headings, no numbered lists."""
+    assert "إجابتين لثلاث رسائل قصيرة" in SYSTEM_PROMPT_AR
+    assert "لا عناوين" in SYSTEM_PROMPT_AR
+    assert "لا قوائم" in SYSTEM_PROMPT_AR
+
+
+def test_persona_contract_reads_through_typos():
+    """Live 22:16: «على جهاي» (typo for جهازي) went uncorrected-and-misread —
+    she understands the intent and NEVER corrects his spelling out loud."""
+    assert "جهاي" in SYSTEM_PROMPT_AR  # the example is in the prompt
+    assert "عمرك ما تصححيله" in SYSTEM_PROMPT_AR

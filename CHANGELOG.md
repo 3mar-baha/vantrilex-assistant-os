@@ -9,6 +9,26 @@ product release tags start independently at v1.0.0.)
 ## [Unreleased]
 
 ### Fixed
+- **Round-2 live fixes (owner test 2026-09-03 22:14–22:17)**:
+  - **The router picks the reply channel**: `voice_reply` rides the same FAST
+    verdict — the MODEL decides whether a turn deserves her voice (zero extra
+    calls); his explicit «رد صوتي/رد نصي» still overrides everything; origin
+    default (voice begets voice) otherwise. The 70/30 dice roll is retired
+    and the regex keeps only unambiguous request patterns («بدي اسمع صوتك»
+    fixed).
+  - **Persona hardened** (contract-tested): she NEVER denies her voice
+    («ما بقدر أبعت صوت»/«صوتي ميكانيكي» banned by name), NEVER admits being
+    a robot — deflects humanly like a friend's joke; replies are 2-3 SHORT
+    bubbles with no markdown/headings/numbered lists; she reads through his
+    typos («جهاي»=«جهازي») and never corrects spelling out loud.
+  - **Proactive outreach is VOICE**: Sara checks in with her own voice note
+    (text only when synthesis is down).
+  - **A dead bridge gets its own honest line**: launch with no bridge session
+    says «الجسر مو متصل» (actionable) instead of the generic «عطل بسيط».
+  - **Voice-reply text fallback splits into short bubbles** (the
+    long-single-lecture class is dead on every surface).
+
+### Fixed (earlier today)
 - **Proactive failure backoff (live-test finding 2026-09-03 21:52–22:00)**:
   when the brain is unreachable (gateway down), the outreach loop no longer
   retries the full model chain every ~30 s tick — a verdict failure parks

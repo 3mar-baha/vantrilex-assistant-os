@@ -194,6 +194,24 @@ async def test_launch_without_coordinator_is_honest():
     assert out is not None and "الجسر" in out
 
 
+async def test_launch_with_dead_bridge_gets_bridge_line_not_generic_fail():
+    """Live 2026-09-03 22:16: coordinator present but the bridge session is
+    gone — the owner must hear «الجسر مو متصل» (actionable), never the
+    generic «عطل بسيط» line."""
+    from src.bridge_server import BridgeOffline
+
+    class DeadBridgeCoordinator(FakeCoordinator):
+        async def request_launch(self, name, *, origin):
+            self.calls.append((name, origin))
+            raise BridgeOffline("no bridge session")
+
+    coordinator = DeadBridgeCoordinator()
+    registry = ToolRegistry(coordinator=coordinator)
+    out = await registry.call("launch", "الآلة الحاسبة")
+    assert out is not None and "الجسر" in out  # the actionable line
+    assert "عطل" not in out  # not the generic failure
+
+
 async def test_launch_without_app_name_asks():
     registry = ToolRegistry(coordinator=FakeCoordinator())
     out = await registry.call("launch", "")

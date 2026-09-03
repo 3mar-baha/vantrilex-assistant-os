@@ -32,7 +32,7 @@ _ACK_CLAIM_WORDS: Final[tuple[str, ...]] = ("تم فتح", "فتحت", "بعت",
 _ROUTER_PROMPT_AR: Final[str] = (
     "صنّف طلب المالك وأجب بسطر JSON واحد فقط:\n"
     '{"route": "direct"|"tier2"|"tier3", "tool": "none"|"gmail"|"calendar"|"tasks"'
-    '|"telemetry"|"launch"|"brief", "arg": "...", "ack": "..."}\n'
+    '|"telemetry"|"launch"|"brief", "arg": "...", "ack": "...", "voice_reply": true|false}\n'
     '- "ack" إقرار من كلمتين إلى خمس كلمات فقط (مثل «من عيوني هسا» أو «لحظة بفحصلك») '
     "— ممنوع تجيب على السؤال داخله، الرد الكامل يُبث بعد التصنيف.\n"
     "- direct: دردشة أو سؤال بسيط.\n"
@@ -42,6 +42,9 @@ _ROUTER_PROMPT_AR: Final[str] = (
     "  gmail=فحص البريد، calendar=مواعيد التقويم، tasks=المهام المستحقة، "
     'telemetry=حالة الجهاز والجسر، launch=فتح برنامج على PC مع اسم البرنامج في "arg"، '
     "brief=الإحاطة اليومية الشاملة. الطلبات ذات الأداة تصنَّف دائماً tier2.\n"
+    "- voice_reply: هل هذا الطلب يليق ردّه صوتاً (رسالة صوتية) بدل النص؟ true فقط إذا "
+    "المالك طلب الصوت صراحةً أو بنيته (بدي اسمعك، حابب صوتك، احكيلي عن حالك) أو الجو "
+    "حميمي/عاطفي يستدعي الصوت؛ false للدردشة العادية والأوامر والمعلومات العملية.\n"
     "لا تكتب أي شيء خارج الـ JSON."
 )
 
@@ -94,8 +97,9 @@ def _keyword_net(text: str) -> tuple[str, str]:
     return ("none", "")
 
 
-def _parse_router(reply: str) -> tuple[str, str, str, str] | None:
-    """Extract the {route, tool, arg, ack} verdict; None when not a valid routing."""
+def _parse_router(reply: str) -> tuple[str, str, str, str, bool] | None:
+    """Extract the {route, tool, arg, ack, voice_reply} verdict; None when not a
+    valid routing."""
     match = _JSON_RE.search(reply)
     if not match:
         return None
@@ -118,13 +122,19 @@ def _parse_router(reply: str) -> tuple[str, str, str, str] | None:
         word in lowered for word in _ACK_CLAIM_WORDS
     ):  # gateway identity / claimed action: never Sara's voice (remediation 1.3)
         ack = DEFAULT_ACK_AR
-    return route, ack or DEFAULT_ACK_AR, tool, str(verdict.get("arg") or "").strip()
+    voice_reply = bool(verdict.get("voice_reply"))  # round-2: the MODEL picks the channel
+    return route, ack or DEFAULT_ACK_AR, tool, str(verdict.get("arg") or "").strip(), voice_reply
 
 
 class FrontDoorDispatcher:
     def __init__(self, gateway: OmniRouteClient, settings: Settings) -> None:
         self._gateway = gateway
         self._settings = settings
+        # Round-2 (owner 2026-09-03): the ROUTER picks the reply channel —
+        # voice_reply rides the same FAST verdict, zero extra calls. The bot
+        # shell reads this after the first yield. Explicit owner patterns in
+        # reply_modality still override (the owner's word is the highest law).
+        self.voice_hint: bool = False
 
     async def handle(
         self,
@@ -135,6 +145,7 @@ class FrontDoorDispatcher:
         tools: Any = None,
         media: list[dict] | None = None,
     ) -> AsyncIterator[str]:
+        self.voice_hint = False
         if media:
             # Media turns (owner directive 2026-09-03): the conversation lane
             # SEES the image/video natively — no tool routing, the answer flows
@@ -170,7 +181,8 @@ class FrontDoorDispatcher:
                     "dispatcher unparsable router reply -> default tier2: {!r}", reply[:200]
                 )
             else:
-                route, ack, tool, arg = parsed
+                route, ack, tool, arg, voice = parsed
+                self.voice_hint = voice
         if tool == "none":
             net_tool, net_arg = _keyword_net(user_text)
             if net_tool != "none":

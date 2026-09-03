@@ -21,6 +21,12 @@ from src.skills.reply_modality import choose_reply_modality, forced_modality
         ("ابعثي رسالة صوتية", "voice"),  # live 2026-09-03 07:03 — explicit ask
         ("ابعتلي ملاحظة صوتية بتعرفي عن حالك", "voice"),
         ("رسالة صوتية", "voice"),
+        ("بدي اسمع صوتك", "voice"),  # live 2026-09-03 22:14 — the round-2 gap
+        ("بدي اسمع صوتك وانت تحكي عن حالك", "voice"),  # the full live phrasing
+        ("سمعيني صوتك", "voice"),
+        ("احكيلي عن حالك بصوتك", "voice"),
+        # «شو صوتك؟» needs NO forced pattern — the ROUTER judges curiosity
+        # about her voice as voice-worthy (round-2: the model decides).
         ("رد نصي", "text"),
         ("ردّ كتابي", "text"),
         ("اكتبيلي الجواب", "text"),

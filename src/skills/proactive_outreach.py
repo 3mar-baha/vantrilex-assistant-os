@@ -64,6 +64,7 @@ class ProactiveOutreach:
         settings: Settings,
         state_path: Path,
         tz: ZoneInfo | None = None,
+        voice=None,
     ) -> None:
         self._brain = brain
         self._bot = bot
@@ -73,6 +74,9 @@ class ProactiveOutreach:
         self._settings = settings
         self._state_path = Path(state_path)
         self._tz = tz or ZoneInfo(settings.tz)
+        # Round-2 (owner 2026-09-03): outreach messages land as VOICE —
+        # Sara checks in with her own voice, not a text bubble.
+        self._voice = voice
 
     # --- gates ----------------------------------------------------------------
 
@@ -203,7 +207,23 @@ class ProactiveOutreach:
         if not message:
             return False
         try:
-            await self._bot.send_message(self._chat_id, message)
+            # Round-2: outreach is VOICE (her own check-in voice); text is the
+            # honest fallback when synthesis is down. The state only persists
+            # on the surface that actually reached the owner.
+            delivered = False
+            if self._voice is not None:
+                try:
+                    ogg = await self._voice.synthesize(message)
+                    from aiogram.types import BufferedInputFile
+
+                    await self._bot.send_voice(
+                        self._chat_id, BufferedInputFile(ogg, filename="sara.ogg")
+                    )
+                    delivered = True
+                except Exception:  # noqa: BLE001 — synthesis dead -> text
+                    logger.warning("proactive voice synthesis failed; text lands")
+            if not delivered:
+                await self._bot.send_message(self._chat_id, message)
         except Exception:  # noqa: BLE001 — send failure retries next tick
             logger.warning("proactive send failed; state not persisted")
             return False

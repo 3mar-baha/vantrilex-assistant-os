@@ -1,9 +1,12 @@
-"""Reply-modality skill (owner directive 2026-09-03): Sara chooses her reply
-surface — a text message or a voice note — mirroring the owner's channel with
-a 70/30 split: he sends text -> 70% text / 30% voice; he sends voice -> the
-ratio flips (70% voice / 30% text). An EXPLICIT owner request («رد صوتي» /
-«رد نصي») always wins, whatever the channel. Exactly ONE surface either way
-(the remediation-1.4 no-duplicates contract is untouched).
+"""Reply-modality skill (owner directives 2026-09-03, round-2 amended):
+Sara's reply surface is chosen in priority order —
+1. The owner's EXPLICIT channel request («رد صوتي» / «رد نصي») always wins;
+2. Otherwise the ROUTER decides (voice_reply in the same FAST verdict — the
+   model reads the intent and picks the channel; zero extra calls);
+3. Origin default: a voice note begets a voice reply, text begets text.
+The 70/30 probabilistic mirror is RETIRED (round-2: the model judges, not a
+dice roll). This module now only parses the explicit request; the shell
+composes the rest. Exactly ONE surface either way (remediation-1.4 contract).
 """
 
 import random
@@ -13,6 +16,10 @@ from typing import Final
 VOICE_FORCE_RE: Final = re.compile(
     r"ردّ?\s*(ب)?صوتي|بصوتك|جاوبيني\s*(ب)?صوت|الرد\s*(ب)?صوتي"
     r"|(ابعثي|ابعتلي|بعتيلي|ارسلي|أرسلي)\s+(رسالة\s+)?صوتية|رسالة\s+صوتية|ملاحظة\s+صوتية"
+    # live round-2 2026-09-03: «بدي اسمع صوتك» sailed past — hearing her voice
+    # IS a voice turn; so is asking about her voice or telling her to speak.
+    r"|(بدي|بدّي|بدي\s+اسمع|حابب\s+اسمع|سمعيني|اسمعي|خليني\s+اسمع|احكي\s+عن\s+حالك)\s*صوتك"
+    r"|صوتك(?!\s+ك)\s*$|(احكيلي|حكيلي|احكي)\s+.*بصوت"
 )
 TEXT_FORCE_RE: Final = re.compile(
     r"ردّ?\s*(نصي|كتابي)|بالنص|رد\s*نص|جاوبيني\s*كتابة|اكتبيلي|بصيغة نص"
@@ -43,10 +50,8 @@ def choose_reply_modality(*, voice_origin: bool, rng=random.random) -> str:
     return "text" if roll < 0.70 else "voice"
 
 
-def decide_reply_modality(text: str, voice_origin: bool) -> str:
-    """The shipped decision: an explicit request in the owner's text always
-    wins; otherwise the 70/30 mirror decides."""
-    forced = forced_modality(text)
-    if forced:
-        return forced
-    return choose_reply_modality(voice_origin=voice_origin)
+def decide_reply_modality(text: str, voice_origin: bool) -> str | None:
+    """Round-2 contract: return ONLY the owner's explicit channel request
+    (or None). The router's voice_reply and the origin default compose in
+    the shell — the model judges intent; this parser just obeys commands."""
+    return forced_modality(text)

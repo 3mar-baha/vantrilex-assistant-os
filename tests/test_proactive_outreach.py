@@ -169,6 +169,65 @@ async def test_heavy_yes_sends_one_warm_message(tmp_path):
     assert brain.calls[0]["tier"].name == "HEAVY"
 
 
+async def test_outreach_lands_as_voice_with_text_fallback(tmp_path):
+    """Round-2 (owner 2026-09-03): outreach is her OWN VOICE — a voice note
+    when synthesis lives, text only when synthesis dies."""
+
+    class FakeVoice:
+        def __init__(self, error=None):
+            self.error = error
+            self.spoken: list[str] = []
+
+        async def synthesize(self, text):
+            if self.error:
+                raise self.error
+            self.spoken.append(text)
+            return b"OGG-BYTES"
+
+    class VoiceBot(FakeBot):
+        def __init__(self):
+            super().__init__()
+            self.voices: list = []
+
+        async def send_voice(self, chat_id, voice):
+            self.voices.append(voice)
+
+    # voice path
+    brain = FakeBrain('{"should": true, "message": "هلا عمر"}')
+    bot = VoiceBot()
+    voice = FakeVoice()
+    engine = ProactiveOutreach(
+        brain=brain,
+        bot=bot,
+        chat_id=OWNER_ID,
+        vault=FakeVault(fail=True),
+        suite=FakeSuite(),
+        settings=_settings(tmp_path, PROACTIVE_COOLDOWN_MIN="0"),
+        state_path=tmp_path / "State" / "p1.json",
+        voice=voice,
+    )
+    assert await engine.fire_once(TUE_2026_09_01) is True
+    assert voice.spoken == ["هلا عمر"]  # the check-in was SPOKEN
+    assert bot.voices and not bot.sent  # voice note, no text duplicate
+
+    # synthesis dead -> honest text
+    brain2 = FakeBrain('{"should": true, "message": "هلا عمر"}')
+    bot2 = VoiceBot()
+    engine2 = ProactiveOutreach(
+        brain=brain2,
+        bot=bot2,
+        chat_id=OWNER_ID,
+        vault=FakeVault(fail=True),
+        suite=FakeSuite(),
+        settings=_settings(tmp_path, PROACTIVE_COOLDOWN_MIN="0"),
+        state_path=tmp_path / "State" / "p2.json",
+        voice=FakeVoice(error=RuntimeError("fish 429")),
+    )
+    assert await engine2.fire_once(TUE_2026_09_01) is True
+    assert bot2.sent == ["هلا عمر"]  # the honest fallback reached him
+    assert not bot2.voices
+
+
 async def test_heavy_no_stays_silent(tmp_path):
     engine, brain, bot = _rig(tmp_path, brain_reply='{"should": false}')
     assert await engine.fire_once(TUE_2026_09_01) is False

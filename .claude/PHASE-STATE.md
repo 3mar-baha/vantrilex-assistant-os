@@ -759,6 +759,31 @@ product.)
       starts it / `omniroute run`), terminal 2 = core. `python -m src.main`
       alone is the core child only.
 
+      ### LIVE-TEST ROUND 2 (2026-09-03 22:14–22:17, owner) — all fixed
+      Context: OmniRoute RUNNING (chat worked), bridge daemon started AFTER
+      the launch attempts. OWNER DIRECTIVES (his words):
+      (a) «اريد ان يتم تحديد هذه الامور بشكل افضل واظن انه من الافضل ان يحدد
+      النموذج نفسه ما المطلوب» — the reply channel is now THE ROUTER'S call:
+      `voice_reply` in the same FAST verdict (zero extra calls); explicit
+      «رد صوتي/نصي» overrides; origin default otherwise. The 70/30 dice roll
+      RETIRED. regex holds only unambiguous patterns; «بدي اسمع صوتك» fixed.
+      (b) «بدي اسمع صوتك» got a written REFUSAL claiming a mechanical voice —
+      persona now NEVER denies her voice (banned by name, contract-tested)
+      and NEVER admits being a robot («رقمي/افتراضي/ميكانيكي» banned; deflects
+      with a friend's joke and returns to the topic).
+      (c) Replies must be 2-3 SHORT messages, not one long formatted lecture —
+      prompt contract («إجابتين لثلاث رسائل قصيرة», no headings/numbered
+      lists/markdown) + send_split() for the voice-fallback surface.
+      (d) «رسائل الإطمئنان اريدها صوتية» — proactive outreach now rides the
+      VOICE lane (text only when synthesis dies; state persists on delivery).
+      (e) Typo «جهاي» must be read-through silently — prompt contract.
+      (f) Bridge-down launch gets its own actionable line «الجسر مو متصل»
+      (BridgeOffline catch in the tool lane; was generic «عطل بسيط»).
+      Gate: 457 passed / 87.06% / security+docs green. Owner retest list:
+      «بدي اسمع صوتك» → VOICE note; «مين انتي؟» → human deflection, no robot
+      admission; long question → 2-3 short bubbles; outreach arrives as a
+      voice note; launch with daemon down → «الجسر مو متصل».
+
 ## Open items / blockers
 
 - **ACTIVE BLOCKER (2026-08-31, owner pausing for today)**: Oracle signup declined the

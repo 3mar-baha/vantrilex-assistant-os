@@ -13,6 +13,7 @@ from zoneinfo import ZoneInfo
 
 from loguru import logger
 
+from src.bridge_server import BridgeOffline
 from src.telemetry import OFFLINE_TEXT_AR
 
 GOOGLE_OFFLINE_AR = "الجيميل والتقويم مو متصلين هسا — ما قدرت أوصل لحسابك بغوغل"
@@ -115,7 +116,13 @@ class ToolRegistry:
             return ASK_APP_AR
         if self._coordinator is None:
             return LAUNCH_OFFLINE_AR
-        await self._coordinator.request_launch(name, origin="owner_chat")
+        try:
+            await self._coordinator.request_launch(name, origin="owner_chat")
+        except BridgeOffline:
+            # live 2026-09-03 22:16: a missing bridge session deserves its OWN
+            # honest line, not the generic «عطل بسيط» — the owner knows to
+            # start the daemon.
+            return LAUNCH_OFFLINE_AR
         return None  # the coordinator notifies the owner itself (audit code inside)
 
     async def _do_brief(self, arg: str) -> str:

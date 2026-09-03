@@ -317,10 +317,10 @@ def make_shell(make_settings):
         decide_modality=None,
         **settings_overrides,
     ):
-        # Deterministic default (2026-09-03): legacy shell tests pin the OLD
-        # channel contract (text-origin -> text bubble, voice-origin -> voice
-        # note) — the shipped 70/30 mirror would make them flaky. Modality
-        # tests inject their own decider; the real skill has its own suite.
+        # Round-2 (2026-09-03): the decider returns ONLY the explicit request
+        # (or None) — the router's voice_reply + origin default compose in the
+        # shell. Legacy tests pin the channel contract via these doubles:
+        # default = follow the origin; explicit tests inject their own.
         if decide_modality is None:
             decide_modality = lambda text, voice_origin: "voice" if voice_origin else "text"
         gateway = FakeGateway(router_replies=router_replies, stream_programs=stream_programs)
