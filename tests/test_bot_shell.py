@@ -27,7 +27,14 @@ from src.bot import (
 )
 from src.gateway import GatewayError
 from src.skills.voice_biometric_auth import GUEST_LOCKDOWN_AR, VoiceBiometrics
-from tests.conftest import OWNER_ID, StreamProgram, drain, make_update, wait_until
+from tests.conftest import (
+    OWNER_ID,
+    StreamProgram,
+    drain,
+    make_update,
+    wait_until,
+)
+from tests.conftest import FakeVoice as _ConftestFakeVoice
 
 
 def _router(route: str, ack: str) -> str:
@@ -506,6 +513,23 @@ class _ReadVault:
         return self.reads[path]
 
 
+class _VaultDouble:
+    """2.5: read + upsert double — enough for the dialect-learning loop."""
+
+    def __init__(self, files=None):
+        self.files = dict(files or {})
+        self.writes: list[tuple[str, str]] = []
+
+    async def read(self, path):
+        if path not in self.files:
+            raise FileNotFoundError(path)
+        return self.files[path]
+
+    async def upsert(self, path, content, *, message):
+        self.writes.append((path, content))
+        self.files[path] = content
+
+
 class _WriterDouble:
     def __init__(self):
         self.exchanges = []
@@ -655,6 +679,66 @@ async def test_pending_confirmation_turns_enter_memory(fake_bot, make_shell):
     contents = [m["content"] for m in history]
     assert any("نعم" in c for c in contents)  # the confirmation line entered
     assert any("calculator" in c for c in contents)  # the RESULT entered
+
+
+# --- remediation 2.5 (dead learning loop): «تعلمي:» writes the vault ----------------
+
+
+async def test_teach_line_writes_dialect_notes_and_updates_live_lexicon(fake_bot, make_shell):
+    """«تعلمي: كفيك -> كفايك» → Dialect_Notes actually UPSERTED in the vault AND
+    the live synthesis lexicon updated (the voice pipeline shapes the NEXT reply
+    with the owner's pronunciation). The loop: teach → vault → speech + envelope."""
+    vault = _VaultDouble(
+        {
+            "02_Areas/Profile/Dialect_Notes.md": "---\nnotes:\n  - term: هسا\n    phonetic: هسَّا\n---\n"
+        }
+    )
+    shell = make_shell(
+        vault=vault,
+        router_replies=[_router("tier2", "تم")],
+        stream_programs=[StreamProgram(deltas=("كفيك",))],
+    )
+    bot = fake_bot()
+    await _run(shell, bot, make_update(1, OWNER_ID, "تعلمي: كفيك -> كفايك"))
+
+    # the teaching reached the brain turn normally
+    assert shell.gateway.stream_calls
+
+    from tests.conftest import wait_until
+
+    await wait_until(lambda: any("Dialect_Notes" in p for p, _ in vault.writes))
+    content = next(c for p, c in vault.writes if "Dialect_Notes" in p)
+    assert "كفيك" in content and "كفايك" in content  # the pair landed in the vault
+
+
+async def test_teach_line_refreshes_live_voice_lexicon(fake_bot, make_shell):
+    """2.5 live half: after «تعلمي:», the voice pipeline's notes are refreshed
+    from the vault — the next synthesis shapes with the learned pair (no reboot)."""
+    vault = _VaultDouble(
+        {
+            "02_Areas/Profile/Dialect_Notes.md": "---\nnotes:\n  - term: هسا\n    phonetic: هسَّا\n---\n"
+        }
+    )
+    updated_notes: list = []
+
+    class _NotedVoice(_ConftestFakeVoice):
+        def update_notes(self, notes):
+            updated_notes.extend(notes)
+
+    shell = make_shell(
+        vault=vault,
+        custom_voice=_NotedVoice(),
+        router_replies=[_router("tier2", "تم")],
+        stream_programs=[StreamProgram(deltas=("رد",))],
+    )
+    bot = fake_bot()
+    await _run(shell, bot, make_update(1, OWNER_ID, "تعلمي: كفيك -> كفايك"))
+
+    from tests.conftest import wait_until
+
+    await wait_until(lambda: updated_notes)
+    terms = {n.term for n in updated_notes}
+    assert "كفيك" in terms and "هسا" in terms  # learned pair + boot pairs both live
 
 
 async def test_streams_carry_history_and_long_term_envelope(fake_bot, make_shell):

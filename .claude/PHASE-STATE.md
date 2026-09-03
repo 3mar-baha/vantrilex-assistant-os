@@ -627,6 +627,20 @@ product.)
       + memory). Gate: 468 passed / 86.64% / security+docs green. Fixes
       audit C-8. Next: 2.5 learning loop (Dialect_Notes header + «تعلمي:»).
 
+      **2.5 DONE (dead learning loop fixed end-to-end)**: (a) `load_long_term`
+      reads the Dialect_Notes FRONTMATTER pairs (parse_notes + prompt_block)
+      on top of the prose body — learned pronunciations reach the brain
+      envelope every turn; (b) VoicePipeline + FishVoice/FishFirstVoice accept
+      notes= and update_notes() refreshes the LIVE lexicon on both voice
+      lanes without a reboot; (c) `_learn_dialect` background task in bot.py
+      (M1 never-blocks contract): read vault → dialect.learn merge → upsert →
+      live-lexicon refresh; boot seeds the lexicon from the vault once the
+      VaultClient exists. «تعلمي: كفيك -> كفايك» now: teaches → vault → speech
+      + envelope. 4 new tests (header-in-envelope, learned pronunciation in
+      synthesis, vault write, live-lexicon refresh); conftest make_shell
+      gains custom_voice injection. Gate: 472 passed / 86.66% / security+docs
+      green. Next: 2.6 Whisper Arabic pinning.
+
 ## Open items / blockers
 
 - **ACTIVE BLOCKER (2026-08-31, owner pausing for today)**: Oracle signup declined the

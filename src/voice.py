@@ -144,14 +144,27 @@ async def transcode_mp3_to_opus(mp3: bytes) -> bytes:
 
 
 class VoicePipeline:
-    def __init__(self, *, voice: str, rate: str, pitch: str, ffmpeg_bin: str = FFMPEG_BIN) -> None:
+    def __init__(
+        self,
+        *,
+        voice: str,
+        rate: str,
+        pitch: str,
+        ffmpeg_bin: str = FFMPEG_BIN,
+        notes: list | None = None,
+    ) -> None:
         self._voice = voice
         self._rate = rate
         self._pitch = pitch
         self._ffmpeg_bin = ffmpeg_bin
+        self._notes = notes  # 2.5: learned pronunciation pairs — update_notes() refreshes live
+
+    def update_notes(self, notes: list) -> None:
+        """2.5: «تعلمي:» refreshes the live lexicon without a reboot."""
+        self._notes = notes
 
     def synthesize_stream(self, text: str) -> AsyncIterator[bytes]:
-        shaped = shape_for_tts(text)
+        shaped = shape_for_tts(text, notes=self._notes)
         if not shaped.strip():
             raise ValueError("text is blank — nothing to synthesize")
         if len(shaped) > MAX_TTS_CHARS:

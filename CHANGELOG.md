@@ -9,6 +9,15 @@ product release tags start independently at v1.0.0.)
 ## [Unreleased]
 
 ### Added
+- **Live dialect learning loop (remediation 2.5, audit dead-loop fix)**: «تعلمي:
+  مصطلح -> نطق» now actually does something — a background task reads
+  Dialect_Notes.md, merges the teaching (dedupe by term), upserts the vault,
+  and refreshes the LIVE voice lexicon on both lanes (Edge VoicePipeline and
+  the Fish lane) with no reboot. The learned pairs also reach the brain:
+  `load_long_term` now reads the Dialect_Notes FRONTMATTER (`notes:` pairs)
+  in addition to the prose body, so learned pronunciations ride every
+  envelope. Best-effort per the M1 contract: a vault failure logs and skips,
+  the reply is never blocked.
 - **Confirmation memory (remediation 2.4, audit C-8)**: every PC-action
   exchange — the coordinator's prompt, the owner's «نعم»/«لا», the execution
   result or refusal line — now enters `memory.remember` under the owner's chat

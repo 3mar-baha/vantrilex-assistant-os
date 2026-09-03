@@ -362,6 +362,11 @@ async def _stream_answer(
 ) -> None:
     chat_id = message.chat.id
     streamer = ChatStreamer(bot, chat_id, edit_interval_ms=settings.stream_edit_interval_ms)
+    if vault is not None:
+        # 2.5 (dead-loop fix): «تعلمي:» — background, never blocks the reply
+        task = asyncio.create_task(_learn_dialect(vault, text, voice, ZoneInfo(settings.tz)))
+        _PERSIST_TASKS.add(task)
+        task.add_done_callback(_PERSIST_TASKS.discard)
     try:
         await bot.send_chat_action(chat_id, "record_voice" if voice_origin else "typing")
         system = SYSTEM_PROMPT_AR
@@ -451,6 +456,33 @@ def _persist_exchange(writer, user_text: str, reply_text: str) -> None:
     task.add_done_callback(_PERSIST_TASKS.discard)
 
 
+DIALECT_NOTES_PATH: Final[str] = "02_Areas/Profile/Dialect_Notes.md"
+
+
+async def _learn_dialect(vault, text: str, voice, tz: ZoneInfo) -> None:
+    """Remediation 2.5 (dead learning loop): «تعلمي: term -> phonetic» —
+    read Dialect_Notes → dialect.learn merge → vault upsert → refresh the LIVE
+    voice lexicon. Best-effort: any failure logs and skips, the reply is never
+    blocked (M1 contract)."""
+    try:
+        from src.dialect import learn, parse_notes
+
+        try:
+            notes_md = await vault.read(DIALECT_NOTES_PATH)
+        except FileNotFoundError:
+            notes_md = "---\nnotes:\n---\n"
+        updated = learn(text, notes_md=notes_md, today=datetime.now(tz).date().isoformat())
+        if updated is None:
+            return
+        await vault.upsert(DIALECT_NOTES_PATH, updated, message="sara: dialect learning")
+        update = getattr(voice, "update_notes", None)
+        if callable(update):
+            update(parse_notes(updated))  # the live lexicon (Edge + Fish), no reboot
+        logger.info("dialect learning: vault updated + live lexicon refreshed")
+    except Exception:  # noqa: BLE001 — teaching is best-effort, never blocks the reply
+        logger.warning("dialect learning failed (non-blocking)")
+
+
 class _BotNotifier:
     """Delivers PCActionCoordinator outcomes/prompts to the owner's chat."""
 
@@ -462,14 +494,18 @@ class _BotNotifier:
         await self._bot.send_message(self._chat_id, text)
 
 
-def build_voice(settings: Settings):
+def build_voice(settings: Settings, notes: list | None = None):
     """Voice lane factory (remediation 1.9, identity-purity update 2026-09-03):
     Fish Audio is Sara's ONLY voice when configured — NO Microsoft fallback
     (a foreign voice broke identity live); Fish failure lands the caller's
-    honest TEXT fallback. Unconfigured deployments stay pure Edge-TTS."""
+    honest TEXT fallback. Unconfigured deployments stay pure Edge-TTS.
+    2.5: notes = the learned dialect pairs riding the Edge shaper from boot."""
     if not settings.fish_audio_ready:
         return VoicePipeline(
-            voice=settings.voice_name, rate=settings.voice_rate, pitch=settings.voice_pitch
+            voice=settings.voice_name,
+            rate=settings.voice_rate,
+            pitch=settings.voice_pitch,
+            notes=notes,
         )
     return FishFirstVoice(fish=FishVoice.from_settings(settings))
 
@@ -484,12 +520,18 @@ async def run_bot(settings: Settings, bridge=None) -> None:
             Tier.HEAVY: settings.heavy_chain,
         },
     )
-    voice = build_voice(settings)
+    voice = build_voice(settings)  # 2.5: boot notes load below, once the vault exists
     vault = VaultClient(
         settings.vault_github_repo,
         settings.vault_github_token.get_secret_value(),
         branch=settings.vault_branch,
     )
+    try:  # 2.5: seed the live voice lexicon from the vault at boot (best-effort)
+        from src.dialect import parse_notes
+
+        voice.update_notes(parse_notes(await vault.read(DIALECT_NOTES_PATH)))
+    except Exception as error:  # noqa: BLE001 — no notes = no lexicon, the bot still boots
+        logger.warning("boot dialect notes load skipped: {}", error)
     memory = ConversationMemory()
     writer = VaultMemoryWriter(vault, gateway, tz=ZoneInfo(settings.tz))
     bot = Bot(token=settings.telegram_bot_token)

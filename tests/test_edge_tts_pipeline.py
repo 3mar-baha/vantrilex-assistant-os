@@ -180,6 +180,25 @@ async def test_synthesis_applies_dialect_shaper(monkeypatch):
     assert cls.instances[-1].text == "هسَّا"
 
 
+@needs_ffmpeg
+async def test_synthesis_uses_owner_learned_pronunciation(monkeypatch):
+    """Remediation 2.5 (dead loop): notes resolved from the vault at pipeline
+    build ride the shaper — the owner's learned pair «كفيك -> كفايك» changes
+    what the engine actually synthesizes."""
+    from src.dialect import DialectNote
+
+    cls = _script([{"type": "audio", "data": CANNED_MP3}])
+    monkeypatch.setattr("edge_tts.Communicate", cls)
+    pipeline = VoicePipeline(
+        voice="ar-JO-SanaNeural",
+        rate="+0%",
+        pitch="+0Hz",
+        notes=[DialectNote(term="كفيك", phonetic="كفايك")],
+    )
+    await pipeline.synthesize("كفيك")
+    assert cls.instances[-1].text == "كفايك"  # the learned pronunciation won
+
+
 async def test_emoji_only_text_rejected_pre_spawn(monkeypatch):
     """Emoji-only text shapes to blank -> rejected before any spawn."""
     spawns = []

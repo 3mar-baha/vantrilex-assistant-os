@@ -88,7 +88,11 @@ def build_messages(
 
 async def load_long_term(vault, *, today: date, max_chars: int = SECTION_CHAR_CAP) -> str:
     """Vault excerpts for the envelope: profile + dialect notes + today's ledger.
-    Missing notes are skipped; any other read failure degrades with a loud log."""
+    Missing notes are skipped; any other read failure degrades with a loud log.
+    2.5 (dead-loop fix): Dialect_Notes contributes BOTH its prose body AND its
+    frontmatter pairs (the learned pronunciations live in the `notes:` header)."""
+    from src.dialect import parse_notes, prompt_block
+
     parts: list[str] = []
     for path in (PROFILE_USER_INFO, "02_Areas/Profile/Dialect_Notes.md", daily_log_path(today)):
         try:
@@ -101,8 +105,13 @@ async def load_long_term(vault, *, today: date, max_chars: int = SECTION_CHAR_CA
             )
             continue
         body = split_frontmatter(text)[1].strip()
-        if body:
-            parts.append(body[:max_chars])
+        section = body
+        if path.endswith("Dialect_Notes.md"):
+            header = prompt_block(parse_notes(text)).strip()
+            if header:
+                section = f"{header}\n\n{body}".strip()
+        if section:
+            parts.append(section[:max_chars])
     return "\n\n".join(parts)
 
 

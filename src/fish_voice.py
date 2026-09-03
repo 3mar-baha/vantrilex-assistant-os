@@ -33,13 +33,19 @@ class FishVoice:
         voice_ref: str,
         api_key: str,
         speed: float | None = None,
+        notes: list | None = None,
         transport=None,
     ) -> None:
         self.model = model
         self.voice_ref = voice_ref
         self.speed = speed
+        self._notes = notes  # 2.5: learned dialect pairs ride the shaper here too
         self._api_key = api_key
         self._client = httpx.AsyncClient(timeout=_TIMEOUT, transport=transport)
+
+    def update_notes(self, notes: list) -> None:
+        """2.5: «تعلمي:» refreshes the live lexicon without a reboot."""
+        self._notes = notes
 
     @property
     def available(self) -> bool:
@@ -60,7 +66,7 @@ class FishVoice:
         # «هههه» became an out-of-context laugh, emoji/tanween mangled the
         # dialect. Shape exactly like the Edge lane; if shaping empties the
         # string (pure emoji), pass the original through — never blank.
-        text = (shape_for_tts(text) or text).strip()
+        text = (shape_for_tts(text, notes=self._notes) or text).strip()
         if not text:
             raise ValueError("blank text — nothing to synthesize")
         if not self.available:
@@ -107,6 +113,11 @@ class FishFirstVoice:
 
     def __init__(self, *, fish: FishVoice | None) -> None:
         self._fish = fish
+
+    def update_notes(self, notes: list) -> None:
+        """2.5: delegate to the Fish lane so «تعلمي:» refreshes it too."""
+        if self._fish is not None:
+            self._fish.update_notes(notes)
 
     async def synthesize(self, text: str) -> bytes:
         if self._fish is None or not self._fish.available:

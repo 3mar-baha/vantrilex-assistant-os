@@ -307,6 +307,7 @@ def make_shell(make_settings):
         router_replies=(),
         stream_programs=(),
         voice_error=None,
+        custom_voice=None,
         transcriber=None,
         vault=None,
         memory=None,
@@ -323,7 +324,7 @@ def make_shell(make_settings):
         if decide_modality is None:
             decide_modality = lambda text, voice_origin: "voice" if voice_origin else "text"
         gateway = FakeGateway(router_replies=router_replies, stream_programs=stream_programs)
-        voice = FakeVoice(error=voice_error)
+        voice = custom_voice if custom_voice is not None else FakeVoice(error=voice_error)
         settings = make_settings(STREAM_EDIT_INTERVAL_MS="40", **settings_overrides)
         dp = build_dispatcher(
             gateway,

@@ -108,6 +108,23 @@ async def test_load_long_term_joins_profile_dialect_and_today_log():
     assert "صباح" in context
 
 
+async def test_load_long_term_reads_dialect_notes_header():
+    """Remediation 2.5 (dead loop): the learned pronunciation pairs live in the
+    Dialect_Notes FRONTMATTER (notes: list) — the header must reach the brain's
+    envelope, not just the prose body. Previously the owner's teachings were
+    invisible to every turn."""
+    vault = FakeVault(
+        {
+            "02_Areas/Profile/Dialect_Notes.md": (
+                "---\nnotes:\n  - term: كفيك\n    phonetic: كفايك\n---\nعمر يحكي أردني."
+            )
+        }
+    )
+    context = await load_long_term(vault, today=NOW.date())
+    assert "كفيك" in context and "كفايك" in context  # the pair reached the envelope
+    assert "عمر يحكي أردني." in context  # body still rides along
+
+
 async def test_load_long_term_skips_missing_notes_and_survives_vault_failure():
     class ExplodingVault(FakeVault):
         async def read(self, path):
