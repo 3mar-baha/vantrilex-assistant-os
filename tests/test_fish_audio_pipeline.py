@@ -9,7 +9,7 @@ import pytest
 from src.config import Settings
 from src.fish_voice import FishFirstVoice, FishVoice, FishVoiceError
 from src.voice import VoicePipeline
-from tests.helpers_voice import CANNED_MP3, _script, needs_ffmpeg
+from tests.helpers_voice import CANNED_MP3, needs_ffmpeg
 
 
 def _settings(**over) -> Settings:
@@ -197,53 +197,38 @@ def test_settings_default_speed_09():
     assert _settings().fish_audio_speed == 0.9
 
 
-# --- FishFirstVoice: fish preferred, Salma fallback (the wiring contract) ---------
+# --- FishFirstVoice: Sara's ONLY voice (identity purity, owner 2026-09-03) --------
 
 
 @needs_ffmpeg
-async def test_fishfirst_prefers_fish_when_available(monkeypatch):
-    """Fish healthy -> Edge-TTS is never touched (the wire carries fish bytes)."""
-    monkeypatch.setattr("edge_tts.Communicate", _script([{"type": "audio", "data": CANNED_MP3}]))
+async def test_fishfirst_synthesizes_when_fish_healthy():
+    """Fish healthy -> the wire carries fish bytes through the ffmpeg opus chain."""
     rec = _Recorder(body=CANNED_MP3)  # real MPEG frames — the transcode chain must accept them
-    pipe = FishFirstVoice(
-        fish=FishVoice(model="m", voice_ref="r", api_key="k", transport=rec),
-        edge=type("Edge", (), {"synthesize": None})(),  # would explode if called
-    )
+    pipe = FishFirstVoice(fish=FishVoice(model="m", voice_ref="r", api_key="k", transport=rec))
     out = await pipe.synthesize("أهلاً")
-    assert out.startswith(b"OggS")  # same ffmpeg 64k opus chain as the edge lane
+    assert out.startswith(b"OggS")  # same ffmpeg 64k opus chain
     assert len(rec.requests) == 1
 
 
-@needs_ffmpeg
-async def test_fishfirst_falls_back_to_edge_on_fish_failure(monkeypatch):
-    """Fish dead (402/429/network) -> Edge-TTS synthesizes the same text verbatim."""
-    cls = _script([{"type": "audio", "data": CANNED_MP3}])
-    monkeypatch.setattr("edge_tts.Communicate", cls)
+async def test_fish_failure_reraises_for_honest_text_fallback():
+    """Owner directive 2026-09-03 07:03 (live): Fish is Sara's ONLY voice — a
+    Microsoft-Salma voice note after a Fish failure broke identity («الرد عاد
+    لمايكروسوفت»). FishFirstVoice never falls back to Edge SYNTHESIS: it
+    re-raises so the bot's honest TEXT fallback lands (the owner never hangs;
+    the voice identity stays pure Fish)."""
     rec = _Recorder(status=429)
-
-    edge = VoicePipeline(voice="ar-EG-SalmaNeural", rate="+0%", pitch="+0Hz")
-    pipe = FishFirstVoice(
-        fish=FishVoice(model="m", voice_ref="r", api_key="k", transport=rec),
-        edge=edge,
-    )
-    out = await pipe.synthesize("أهلاً عمر")
-    assert out.startswith(b"OggS")  # real ffmpeg encode of the canned MP3
-    assert cls.instances[-1].text == "أهلا عمر"  # shaped (تسكين strips the tanween)
-    assert cls.instances[-1].voice == "ar-EG-SalmaNeural"
+    pipe = FishFirstVoice(fish=FishVoice(model="m", voice_ref="r", api_key="k", transport=rec))
+    with pytest.raises(FishVoiceError):
+        await pipe.synthesize("أهلاً عمر")
 
 
-@needs_ffmpeg
-async def test_fishfirst_falls_back_when_fish_unconfigured():
-    """No fish config at all -> the pipeline IS the edge pipeline (pure Salma)."""
-    cls = _script([{"type": "audio", "data": CANNED_MP3}])
-
-    edge = VoicePipeline(voice="ar-EG-SalmaNeural", rate="+0%", pitch="+0Hz")
-    import edge_tts
-
-    edge_tts.Communicate = cls
-    pipe = FishFirstVoice(fish=None, edge=edge)
-    out = await pipe.synthesize("مرحبا")
-    assert out.startswith(b"OggS")
+async def test_unconfigured_fish_raises_no_foreign_fallback():
+    """No fish config on a FishFirstVoice -> loud failure, never a silent
+    Microsoft voice. (Deployments that WANT Edge-TTS simply leave fish
+    unconfigured — build_voice returns the pure Edge pipeline.)"""
+    pipe = FishFirstVoice(fish=None)
+    with pytest.raises(FishVoiceError):
+        await pipe.synthesize("أهلاً")
 
 
 # --- run_bot wiring: fish when ready, pure edge otherwise (remediation 1.9) ------

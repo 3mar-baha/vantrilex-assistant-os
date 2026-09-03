@@ -18,6 +18,9 @@ from src.skills.reply_modality import choose_reply_modality, forced_modality
         ("ردّ بصوتك", "voice"),
         ("جاوبيني بصوت", "voice"),
         ("الرد صوتي", "voice"),
+        ("ابعثي رسالة صوتية", "voice"),  # live 2026-09-03 07:03 — explicit ask
+        ("ابعتلي ملاحظة صوتية بتعرفي عن حالك", "voice"),
+        ("رسالة صوتية", "voice"),
         ("رد نصي", "text"),
         ("ردّ كتابي", "text"),
         ("اكتبيلي الجواب", "text"),

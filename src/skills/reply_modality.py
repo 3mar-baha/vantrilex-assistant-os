@@ -10,7 +10,10 @@ import random
 import re
 from typing import Final
 
-VOICE_FORCE_RE: Final = re.compile(r"ردّ?\s*(ب)?صوتي|بصوتك|جاوبيني\s*(ب)?صوت|الرد\s*(ب)?صوتي")
+VOICE_FORCE_RE: Final = re.compile(
+    r"ردّ?\s*(ب)?صوتي|بصوتك|جاوبيني\s*(ب)?صوت|الرد\s*(ب)?صوتي"
+    r"|(ابعثي|ابعتلي|بعتيلي|ارسلي|أرسلي)\s+(رسالة\s+)?صوتية|رسالة\s+صوتية|ملاحظة\s+صوتية"
+)
 TEXT_FORCE_RE: Final = re.compile(
     r"ردّ?\s*(نصي|كتابي)|بالنص|رد\s*نص|جاوبيني\s*كتابة|اكتبيلي|بصيغة نص"
 )
@@ -26,7 +29,7 @@ def forced_modality(text: str) -> str | None:
         return None
     if TEXT_FORCE_RE.search(text):
         return "text"
-    if re.search(r"ردّ?\s*(ب)?صوتي|بصوتك|جاوبيني\s*(ب)?صوت|الرد\s*(ب)?صوتي", text):
+    if VOICE_FORCE_RE.search(text):
         return "voice"
     return None
 

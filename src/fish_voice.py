@@ -11,7 +11,6 @@ already in .env — the voice lane borrows it; the brain still routes via OmniRo
 """
 
 import httpx
-from loguru import logger
 
 from src.dialect import shape_for_tts
 from src.voice import transcode_mp3_to_opus
@@ -101,18 +100,16 @@ class FishVoice:
 
 
 class FishFirstVoice:
-    """Same synthesize(text) -> Ogg-Opus-bytes interface as VoicePipeline: Fish
-    first (MP3 -> the existing ffmpeg 64k chain), Edge-TTS on any Fish failure."""
+    """Sara's ONLY voice lane (owner directive 2026-09-03 07:03): Fish via
+    OpenRouter, MP3 -> the ffmpeg 64k opus chain. NO Microsoft-Edge fallback —
+    a foreign voice broke identity live («الرد عاد لمايكروسوفت»); a Fish
+    failure re-raises so the caller's honest TEXT fallback lands instead."""
 
-    def __init__(self, *, fish: FishVoice | None, edge) -> None:
+    def __init__(self, *, fish: FishVoice | None) -> None:
         self._fish = fish
-        self._edge = edge
 
     async def synthesize(self, text: str) -> bytes:
-        if self._fish is not None and self._fish.available:
-            try:
-                mp3 = await self._fish.synthesize(text)
-                return await transcode_mp3_to_opus(mp3)
-            except FishVoiceError as error:
-                logger.warning("fish voice failed, falling back to Edge-TTS: {}", error)
-        return await self._edge.synthesize(text)
+        if self._fish is None or not self._fish.available:
+            raise FishVoiceError("fish voice unconfigured — no synthesis, no foreign fallback")
+        mp3 = await self._fish.synthesize(text)
+        return await transcode_mp3_to_opus(mp3)

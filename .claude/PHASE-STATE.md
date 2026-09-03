@@ -568,6 +568,17 @@ product.)
       رد نصي» always wins, one surface only; (4) reply_to_message quote rides
       the brain prompt; (5) 50-message history + Obsidian envelope confirmed
       already in every turn (pre-existing). Gate: 447 passed / 86.14%.
+      SECOND RETEST (07:00-07:06): media comprehension PASS (described the
+      photo natively), reply-awareness PASS («شايفة الرسالة؟» -> «شايفتها،
+      هي اللي كتبتها بعد ما قلتلي»), calculator still «ما بقدر» (2.1/2.2
+      pending, known). FAIL: 07:03 voice ask returned a MICROSOFT-Salma voice
+      (Fish 429'd -> transparent Edge fallback fired) -> owner directive:
+      Fish ONLY, no foreign voice. FIX LANDED: FishFirstVoice re-raises on
+      Fish failure (honest text reply; no Edge synthesis fallback), build_voice
+      wires no edge when fish configured; «ابعثي/ارسلي رسالة صوتية» /
+      «رسالة صوتية» / «ملاحظة صوتية» added to the voice-forcing patterns.
+      Speech pool 429 rate-limited at probe time (morning) — recovery watch
+      ran; free-pool burstiness is the cause, not a code defect.
 
 ## Open items / blockers
 

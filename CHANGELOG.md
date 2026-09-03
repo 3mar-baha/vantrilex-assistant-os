@@ -8,6 +8,20 @@ product release tags start independently at v1.0.0.)
 
 ## [Unreleased]
 
+### Changed
+- **Fish is Sara's ONLY voice — Microsoft fallback removed (owner directive
+  2026-09-03 07:03, live retest)**: the 07:03 voice note came back in the
+  Microsoft-Salma voice after a Fish failure («الرد عاد لمايكروسوفت») — a
+  foreign voice broke identity. `FishFirstVoice` no longer falls back to Edge
+  synthesis: a Fish failure (429/5xx/network) re-raises so the bot's honest
+  TEXT reply lands; the owner never hangs, and the voice identity stays pure
+  Fish. `build_voice()` wires no Edge lane when Fish is configured;
+  unconfigured deployments remain pure Edge-TTS. Docs synced (CLAUDE.md
+  invariant 1, .env.example voice block).
+- **Explicit voice-ask forcing widened (live 07:03)**: «ابعثي رسالة صوتية» /
+  «رسالة صوتية» / «ملاحظة صوتية» now force the voice channel like «رد صوتي» —
+  the explicit ask never rides the 70/30 dice.
+
 ### Added
 - **Media comprehension — photos & videos seen natively (owner directive 2026-09-03)**:
   a photo or video the owner sends on Telegram is understood automatically —

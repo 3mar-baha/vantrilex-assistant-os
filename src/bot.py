@@ -437,14 +437,15 @@ class _BotNotifier:
 
 
 def build_voice(settings: Settings):
-    """Voice lane factory (remediation 1.9): Fish Audio primary when configured,
-    pure Edge-TTS Salma otherwise — same synthesize() interface either way."""
-    edge = VoicePipeline(
-        voice=settings.voice_name, rate=settings.voice_rate, pitch=settings.voice_pitch
-    )
+    """Voice lane factory (remediation 1.9, identity-purity update 2026-09-03):
+    Fish Audio is Sara's ONLY voice when configured — NO Microsoft fallback
+    (a foreign voice broke identity live); Fish failure lands the caller's
+    honest TEXT fallback. Unconfigured deployments stay pure Edge-TTS."""
     if not settings.fish_audio_ready:
-        return edge
-    return FishFirstVoice(fish=FishVoice.from_settings(settings), edge=edge)
+        return VoicePipeline(
+            voice=settings.voice_name, rate=settings.voice_rate, pitch=settings.voice_pitch
+        )
+    return FishFirstVoice(fish=FishVoice.from_settings(settings))
 
 
 async def run_bot(settings: Settings, bridge=None) -> None:

@@ -53,9 +53,12 @@ strictly-zero-cost executive AI assistant named **Sara (سارة)**.
 ## 2. Hard Architectural Rules & Invariants
 
 1. **Zero-Cost Invariant ($0.00/month, absolute)**: All LLM calls route through OmniRoute free pools;
-   all speech uses local/free Edge-TTS (`ar-EG-SalmaNeural`, dialect-shaped via
-   `src/dialect.py shape_for_tts` — owner directive 2026-09-02); all storage and compute on verified free
-   tiers. Any dependency introduced MUST be free/open-source.
+   all speech synthesizes through Fish Audio `s2.1-pro-free:free` via OpenRouter's speech API
+   (owner directive 2026-09-03: Fish is Sara's ONLY voice — NO Microsoft/Edge fallback; a Fish
+   failure lands the honest text reply; unconfigured deployments stay pure local Edge-TTS
+   `ar-EG-SalmaNeural`), dialect-shaped via `src/dialect.py shape_for_tts` (owner directive
+   2026-09-02: emoji/quote/laughter strip + lexicon + تسكين الأواخر on EVERY engine);
+   all storage and compute on verified free tiers. Any dependency introduced MUST be free/open-source.
 2. **Never Hardcode Secrets**: All tokens, keys, IDs and MAC addresses load strictly from environment
    variables (see `.env.example`). Never commit `.env`, session strings, or OAuth client credentials
    (`config/google_oauth_client.json`).
