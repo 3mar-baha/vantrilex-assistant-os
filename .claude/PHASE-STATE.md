@@ -594,6 +594,20 @@ product.)
       audit C-1 (live «افتحي الآلة الحاسبة» → «ما بقدر» root cause #1).
       Next: 2.2 Arabic app aliases (pc_actions.py).
 
+      **2.2 DONE**: `_APP_ALIASES` table + `resolve_app_alias()` in
+      pc_actions.py («الآلة الحاسبة»→calculator، «أوبسيديان»→obsidian،
+      «المفكرة»→Notepad، «الكروم»، «سبوتيفاي»…) resolved inside
+      request_launch BEFORE the wire; coordinator accepts an optional
+      core-side Guard — a name with no alias AND no whitelist hit gets the
+      honest «مش موجود بالقائمة المعتمدة» line immediately (no doomed
+      confirmation round-trip, no pending state); bot.py wires the Guard
+      (config/whitelist.json, re-read per check — owner edits live-apply).
+      5 new tests (tests/test_pc_actions.py); legacy no-guard construction
+      untouched (daemon still guards). Gate: 461 passed / 86.50%. Fixes
+      audit C-7 (live «افتحي الآلة الحاسبة» → «ما بقدر» root cause #2 —
+      the Arabic name never matched the English whitelist key).
+      Next: 2.3 voice-confirmation guard (bot.py on_voice).
+
 ## Open items / blockers
 
 - **ACTIVE BLOCKER (2026-08-31, owner pausing for today)**: Oracle signup declined the

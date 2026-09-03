@@ -24,6 +24,7 @@ from aiogram.filters import Command, CommandStart
 from aiogram.types import BufferedInputFile, ErrorEvent, Message
 from loguru import logger
 
+from bridge.guard import Guard
 from src.config import Settings
 from src.dispatcher import FrontDoorDispatcher
 from src.fish_voice import FishFirstVoice, FishVoice
@@ -491,7 +492,12 @@ async def run_bot(settings: Settings, bridge=None) -> None:
         composer = None
     telemetry = TelemetryClient(bridge, gateway) if bridge is not None else None
     coordinator = (
-        PCActionCoordinator(bridge, vault, _BotNotifier(bot, settings.authorized_user_id))
+        PCActionCoordinator(
+            bridge,
+            vault,
+            _BotNotifier(bot, settings.authorized_user_id),
+            guard=Guard("config/whitelist.json"),  # 2.2: alias no-hit honesty
+        )
         if bridge is not None
         else None
     )

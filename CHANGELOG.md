@@ -9,6 +9,16 @@ product release tags start independently at v1.0.0.)
 ## [Unreleased]
 
 ### Added
+- **Arabic app aliases (remediation 2.2, audit C-7)**: the owner can now launch
+  apps by their natural Arabic names — «الآلة الحاسبة» resolves to `calculator`,
+  «أوبسيديان» to `obsidian`, «المفكرة» to `Notepad` (+ الكروم، سبوتيفاي، واتساب،
+  ديسكورد…). Resolution happens in the coordinator BEFORE any bridge
+  round-trip; a name with no alias AND no whitelist hit gets the honest
+  «مش موجود بالقائمة المعتمدة» line immediately — no confirmation round-trip
+  for a name that can never resolve, no pending state left behind. The
+  coordinator carries an optional core-side Guard (bot.py wires it,
+  `config/whitelist.json`, re-read per check); unguarded construction keeps
+  the legacy pass-through (the daemon-side Guard still guards every execution).
 - **Anti-hallucination keyword net (remediation 2.1, audit C-1)**: a
   deterministic intent net in the dispatcher now runs BEHIND the router —
   colloquial tool words (جيميل/بريد → gmail، مواعيد/تقويم → calendar، مهام →

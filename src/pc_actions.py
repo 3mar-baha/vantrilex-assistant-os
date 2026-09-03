@@ -20,6 +20,63 @@ from src.vault import AUDIT_DIR, CONFIRMATIONS_DIR, VaultClient, write_frontmatt
 PENDING_TTL = timedelta(minutes=10)
 LEDGER_PATH = f"{AUDIT_DIR}/pc-ledger.md"
 
+UNKNOWN_APP_AR = "«{}» مش موجود بالقائمة المعتمدة — اسمه مش مسجّل عندي."
+
+# Remediation 2.2 (owner directive 2026-09-03, audit C-7): Arabic colloquial
+# app aliases → whitelist keys. The owner says «الآلة الحاسبة», the bridge
+# needs «calculator». Seeded from the 156-entry whitelist display names +
+# common colloquial forms; resolved BEFORE any wire round-trip.
+_APP_ALIASES: dict[str, str] = {
+    # calculator
+    "الآلة الحاسبة": "calculator",
+    "اله الحاسبة": "calculator",
+    "الحاسبة": "calculator",
+    "الة حاسبة": "calculator",
+    "كالكوليتر": "calculator",
+    # notepad
+    "المفكرة": "Notepad",
+    "مفكرة": "Notepad",
+    "المفكرة النصية": "Notepad",
+    "نوتباد": "Notepad",
+    # obsidian
+    "أوبسيديان": "obsidian",
+    "اوبسيديان": "obsidian",
+    "اوبزديان": "obsidian",
+    "أوبزديان": "obsidian",
+    # chrome / edge / firefox
+    "الكروم": "Google Chrome",
+    "كروم": "Google Chrome",
+    "الإيدج": "Microsoft Edge",
+    "ايدج": "Microsoft Edge",
+    "الفيرفوكس": "Firefox",
+    "فيرفوكس": "Firefox",
+    # vs code
+    "الفيسوال ستوديو كود": "Visual Studio Code",
+    "الفي اس كود": "Visual Studio Code",
+    "فيسوال كود": "Visual Studio Code",
+    "الكود": "Visual Studio Code",
+    # common colloquial singletons
+    "الاكسبلورر": "File Explorer",
+    "مدير الملفات": "File Explorer",
+    "الملفات": "File Explorer",
+    "السبوتيفاي": "Spotify",
+    "سبوتيفاي": "Spotify",
+    "التلغرام": "Telegram Desktop",
+    "تلغرام": "Telegram Desktop",
+    "الديسكورد": "Discord",
+    "ديسكورد": "Discord",
+    "الوثب": "WhatsApp",
+    "واتساب": "WhatsApp",
+    "الضغط": "7-Zip",
+    "السيف مود": None,  # placeholder never matched — kept for table honesty
+}
+
+
+def resolve_app_alias(name: str) -> str:
+    """Map an Arabic colloquial app name to its whitelist key (pass-through)."""
+    clean = " ".join(name.split()).strip()
+    return _APP_ALIASES.get(clean, clean)
+
 
 class LaunchStatus(StrEnum):
     EXECUTED = "executed"
@@ -39,10 +96,11 @@ class _Pending:
 
 
 class PCActionCoordinator:
-    def __init__(self, bridge, vault: VaultClient, notifier):
+    def __init__(self, bridge, vault: VaultClient, notifier, guard=None):
         self._bridge = bridge
         self._vault = vault
         self._notifier = notifier
+        self._guard = guard  # None = legacy pass-through (guard lives on the daemon)
         self._pending: _Pending | None = None
 
     def pending_active(self) -> bool:
@@ -55,23 +113,31 @@ class PCActionCoordinator:
 
     async def request_launch(self, name: str, *, origin: str) -> LaunchStatus:
         self._require_owner_origin(origin)
-        result = await self._send("exec.launch", {"name": name})
+        resolved = resolve_app_alias(name)
+        if self._guard is not None:
+            # 2.2: an unresolvable name gets the honest line NOW — no doomed
+            # confirmation round-trip for a name that can never resolve.
+            verdict = self._guard.check_app(resolved)
+            if verdict.reason == "not whitelisted" and resolved == name:
+                await self._notifier.notify(UNKNOWN_APP_AR.format(name))
+                return LaunchStatus.REFUSED
+        result = await self._send("exec.launch", {"name": resolved})
         code = result["audit_code"]
         if result["status"] == "ok":
-            await self._ledger(code, "launch", "executed", name)
-            await self._notifier.notify(f"✅ شغّلت {name}. رمز التدقيق: {code}")
+            await self._ledger(code, "launch", "executed", resolved)
+            await self._notifier.notify(f"✅ شغّلت {resolved}. رمز التدقيق: {code}")
             return LaunchStatus.EXECUTED
         if "confirmation" in result["detail"] or "not whitelisted" in result["detail"]:
             prompt = (
-                f"«{name}» مش بالقائمة المعتمدة — بتحب أسمح فيه هالمرة؟ "
+                f"«{resolved}» مش بالقائمة المعتمدة — بتحب أسمح فيه هالمرة؟ "
                 f"رد بـ«نعم» للتأكيد. رمز التدقيق: {code}"
             )
-            self._pending = _Pending("launch", name, datetime.now(UTC))
+            self._pending = _Pending("launch", resolved, datetime.now(UTC))
             await self._ledger(code, "launch", "refused", result["detail"])
             await self._notifier.notify(prompt)
             return LaunchStatus.CONFIRMATION_REQUIRED
         await self._ledger(code, "launch", "error", result["detail"])
-        await self._notifier.notify(f"⚠️ ما قدرت أشغّل {name}: {result['detail']}")
+        await self._notifier.notify(f"⚠️ ما قدرت أشغّل {resolved}: {result['detail']}")
         return LaunchStatus.REFUSED
 
     async def request_power(self, action: str, *, origin: str) -> LaunchStatus:
