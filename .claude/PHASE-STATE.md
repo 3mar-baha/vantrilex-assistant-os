@@ -661,6 +661,19 @@ product.)
       loops + 3.2 proactive engine + 3.3-3.6 pruning/verification) unless
       the owner stops it.
 
+      **3.1 DONE (absent loops live for the first time)**:
+      `start_background_loops` — one testable stitch point in bot.py —
+      launches BriefComposer (07:30) + EveningJournaler (18:00-19:30) +
+      run_gmail_poll (triage Dispatcher+TriageClassifier wired) + the existing
+      DailySummarizer; every task cancelled in the run_bot finally via
+      gather(return_exceptions). BRIEF_ENABLED=false suppresses only the brief;
+      degraded Google boot (no OAuth yet) keeps chat loops, skips only the
+      mail watch. 3 new tests (tests/test_production_wiring.py). Gate: 478
+      passed / 86.54% / security+docs green. NOTE for the owner live-retest:
+      the Gmail watch + brief need the one-time Google OAuth bootstrap
+      (vault/State empty — audit §14) to actually deliver; journaler+summary
+      work without it. Next: 3.2 proactive outreach engine.
+
 ## Open items / blockers
 
 - **ACTIVE BLOCKER (2026-08-31, owner pausing for today)**: Oracle signup declined the

@@ -9,6 +9,15 @@ product release tags start independently at v1.0.0.)
 ## [Unreleased]
 
 ### Changed
+- **The three absent loops now run (remediation 3.1)**: `start_background_loops`
+  — one testable stitch point in bot.py — launches the 07:30 morning brief
+  (`BriefComposer.run_forever`), the evening check-in
+  (`EveningJournaler.run_forever`, 18:00-19:30 window), the real Gmail watch
+  (`run_gmail_poll` + triage dispatcher/classifier), and the existing 23:50
+  daily summary. All four tasks are cancelled on shutdown;
+  `BRIEF_ENABLED=false` suppresses only the brief; a degraded Google boot
+  (no OAuth) keeps the chat loops alive and skips only the Gmail watch.
+  First activation since these features were built.
 - **Memory reads the newest facts (remediation 2.7, head-vs-tail flaw)**:
   the per-section cap in `load_long_term` now slices from the TAIL
   (`body[-max_chars:]`) — learned facts append to the end of User_Info, so
