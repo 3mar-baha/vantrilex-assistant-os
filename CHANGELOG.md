@@ -9,6 +9,19 @@ product release tags start independently at v1.0.0.)
 ## [Unreleased]
 
 ### Changed
+- **Two-tier architecture ratified in the remediation plan (owner directive 2026-09-03)**:
+  TALKER_AND_MEMORY = `minimax-m3:free` (428B MoE / 23B active / 1M context / native
+  image+video input confirmed from OpenRouter's schema; strongest free Jordanian
+  Arabic — live-probed) + HEAVY_TOOL_MASTER = `nemotron-3-ultra-550b-a55b:free`
+  (exclusive tool/bridge/whitelist executor, unchanged). Both draw from the shared
+  50/day free pool — the proactive loop stays capped ≤3 HEAVY/day so neither lane
+  starves the other. Voice-tone filter section (2.1b): the official `/audio/speech`
+  schema carries NO temperature (a chat param, not a speech param); calm tone is
+  controlled by the reference voice + the officially supported `speed` param —
+  probe pending rate-limit relief. Discovered and recorded: `input_references`
+  voice cloning (≤15MiB sample) — future free upgrade path to a Sara voice cloned
+  from the owner's own sample. Media (photo/video) comprehension via m3 is
+  technically available but NOT yet wired in bot.py — future directive work.
 - **FAST model upgraded to minimax-m3 (owner directive 2026-09-03, live-retest feedback)**:
   the owner's live Phase-1 retest caught m2.7's conversation lane producing
   mixed-language garble («معكcepted», «بتقدرتفتحها») and leaked stage directions
