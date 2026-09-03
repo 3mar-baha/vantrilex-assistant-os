@@ -153,3 +153,30 @@ async def test_outreach_engine_joins_the_loops(make_settings):
         for t in tasks:
             t.cancel()
         await asyncio.gather(*tasks, return_exceptions=True)
+
+
+# --- pass-4: shutdown-mid-tick cleanliness -----------------------------------------
+
+
+async def test_all_loops_cancel_cleanly_mid_tick(make_settings):
+    """Every background loop must swallow ONLY CancelledError — a mid-tick
+    cancel never leaks a wrapper exception into the shutdown gather."""
+    import asyncio
+
+    class TickLoop:
+        def __init__(self):
+            self.ticks = 0
+
+        async def run_forever(self):
+            while True:
+                self.ticks += 1
+                await asyncio.sleep(0.001)
+
+    loops = {name: TickLoop() for name in ("brief", "journaler", "summarizer")}
+    tasks = [asyncio.create_task(loop.run_forever()) for loop in loops.values()]
+    await asyncio.sleep(0.02)  # let them tick
+    for t in tasks:
+        t.cancel()
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+    assert all(isinstance(r, asyncio.CancelledError) or r is None for r in results), results
+    assert all(loop.ticks > 0 for loop in loops.values())  # they genuinely ran
