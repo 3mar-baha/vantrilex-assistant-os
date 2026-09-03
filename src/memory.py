@@ -111,7 +111,9 @@ async def load_long_term(vault, *, today: date, max_chars: int = SECTION_CHAR_CA
             if header:
                 section = f"{header}\n\n{body}".strip()
         if section:
-            parts.append(section[:max_chars])
+            # 2.7 (head-vs-tail flaw): facts append to the END — the cap keeps
+            # the NEWEST slice so learned facts are always what the brain sees.
+            parts.append(section[-max_chars:])
     return "\n\n".join(parts)
 
 

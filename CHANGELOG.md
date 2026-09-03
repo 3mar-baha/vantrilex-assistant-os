@@ -8,6 +8,12 @@ product release tags start independently at v1.0.0.)
 
 ## [Unreleased]
 
+### Changed
+- **Memory reads the newest facts (remediation 2.7, head-vs-tail flaw)**:
+  the per-section cap in `load_long_term` now slices from the TAIL
+  (`body[-max_chars:]`) — learned facts append to the end of User_Info, so
+  the brain sees the newest slice, not the stale head that pushed it out.
+
 ### Added
 - **Whisper pinned to Jordanian Arabic (remediation 2.6, mishear fix)**:
   every voice-note transcription now calls faster-whisper with

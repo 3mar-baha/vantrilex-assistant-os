@@ -147,6 +147,19 @@ async def test_load_long_term_caps_each_section():
     assert len(context) == SECTION_CHAR_CAP
 
 
+async def test_load_long_term_keeps_the_newest_tail():
+    """Remediation 2.7 (head-vs-tail flaw): facts append to the END of
+    User_Info — when the cap slices, the brain must see the NEWEST facts
+    (the tail), not the stale head."""
+    head = "حقيقة قديمة. " * 400  # ~5200 chars of old facts, well past the cap
+    tail = "أحدث حقيقة تعلمتها اليوم عن عمر."
+    vault = FakeVault({"02_Areas/Profile/User_Info.md": "---\n---\n" + head + tail})
+    context = await load_long_term(vault, today=NOW.date())
+    assert "أحدث حقيقة" in context  # the newest fact IS visible
+    assert context.endswith(tail)  # the window ENDS on the newest fact
+    assert len(context) <= SECTION_CHAR_CAP + len(tail)  # roughly the cap window
+
+
 # --- background memory writer ----------------------------------------------------
 
 

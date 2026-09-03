@@ -650,6 +650,17 @@ product.)
       (kwargs pinning + learned-pairs ride). Gate: 474 passed / 86.59% /
       security+docs green. Next: 2.7 memory tail-slice.
 
+      **2.7 DONE**: the envelope's per-section cap now slices from the TAIL
+      (`section[-max_chars:]`) — facts append to the END of User_Info, so the
+      brain reads the NEWEST slice, not the stale head (head-vs-tail flaw
+      fixed). 1 new test. Gate: 475 passed / 86.63% / security+docs green.
+      **PHASE 2 STEPS 2.1-2.7 ALL COMPLETE** — per plan, Phase 2 ends with a
+      live retest list («افحصي الجيميل» post-OAuth, «افتحي الآلة الحاسبة»,
+      «نعم» الصوتية, «تعلمي:» ثم ذاكرها) before «التالي» to Phase 3;
+      owner mandate «اكمل ولا تتوقف» continues into Phase 3 (3.1 absent
+      loops + 3.2 proactive engine + 3.3-3.6 pruning/verification) unless
+      the owner stops it.
+
 ## Open items / blockers
 
 - **ACTIVE BLOCKER (2026-08-31, owner pausing for today)**: Oracle signup declined the
