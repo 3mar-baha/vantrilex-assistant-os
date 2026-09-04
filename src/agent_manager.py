@@ -121,8 +121,13 @@ class AgentManager:
         parsed = _json_block(reply)
         if not isinstance(parsed, dict):
             raise GatewayError(f"planner unparseable: {reply[:120]!r}")
+        raw_lines = parsed.get("lines", [])
+        if not isinstance(raw_lines, list):
+            raise GatewayError("planner lines not a list")
+        # audit (2026-09-05): the cap TRIMS silently — a 9-line plan would drop
+        # lines 5+ with no word to the owner. Trim AFTER parsing, and report.
         lines: list[_Line] = []
-        for entry in parsed.get("lines", [])[:MAX_LINES]:
+        for entry in raw_lines:
             if not isinstance(entry, dict):
                 continue
             mode = entry.get("mode")
@@ -132,6 +137,12 @@ class AgentManager:
         if not lines:
             raise GatewayError("planner returned zero usable lines")
         return lines
+
+    def _trim_lines(self, lines: list[_Line]) -> tuple[list[_Line], int]:
+        """Cap the plan; the overflow is COUNTED, not silently dropped."""
+        if len(lines) <= MAX_LINES:
+            return lines, 0
+        return lines[:MAX_LINES], len(lines) - MAX_LINES
 
     # -- sub-agents ---------------------------------------------------------------
 
@@ -217,10 +228,11 @@ class AgentManager:
     async def run(self, user_text: str) -> str:
         """Full multi-task run: plan -> gather lines -> ONE unified report."""
         try:
-            lines = await self._plan(user_text)
+            all_lines = await self._plan(user_text)
         except GatewayError as error:
             logger.warning("agent-manager plan failed: {}", error)
             return "ما قدرت أنظم مهامك هالمرة — جرب تقسيمها لطلبات أصغر 🌷"
+        lines, trimmed = self._trim_lines(all_lines)
         reports = await asyncio.gather(
             *(self._run_line(line) for line in lines), return_exceptions=True
         )
@@ -231,4 +243,10 @@ class AgentManager:
                 merged.append(f"«{line.text}» — ⚠️ ما قدرت أنفذها هالمرة.")
             else:
                 merged.append(report)
+        if trimmed:
+            # honest overflow: the trimmed lines are NOT executed — named, never silent
+            merged.append(
+                f"⚠️ وطلبت أكتر من {MAX_LINES} مهام بنفس الرسالة — {trimmed} منهم "
+                "ما اخدتوها هالمرة. ابعتها برسالة تانية وبتنجزها فوراً 🌷"
+            )
         return "\n".join(merged)

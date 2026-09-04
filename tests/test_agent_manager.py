@@ -175,15 +175,22 @@ async def test_one_line_failure_never_kills_the_other():
 
 
 async def test_line_and_step_caps_trim_not_crash():
-    """A planner or sub-agent that returns absurd counts is trimmed to the
-    caps — the free pools and the owner's patience are bounded."""
+    """A planner that returns absurd counts is trimmed to the cap — and the
+    overflow is NAMED in the report (audit 2026-09-05: silent drops are
+    claimed-completions' quiet sibling). The free pools and the owner's
+    patience are bounded."""
     many_lines = json.dumps(
         {"lines": [{"mode": "parallel", "text": f"مهمة {i}"} for i in range(9)]},
         ensure_ascii=False,
     )
-    manager = _manager(_Gateway(heavy_reply=many_lines), _Tools())
-    lines = await manager._plan("أي شي")
-    assert len(lines) <= 4
+    gateway = _Gateway(heavy_reply=many_lines, medium_by_line={})
+    tools = _Tools()
+    manager = _manager(gateway, tools)
+    report = await manager.run("شغلي شي وكتير")
+    # only MAX_LINES lines ran (each honestly failing its unscripted mapping)
+    assert report.count("ما قدرت أنفذها") == 4
+    # the trimmed 5 are named, never silently dropped
+    assert "5 منهم ما اخدتوها" in report
 
 
 def test_dispatcher_routes_and_net_multi_task():
