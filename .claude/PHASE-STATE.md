@@ -916,3 +916,27 @@ Owner steps: `docs/08-OWNER-NEXT-STEPS.md`.
       OAuth bootstrap, /enroll-voice, YOUTUBE_API_KEY (optional),
       INSTAGRAM_SESSION (optional), FIRECRAWL_API_KEY (optional), Civ6 mod
       drop, clip-farming future re-activation ruling.
+
+      ### LIVE-SESSION PRODUCTION DIRECTIVE RUN (2026-09-04 afternoon, owner
+      ### transcript 3:18-4:04pm; §1-§9 comprehensive refactor directive)
+      All 9 sections delivered as SEVEN granular commits (owner granularity
+      ruling honored):
+      - 1e41f12 §1+§2: sender-ID-only voice authorization (owner_voice_gate;
+        dead gate deleted; guest floor re-anchored) + close-verb routing with
+        psutil-verified termination + CMD aliases + app_sessions payload fix
+      - 50d0b85 §3+§4: S3/audio-URL stripper behind the voice lane +
+        screenshot-as-a-REAL-Telegram-photo (photo_sender surface)
+      - b8e96eb §5: src/task_orchestrator.py — timed/sequential/parallel/
+        composite; GENERAL parsing matrices (owner ruling: capability, not
+        hardcoded examples); reminders persist + fire proactively; the
+        schedule tool's timed lane
+      - 5cff3ee §6: dynamic folder creation (sanitized _index.md commit)
+      - 631ba35 §7: google_cloud_suite — 41 typed adapters (Gemini EXCLUDED)
+        + CacheEngine (weather 6h/4-day, places 7d, custom 80/day HARD,
+        fitness 08:00/22:00) + QuotaGuard (>90% breaker, conservative fail)
+      - (docs commit follows) §8 persona emojis + TEST-PLAN/API-SPEC/RUNBOOK/
+        CHANGELOG sync
+      Final gate this run: 661 passed / 1 skipped / 85.29% / security+docs
+      green; sacred floors green (guest floor re-anchored to §1 semantics).
+      Owner-pending unchanged: OmniRoute start, Google OAuth bootstrap,
+      /enroll-voice ≥5s, optional YOUTUBE/INSTAGRAM/FIRECRAWL keys.

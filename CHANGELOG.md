@@ -8,6 +8,51 @@ product release tags start independently at v1.0.0.)
 
 ## [Unreleased]
 
+### Fixed — the live-session production round (2026-09-04, owner transcript 3:18-4:04pm)
+- **§1 Sender-ID-only voice authorization**: the owner's account NEVER falls
+  to Guest Mode from any device/mic — `owner_voice_gate` replaces the old
+  biometric gate in on_voice (the missed print stages a Pending_Speakers
+  LABELING note; the turn proceeds with full permissions). The dead
+  verify_or_lockdown path deleted; the guest floor re-anchored: non-owner
+  chats stay False, dead staging never blocks the owner turn.
+- **§2 Real process termination**: سكري/اغلقي/طفي/وقفي/close/kill route to
+  the `close` tool (BEFORE launch in the net); the daemon runs
+  taskkill /IM /F /T and VERIFIES via psutil — the owner line carries the
+  real killed count; killed=0 gets its own honest line; CMD/DOS/PowerShell
+  aliases land. (Live: a close spawned a SECOND copy, then hallucinated.)
+- **§3 Real voice-note dispatch**: hallucinated external audio URLs
+  (s3/cdn/mp3...) structurally stripped before any surface; the
+  in-memory Ogg-Opus answer_voice lane unchanged. (Live: sara-voice.s3
+  links + an invented no-audio-on-Telegram claim.)
+- **§4 Screenshot as a real photo**: «بعثيلي السكرين شوت» routes to the
+  screenshot tool; the captured JPEG dispatches as a REAL Telegram photo
+  (answer_photo + caption) before the vision description. (Live: text only.)
+- **app_sessions payload fix**: the daemon returns the raw day report —
+  present `apps` is the ok marker (the live 3:36pm «عطل» root cause).
+
+### Added
+- **§5 Dual task engine** (`src/task_orchestrator.py`): timed reminders that
+  FIRE (general delay/wallclock parsing — matrices, Arabic-Indic digits,
+  12 صباح=midnight; state persists, restart re-arms, dispatch failure
+  retries), sequential step-DAG (stops at failure, names it), parallel
+  gather (one unified confirmation), composite timer→chain; rides the loop
+  set. (Live: three reminders acknowledged then never fired.)
+- **§6 Dynamic Obsidian folders**: `create_folder` — one sanitized `_index.md`
+  commit creates the dir (contents API); idempotent; PARA backbone
+  additive-only. (Live: RoutineTasks «عطل بسيط».)
+- **§7 Google 41-API suite** (`src/google_cloud_suite.py`): the full registry
+  (Workspace 7 + Health/Gaming 4 + Media/Search 8 + BigQuery/Storage 14 +
+  Observability/Quota 8 = 41; **Gemini STRICTLY EXCLUDED**) behind the
+  $0.00 caching engine — TTL rules (weather 6h/4-day, places 7d, custom
+  search 24h + HARD 80/day, fitness 08:00/22:00 + 1h), QuotaGuard breaker
+  (>90% free-tier = open; dead API fails conservative), cache-first call
+  order proven by the custom_search lane (2 identical queries = 1 wire call).
+- **§8 Persona emojis**: the feminine emoji palette (🌸✨💖😊🫡☕🎮📚🌙)
+  woven into the prompt with guided taste (1-2 per message, from the
+  sentence's heart, quiet on serious moments); warmth/loyalty/honesty
+  floors verbatim.
+
+
 ### Added — v2.0 pass-4: web intelligence + staged integrations (2026-09-04, §3-هـ + §3-ب + §3-أ/5 + §3-ح)
 - **`web_search` — keyless live web search**: DuckDuckGo HTML results (real
   titles + links, empty-on-failure, never fabricated); page reading strips to

@@ -50,6 +50,8 @@ on shutdown:
 | Gmail watch (`run_gmail_poll`) | `GMAIL_POLL_SECONDS` | Google stack healthy | yes |
 | Self-evolution reflection (`SelfEvolutionWorker`, v1.1 f4) | ~23:40 local | due() tick | no |
 | Scheduled-tasks mirror catch-up (v2.0 pass-2) | ~10 min ticks | engine present (Google up) | yes (parked notes wait) |
+| Reminder timers (2026-09-04 §5) | 5 s ticks over due jobs | orchestrator present (always in run_bot) | no — dispatch is a plain Telegram message |
+| Google cache/budget engine (2026-09-04 §7) | per-call gate (no loop) | — | the breaker + budgets enforce $0.00 structurally |
 
 Proactive tuning (`.env`, restart to apply): `PROACTIVE_INTERVAL_MIN`,
 `PROACTIVE_MAX_PER_DAY`, `PROACTIVE_WINDOW_START/END`, `PROACTIVE_COOLDOWN_MIN`.

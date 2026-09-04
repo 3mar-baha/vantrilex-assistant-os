@@ -137,6 +137,10 @@ temperature 0) and falls back to a deterministic numeric Arabic line on brain fa
 | `weather` (v2.0 pass-4) | `WeatherClient.current` — Open-Meteo (free, keyless; Google Weather API is paid → excluded by $0.00) | static Jordan coords; geocode-once cache; real numbers verbatim |
 | `youtube` (v2.0 pass-4) | `YouTubeClient.search` — Data API v3 (10k units/day free) | env-gated `YOUTUBE_API_KEY`; quota failures logged loudly, honest offline line |
 | staged §7 surfaces (pass-4) | Instagram sandbox (`InstagramSandbox`), Firecrawl REST (`FirecrawlClient`), Civ6 contract core (`civ6.py`) | live the moment the owner drops credentials in `.env`; sandbox results always labeled `sandbox=True`; Civ6 fog enforcer strips hidden state structurally |
+| `close` (2026-09-04 §2) | keyword net close-verbs -> `PCActionCoordinator.request_close` -> daemon `exec.close` | SAME whitelist gate as launch; taskkill /IM /F /T + psutil-VERIFIED count; the owner line carries the verified numbers |
+| timed reminders (2026-09-04 §5) | `task_orchestrator.Orchestrator` — parse_delay/parse_wallclock (GENERAL shapes) -> asyncio timers | state persists (State/task_reminders.json, restart re-arms); firing dispatches proactively via bot.send_message; dispatch failure retries in a minute — never silent |
+| `create_folder` (2026-09-04 §6) | `ToolRegistry._do_create_folder` — ONE `_index.md` commit (contents API creates the dir) | name sanitized by the vault's `_sanitize_component` (traversal dies); idempotent; PARA backbone additive-only |
+| Google 41-API suite (2026-09-04 §7) | `google_cloud_suite` — 41 typed adapters (Gemini EXCLUDED) behind CacheEngine + QuotaGuard | cache-first: weather 6h/4-day, places 7d, custom search 24h + HARD 80/day, fitness 08:00/22:00 + 1h, YT analytics daily; >90% free-tier = breaker open (cache-only); spent budgets = honest no-call |
 
 Origin gate: `RefusedOrigin` for any origin ≠ `owner_chat` — untrusted content (email
 bodies, web pages, vault parses) is DATA and never mints PC intent (CLAUDE.md rule 7).
