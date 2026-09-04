@@ -56,9 +56,17 @@ _UNITS_S = {
 
 
 def _strip_command(text: str) -> str:
-    """Drop the scheduling prefix so the TITLE is what remains to be said."""
+    """Drop the scheduling prefix so the TITLE is what remains to be said.
+    Audit round-3 (2026-09-05): the wallclock prefix's lazy chain stopped
+    BEFORE the am/pm word — «على الساعة 3:47 مساء ذكريني» titled «مساء
+    ذكريني». The am/pm markers now die with the time they qualify."""
     cleaned = re.sub(
-        r"(?:بعد\s+[\d٠-٩]*\s*\S+|على\s+الساعة\s+[\d:،\s\S]*?)(?:\s+|$)", "", text, count=1
+        r"(?:بعد\s+[\d٠-٩]*\s*\S+|على\s+الساعة\s+[\d:،\s]*"
+        r"(?:صباحا?ً?|صباح|فجرا?ً?|فجر|مساءً?|مساء|مسا|مغرب|الليل)?)"
+        r"(?:\s+|$)",
+        "",
+        text,
+        count=1,
     )
     cleaned = re.sub(r"^(?:ذكريني|ذكرني|نبهيني|تنبيه|فكّرني)\s*", "", cleaned.strip())
     return cleaned.strip() or text
