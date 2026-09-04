@@ -37,6 +37,8 @@ NO_SESSIONS_AR = "ما سجلت جلسات استخدام اليوم — الج�
 
 # pass-2 (v2.0 §3-و): the knowledge-graph tool
 NO_GRAPH_AR = "ما قدرت ابنِ شبكة المعرفة هسا — الخزينة مو متوصلة أو ما فيها مذكرات."
+# pass-4 (v2.0 §3-هـ): the web-search tool
+NO_WEB_AR = "ما قدرت أوصل للنت هالمرة — جربها بعد شوي."
 
 
 class ToolRegistry:
@@ -54,6 +56,7 @@ class ToolRegistry:
         vision: Any = None,
         vault: Any = None,
         task_engine: Any = None,
+        web: Any = None,
     ) -> None:
         self._inbox = inbox
         self._suite = suite
@@ -64,6 +67,7 @@ class ToolRegistry:
         self._vision = vision  # the conversation-lane brain with native image input
         self._vault = vault  # pass-2: knowledge-graph snapshots
         self._tasks = task_engine  # pass-2: ScheduledTasksEngine (create/mark_done)
+        self._web = web  # pass-4: WebIntel (keyless DDG search + page reads)
         self._tz = tz or ZoneInfo("UTC")
         # Injectable clock: the frozen-date test bomb (2026-09-01 -> 2026-09-02) showed
         # wall-clock reads inside handlers make tests die at midnight rollovers.
@@ -285,6 +289,19 @@ class ToolRegistry:
             f"سجلت المهمة «{note.title}» بموعدها {when:%Y-%m-%d %H:%M} — "
             "نزلتها بمفكرة المهام وبتنعكس على التقويم وقايمة مهام غوغل."
         )
+
+    async def _do_web_search(self, arg: str) -> str:
+        """Pass-4 (v2.0 §3-هـ): live keyless web search — real DDG result titles
+        + links as DATA; empty results degrade honestly, never fabricated."""
+        if not arg.strip():
+            return "شو بدني أدور عليه بالنت؟ قولي الموضوع وببحثلك هسا."
+        if self._web is None:
+            return NO_WEB_AR
+        try:
+            return await self._web.search_block(arg.strip())
+        except Exception as error:  # noqa: BLE001 — a dead web is an honest line
+            logger.warning("web search failed: {}", error)
+            return NO_WEB_AR
 
     async def _do_brief(self, arg: str) -> str:
         if self._composer is None:

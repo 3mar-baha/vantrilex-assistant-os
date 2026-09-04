@@ -46,7 +46,8 @@ _ROUTER_PROMPT_AR: Final[str] = (
     "app_sessions=كم استخدم البرامج اليوم وبأي دقيقة، "
     'schedule=تسجيل مهمة/تذكير جديد مع عنوانه في "arg"، '
     "knowledge_graph=شبكة المعرفة بالمفكرات: مين بيحكي عن مين، الروابط بين "
-    'الأفكار، مع اسم المفكرة في "arg" إن وجد. '
+    'الأفكار، مع اسم المفكرة في "arg" إن وجد، '
+    'web_search=بحث حي بالنت بمصادر حقيقية مع نص البحث في "arg". '
     "الطلبات ذات الأداة تصنَّف دائماً tier2.\n"
     "- voice_reply: هل هذا الطلب يليق ردّه صوتاً (رسالة صوتية) بدل النص؟ true فقط إذا "
     "المالك طلب الصوت صراحةً أو بنيته (بدي اسمعك، حابب صوتك، احكيلي عن حالك) أو الجو "
@@ -72,6 +73,7 @@ _VALID_TOOLS: Final = (
     "app_sessions",
     "schedule",
     "knowledge_graph",
+    "web_search",
 )
 _JSON_RE: Final = re.compile(r"\{.*\}", re.DOTALL)
 
@@ -80,6 +82,15 @@ _JSON_RE: Final = re.compile(r"\{.*\}", re.DOTALL)
 # router misses (tool="none") or emits an unknown tool while the text clearly
 # names one, the net forces the real tool path and logs the coercion loudly.
 _TOOL_NET: Final[tuple[tuple[str, re.Pattern[str]], ...]] = (
+    # web_search (v2.0 §3-هـ) — FIRST: an explicit web-search verb phrase wins
+    # over any single-topic word inside the query («دوّر بالنت عن كروت الشاشة»
+    # must not fall to telemetry on the word الشاشة)
+    (
+        "web_search",
+        re.compile(
+            r"(?:دوّر|دور|ابحثي|بحث|لقطي|طلعيلي)\s+(?:بالنت|في النت|عالنت)(?:\s+(?:عن\s+)?(.+))?"
+        ),
+    ),
     # gmail — colloquial mail words (شغّل/افتح never match mail)
     ("gmail", re.compile(r"جيميل|بريدي|ايميل|إيميل|الايميل|الإيميل|البريد|بريد")),
     # calendar
@@ -141,6 +152,9 @@ def _keyword_net(text: str) -> tuple[str, str]:
             # the reminder title rides the net arg («ذكرني بكرة أراجع الفيزياء»
             # -> «بكرة أراجع الفيزياء»); strip device/trailing clauses like launch
             return ("schedule", _LAUNCH_STRIP_RE.sub("", match.group(1)).strip(" .!؟?،,"))
+        if tool == "web_search" and match.groups() and match.group(1):
+            # the query rides the net arg («دوّر بالنت عن أسعار الرام» -> query)
+            return ("web_search", match.group(1).strip(" .!؟?،,"))
         return tool, ""
     return ("none", "")
 
