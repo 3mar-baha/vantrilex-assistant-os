@@ -259,13 +259,16 @@ spec pipeline (acceptance criteria first, TDD).
       2-3 minute motivating narrative voice note over the week's 7 `Daily_Logs/`, Sara's voice.
 - [ ] Shared history & inside-jokes graph (`skill-shared-history-graph`): milestones,
       development struggles, inside jokes, journey narratives persisted in Obsidian.
-- [ ] Clipping bounty automation & anti-shadowban pipeline (`sub-agent-clip-farming-and-warmup`):
-      Whop/Drive clip ingestion -> FFmpeg anti-duplicate mutation (1% micro-zoom, 1.01x speed,
-      AI hook/caption generation) -> Playwright-Stealth human-behavior warm-up (random FYP
-      5-25s watches, 15% likes, 5% follows, niche search warming) -> staggered multi-account
-      publishing (TikTok/Reels/Shorts) -> bounty submission + daily earnings to `Daily_Logs/`;
-      Sara supervises the sub-workers. Owner-gated at every publish step; platform-ToS/ban
-      risk recorded in ARCHITECTURE §8.
+- [ ] ~~Clipping bounty automation & anti-shadowban pipeline~~ **DEFERRED BY OWNER
+      (2026-09-04, v2.0 pass-4)**: «تأجيلها كلياً الى المستقبل فقط في ملفات التوثيق
+      سوف نعمل عليه عندما ينضج المشروع الحالي» — no code, no staging, no scaffolds
+      until the owner re-activates it. The full design (Whop/Drive clip ingestion ->
+      FFmpeg anti-duplicate mutation (1% micro-zoom, 1.01x speed, AI hook/caption
+      generation) -> Playwright-Stealth human-behavior warm-up (random FYP 5-25s
+      watches, 15% likes, 5% follows, niche search warming) -> staggered multi-account
+      publishing (TikTok/Reels/Shorts) -> bounty submission + daily earnings to
+      `Daily_Logs/`) stays HERE as the future spec; owner-gated at every publish
+      step; platform-ToS/ban risk recorded in ARCHITECTURE §8 when activated.
 - [ ] Private VoIP / softphone — SIP over Wi-Fi (v1.5): inbound/outbound calls to virtual
       internal extensions via Linphone / Zoiper, no cellular SIM.
 

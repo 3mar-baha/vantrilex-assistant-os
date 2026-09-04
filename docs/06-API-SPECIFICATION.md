@@ -133,6 +133,10 @@ temperature 0) and falls back to a deterministic numeric Arabic line on brain fa
 | close app («سكري…», v2.0 pass-1) | daemon `exec.close` (`taskkill /IM <image> /F`) | SAME gate as launching: whitelist auto_approve OR live confirmation id; audit code every time |
 | `schedule` (v2.0 pass-2) | `ScheduledTasksEngine.create_task` — ONE note in `01_Projects/Scheduled_Tasks/` + both Google mirrors | vault-first: the note lands BEFORE any cloud write; `[sara:task:id]` idempotence tag; Google down = parked + ~10-min catch-up loop |
 | `knowledge_graph` (v2.0 pass-2) | `build_graph` over a vault snapshot (`VaultClient.list_dir` + reads) — pure local index, zero LLM | read-only; DATA brief (backlinks/neighbors/orphans) quoted verbatim; scan failure = honest degrade line |
+| `web_search` (v2.0 pass-4) | `WebIntel.search` — DuckDuckGo HTML endpoint, keyless | real titles/links only; empty-on-failure; results wrapped DATA (untrusted boundary) |
+| `weather` (v2.0 pass-4) | `WeatherClient.current` — Open-Meteo (free, keyless; Google Weather API is paid → excluded by $0.00) | static Jordan coords; geocode-once cache; real numbers verbatim |
+| `youtube` (v2.0 pass-4) | `YouTubeClient.search` — Data API v3 (10k units/day free) | env-gated `YOUTUBE_API_KEY`; quota failures logged loudly, honest offline line |
+| staged §7 surfaces (pass-4) | Instagram sandbox (`InstagramSandbox`), Firecrawl REST (`FirecrawlClient`), Civ6 contract core (`civ6.py`) | live the moment the owner drops credentials in `.env`; sandbox results always labeled `sandbox=True`; Civ6 fog enforcer strips hidden state structurally |
 
 Origin gate: `RefusedOrigin` for any origin ≠ `owner_chat` — untrusted content (email
 bodies, web pages, vault parses) is DATA and never mints PC intent (CLAUDE.md rule 7).
