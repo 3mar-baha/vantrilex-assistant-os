@@ -214,6 +214,12 @@ class BridgeDaemon:
                     "screen_hours": 0.0,
                     "boot_log": [],
                 }
+            elif frame.cmd == "exec.list_apps":
+                # STT-2 (owner 2026-09-04 7:07pm): the REAL running user-facing
+                # processes — read-only, no confirmation gate (telemetry.state class).
+                from bridge.app_sessions import running_apps_report
+
+                return "ok", running_apps_report()
             else:
                 result = ExecResult(
                     status="error",

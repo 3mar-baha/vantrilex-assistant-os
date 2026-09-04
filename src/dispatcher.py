@@ -75,6 +75,7 @@ _VALID_TOOLS: Final = (
     "brief",
     "screenshot",
     "app_sessions",
+    "running_apps",
     "schedule",
     "create_folder",
     "knowledge_graph",
@@ -153,6 +154,20 @@ _TOOL_NET: Final[tuple[tuple[str, re.Pattern[str]], ...]] = (
         re.compile(
             r"كم استخدمت|استخدام البرامج|جلسات البرامج|برامج اليوم|ساعات الشاشة|"
             "شو فتحت اليوم|كم جلسة|وقت الشاشة"
+        ),
+    ),
+    # running_apps (STT-2 2026-09-04 7:07pm) — «شو التطبيقات المفتوحة/الشغالة»;
+    # a WHAT-IS-RUNNING phrase beats the telemetry's bare الشاشة/وضع الجهاز words.
+    # AFTER close/web/youtube/screenshots verbs, BEFORE telemetry & app_sessions
+    # usage history («برامج اليوم» is the past-day usage, not the live list).
+    (
+        "running_apps",
+        re.compile(
+            r"التطبيقات\s+(?:اللي\s+)?(?:تعمل|تعملوا|شغال|شغالة|مفتوح|مفتوحة|نشطة|النشطة)|"
+            r"شو\s+(?:التطبيقات|البرامج)|"
+            r"وين\s+(?:التطبيقات|البرامج)|"
+            r"افحصي\s+(?:التطبيقات|البرامج)|"
+            r"شو\s+شغال|مين\s+شغال"
         ),
     ),
     # schedule (§3-ج/2 + §5) — «ذكرني بكرة...» / «سجلي مهمة...» AND the timed

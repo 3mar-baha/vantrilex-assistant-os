@@ -254,6 +254,28 @@ class ToolRegistry:
             logger.warning("app-sessions narration failed: {}", error)
             return report
 
+    async def _do_running_apps(self, arg: str) -> str:
+        """STT-2 (owner 2026-09-04 7:07pm): «افحصي التطبيقات التي كانت تعمل» got
+        a generic health answer — this names what's ACTUALLY running right now.
+        Read-only wire (exec.list_apps), the honest raw list is the answer; no
+        LLM re-narration (process names are DATA, never fabricated)."""
+        if self._bridge is None:
+            return OFFLINE_VISION_AR
+        try:
+            payload = await self._bridge.send_cmd("exec.list_apps", {})
+        except BridgeOffline:
+            return OFFLINE_VISION_AR
+        apps = payload.get("apps") if isinstance(payload, dict) else None
+        if not isinstance(apps, list):
+            return TOOL_FAIL_AR
+        names = [str(entry.get("name", "")).strip() for entry in apps if isinstance(entry, dict)]
+        names = [name for name in names if name]
+        if not names:
+            return "ما في تطبيقات مستخدم شغالة هسا حسب اللي أشوفه."
+        listed = "، ".join(names[:MAX_LINES])
+        more = f" (و{len(names) - MAX_LINES} غيرهم)" if len(names) > MAX_LINES else ""
+        return f"التطبيقات الشغالة هسا: {listed}{more}."
+
     async def _do_knowledge_graph(self, arg: str) -> str:
         """Pass-2 (v2.0 §3-و): the wikilink web over the vault — backlinks,
         neighbors, orphans for the note named in arg (or a graph overview with

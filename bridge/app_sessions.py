@@ -10,7 +10,7 @@ import json
 from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Final
 
 from loguru import logger
 from pydantic import BaseModel
@@ -193,6 +193,68 @@ def whitelist_categories(whitelist_path: Path | str) -> dict[str, str]:
         for entry in data.get("allowed_apps", [])
         if entry.get("name")
     }
+
+
+# STT-2 (owner 2026-09-04 7:07pm): system/noise process prefixes stay OUT of
+# the running-apps report — the owner asks what HE has open, not what Windows
+# has open. Real apps never carry these image prefixes.
+_SYSTEM_IMAGE_PREFIXES: Final[tuple[str, ...]] = (
+    "svchost",
+    "csrss",
+    "wininit",
+    "winlogon",
+    "services",
+    "lsass",
+    "smss",
+    "dwm",
+    "fontdrvhost",
+    "sihost",
+    "taskhostw",
+    "runtimebroker",
+    "applicationframehost",
+    "system",
+    "system idle",
+    "idle",
+    "registry",
+    "memcompression",
+    "searchindexer",
+    "audiodg",
+    "conhost",
+    "dllhost",
+    "backgroundtaskhost",
+    "spoolsv",
+    "wudfhost",
+    "wermgr",
+    "wmiprvse",
+)
+
+
+def _running_processes() -> list[tuple[str, str | None]]:
+    """The REAL running user-facing processes: (image, window title) via
+    psutil — the test seam (tests monkeypatch this single function)."""
+    import psutil
+
+    out: list[tuple[str, str | None]] = []
+    for proc in psutil.process_iter(attrs=["name"]):
+        name = proc.info.get("name") or ""
+        if name:
+            out.append((name, None))
+    return out
+
+
+def running_apps_report() -> dict:
+    """STT-2: what's ACTUALLY running — deduped, system-noise excluded,
+    whitelist display names preferred over raw images. Wire-ready dict."""
+    seen: dict[str, str] = {}  # casefolded image -> display name
+    for image, _title in _running_processes():
+        folded = image.casefold()
+        if any(folded.startswith(prefix) for prefix in _SYSTEM_IMAGE_PREFIXES):
+            continue
+        if folded in seen:
+            continue
+        seen[folded] = image
+    apps = [{"name": display} for display in seen.values()]
+    return {"apps": apps}
 
 
 def today_store_path(base_dir: Path | str, *, now: datetime | None = None) -> Path:

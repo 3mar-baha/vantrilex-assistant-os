@@ -22,11 +22,14 @@ BACKOFF_CAP_S = 30.0
 
 # v2.0 pass-1: +exec.screenshot (in-memory capture), +exec.close (guard-checked
 # app close), +telemetry.app_sessions (minute-level usage report)
+# STT-2 (owner 2026-09-04 7:07pm): +exec.list_apps — read-only running-process
+# report (same class as telemetry.state: no confirmation gate)
 CmdName = Literal[
     "exec.launch",
     "exec.open",
     "exec.close",
     "exec.screenshot",
+    "exec.list_apps",
     "power",
     "wol",
     "telemetry.state",
