@@ -872,3 +872,47 @@ Owner steps: `docs/08-OWNER-NEXT-STEPS.md`.
       path §13.1; power/idle/WoL cluster §12) or CI-infra (clean-clone
       image build §13.5) — none implementable without the owner's word.
       Gate this run: 505 passed / 87.59% / security+docs green (was 494).
+
+      ### V2.0 MASTER DIRECTIVE RUN (2026-09-04, owner: unattended continuous
+      ### 5-pass refactoring + feature integration, commits direct on main)
+      Preflight: PHASE-STATE intact (primer warning was stale); make gate green
+      (506/87.60%); OmniRoute OFFLINE locally (000 — TDD unaffected, live
+      smokes await the owner's gateway); Explore subagents 403-broken (harness
+      token has no subagent-model access) -> single-threaded closed loop, per
+      CLAUDE §5 preference.
+      **PASS 1 — deep bridge tools + phonetics (103e108)**: exec.screenshot
+      (Pillow in-RAM JPEG <=1600px, base64 over the tunnel, m3 native vision
+      narration), telemetry.app_sessions (minute-level foreground tracker,
+      category roll-up Games/Programming/Study/Productivity/Unknown, boot/shutdown
+      log, per-day JSON under data/app_sessions/), exec.close (taskkill /IM /F
+      through the SAME whitelist gate), directive lexicon pins (سارة->سارَا،
+      كيفك->كِيفَك); Pillow>=10.0 added; 530 passed / 86.25%.
+      **PASS 2 — knowledge graph + scheduled tasks (631f567)**:
+      src/skills/knowledge_graph.py (pure wikilink web, alias-aware, dangling
+      links honest nodes, backlinks/neighbors/orphans, Arabic DATA brief);
+      VaultClient.list_dir (contents-API scan); ScheduledTasksEngine (ONE note
+      per task in 01_Projects/Scheduled_Tasks/ with [sara:task:id], mirrored to
+      Calendar+Tasks, idempotent by tag, Google-down parks + ~10-min catch-up
+      7th loop); schedule + knowledge_graph tools + net; 552 passed / 85.90%.
+      **PASS 3 — hyper-humanization (3112add)**: persona names her FULL tool
+      inventory, engaged-life partner stance (real follow-up questions on
+      university/friends), spontaneous texture (قصدي stutters, اممم pauses,
+      relief sighs, light laughs) — honesty floor contract-tested unchanged;
+      556 passed / 85.90%.
+      **PASS 4 — web intel + staged integrations (7 granular commits per the
+      owner's granularity ruling)**: web_search keyless DDG (9e4b81d) · weather
+      Open-Meteo keyless — Google Weather API PAID, excluded by $0.00
+      (a098c26) · youtube Data API v3 env-gated (2637ee5) · instagram sandbox
+      §7 (313f8eb) · civ6 fair-play contract core — fog enforcer structural
+      (d651af2) · firecrawl REST §7 (1bebde7) · docs+archive (0055fe6).
+      CLIP FARMING DEFERRED BY OWNER («تأجيلها كلياً إلى المستقبل فقط في
+      ملفات التوثيق») — design kept in 02-BACKLOG as future spec, ZERO code.
+      **PASS 5 — contradiction sweep + this record**: wire cmds docs==code
+      8/8; dispatcher tools==registry handlers 13/13; config keys==.env.example
+      (clean); requirements==imports; TEST-PLAN gained the 4 undocumented
+      v1.1 suite rows (acoustic/affect/consent/live_calls — Phase-0 gap
+      closed). Final gate: 596 passed / 1 skipped / 85.48% / security+docs
+      green; sacred floors green. Owner-pending: OmniRoute start, Google
+      OAuth bootstrap, /enroll-voice, YOUTUBE_API_KEY (optional),
+      INSTAGRAM_SESSION (optional), FIRECRAWL_API_KEY (optional), Civ6 mod
+      drop, clip-farming future re-activation ruling.
