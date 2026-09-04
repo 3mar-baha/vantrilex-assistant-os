@@ -335,6 +335,40 @@ class ToolRegistry:
             "نزلتها بمفكرة المهام وبتنعكس على التقويم وقايمة مهام غوغل."
         )
 
+    async def _do_create_folder(self, arg: str) -> str:
+        """§6 (2026-09-04): dynamic Obsidian folder creation — the GitHub
+        contents API creates the directory with the first committed note, so
+        creating = committing ONE `_index.md` under the sanitized name; the
+        confirmation carries the direct wikilink. Idempotent; the PARA
+        backbone is never renamed/deleted (additive-only)."""
+        if self._vault is None:
+            return NO_GRAPH_AR  # the vault-offline line (same dependency)
+        from src.vault import _sanitize_component, write_frontmatter
+
+        raw = arg.strip().strip("«»'\"")
+        try:
+            name = _sanitize_component(raw)
+        except ValueError:
+            return "الاسم اللي بعته مو صالح لمجلد — جرّب اسم أبسط 🌸"
+        if not name:
+            return "شو اسم الفولدر اللي بدك أنشئه؟"
+        index_path = f"{name}/_index.md"
+        meta = {"type": "vault-index", "dir": name, "created_by": "sara"}
+        body = f"# {name}\n\nمجلد جديد بالخزينة 🌸\n"
+        try:
+            await self._vault.upsert(
+                index_path,
+                write_frontmatter(meta, body),
+                message=f"sara: create folder {name}",
+            )
+        except Exception as error:  # noqa: BLE001 — honest line, never «عطل بسيط» alone
+            logger.warning("create folder {name} failed: {}", name, error)
+            return "ما قدرت أنشئ الفولدر هالمرة — الخزينة مو متوصلة أو صار في مشكلة بالاتصال."
+        return (
+            f"أنشأت فولدر «{name}» ونزّلت فيه ملف الفهرس [[{name}/_index]] 🌸 "
+            "تقدر تحط فيه الملاحظات على طول."
+        )
+
     async def _do_web_search(self, arg: str) -> str:
         """Pass-4 (v2.0 §3-هـ): live keyless web search — real DDG result titles
         + links as DATA; empty results degrade honestly, never fabricated."""

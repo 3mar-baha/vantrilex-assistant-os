@@ -49,6 +49,7 @@ _ROUTER_PROMPT_AR: Final[str] = (
     'الأفكار، مع اسم المفكرة في "arg" إن وجد، '
     'web_search=بحث حي بالنت بمصادر حقيقية مع نص البحث في "arg"، '
     'weather=الطقس الحالي مع اسم المدينة في "arg" (عمان افتراضياً)، '
+    'create_folder=إنشاء فولدر جديد بالخزينة مع اسم الفولدر في "arg"، '
     'youtube=بحث فيديوهات يوتيوب مع نص البحث في "arg"، '
     'close=إغلاق برنامج شغال على PC (سكري/اغلقي/طفي/وقفي) مع اسم البرنامج في "arg". '
     "الطلبات ذات الأداة تصنَّف دائماً tier2.\n"
@@ -75,6 +76,7 @@ _VALID_TOOLS: Final = (
     "screenshot",
     "app_sessions",
     "schedule",
+    "create_folder",
     "knowledge_graph",
     "web_search",
     "weather",
@@ -163,6 +165,15 @@ _TOOL_NET: Final[tuple[tuple[str, re.Pattern[str]], ...]] = (
             r"(?:ذكرني|ذكريني|سجل?ي?\s+مهمة|سجّلي|مهمة\s+جديدة|تذكير)\s*(.*)"
         ),
     ),
+    # create_folder (§6 2026-09-04) — «انشئي/اضيفي فولدر X» in the VAULT;
+    # the name rides the arg (sanitized in the tool). BEFORE knowledge_graph
+    # (a folder ask is not a relations query).
+    (
+        "create_folder",
+        re.compile(
+            r"(?:أنشئي|انشئي|اضيفي|أضيفي|اعملي|سويني)\s+(?:فولدر|مجلد|مجلّد)\s+(?:جديد\s+)?(?:اسمه\s+)?(.+)"
+        ),
+    ),
     # knowledge_graph (v2.0 §3-و) — the relations web «مين بيحكي عن...»
     (
         "knowledge_graph",
@@ -197,6 +208,9 @@ def _keyword_net(text: str) -> tuple[str, str]:
             # precede OR follow the verb («بعد 60 ثانية ذكريني X» /
             # «ذكرني X بعد ساعة»), and the tool's parsers scan it either way
             return ("schedule", clean)
+        if tool == "create_folder" and match.groups() and match.group(1):
+            # the folder name rides the net arg («انشئي فولدر RoutineTasks»)
+            return ("create_folder", match.group(1).strip(" .!؟?،,"))
         if tool == "web_search" and match.groups() and match.group(1):
             # the query rides the net arg («دوّر بالنت عن أسعار الرام» -> query)
             return ("web_search", match.group(1).strip(" .!؟?،,"))
