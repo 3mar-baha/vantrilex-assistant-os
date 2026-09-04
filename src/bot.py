@@ -866,6 +866,11 @@ async def run_bot(settings: Settings, bridge=None) -> None:
         ),  # §4: the screenshot tool dispatches the REAL JPEG as a Telegram photo
         orchestrator=orchestrator,  # §5: timed reminders fire proactively
     )
+    # STT-4 (owner 2026-09-04 evening): the agent manager — HEAVY plans
+    # multi-task lines, MEDIUM sub-agents map them, the REAL registry executes.
+    from src.agent_manager import AgentManager
+
+    tools.bind_agent_manager(AgentManager(gateway=gateway, tools=tools))
     dp = build_dispatcher(
         gateway,
         voice,

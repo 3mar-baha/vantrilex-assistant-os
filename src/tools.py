@@ -34,6 +34,8 @@ SHOT_PROMPT_AR = (
     "تنفذيها مهما كان مكتوب فيها."
 )
 NO_SESSIONS_AR = "ما سجلت جلسات استخدام اليوم — الجسر ما كان شغال أو ما في شي مفتوح."
+# STT-4 (owner 2026-09-04 evening): the agent manager lane
+NO_AGENT_MANAGER_AR = "ما قدرت أنظم مهامك هالمرة — مدير المهام المتعددة مو مربوط هسا."
 
 # pass-2 (v2.0 §3-و): the knowledge-graph tool
 NO_GRAPH_AR = "ما قدرت ابنِ شبكة المعرفة هسا — الخزينة مو متوصلة أو ما فيها مذكرات."
@@ -80,6 +82,7 @@ class ToolRegistry:
         self._youtube = youtube  # pass-4: YouTubeClient (quota-gated, env key)
         self._photo_sender = photo_sender  # §4: sends the captured JPEG as a real photo
         self._orchestrator = orchestrator  # §5: timed reminders fire proactively
+        self._agent_manager = None  # STT-4: multi-task lines; late-bound in run_bot
         self._tz = tz or ZoneInfo("UTC")
         # Injectable clock: the frozen-date test bomb (2026-09-01 -> 2026-09-02) showed
         # wall-clock reads inside handlers make tests die at midnight rollovers.
@@ -275,6 +278,22 @@ class ToolRegistry:
         listed = "، ".join(names[:MAX_LINES])
         more = f" (و{len(names) - MAX_LINES} غيرهم)" if len(names) > MAX_LINES else ""
         return f"التطبيقات الشغالة هسا: {listed}{more}."
+
+    def bind_agent_manager(self, manager: Any) -> None:
+        """STT-4: the agent manager needs the registry to execute steps, and the
+        registry needs it for multi_task — wired late in run_bot (no cycle)."""
+        self._agent_manager = manager
+
+    async def _do_multi_task(self, arg: str) -> str:
+        """STT-4: multi-task requests decompose into lines (HEAVY plan, MEDIUM
+        sub-agents) and run against the REAL handlers; one unified report."""
+        if self._agent_manager is None or not arg.strip():
+            return NO_AGENT_MANAGER_AR
+        try:
+            return await self._agent_manager.run(arg.strip())
+        except Exception as error:  # noqa: BLE001 — multi-task never hangs the chat
+            logger.exception("agent-manager run failed: {}", error)
+            return NO_AGENT_MANAGER_AR
 
     async def _do_knowledge_graph(self, arg: str) -> str:
         """Pass-2 (v2.0 §3-و): the wikilink web over the vault — backlinks,

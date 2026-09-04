@@ -51,7 +51,9 @@ _ROUTER_PROMPT_AR: Final[str] = (
     'weather=الطقس الحالي مع اسم المدينة في "arg" (عمان افتراضياً)، '
     'create_folder=إنشاء فولدر جديد بالخزينة مع اسم الفولدر في "arg"، '
     'youtube=بحث فيديوهات يوتيوب مع نص البحث في "arg"، '
-    'close=إغلاق برنامج شغال على PC (سكري/اغلقي/طفي/وقفي) مع اسم البرنامج في "arg". '
+    'close=إغلاق برنامج شغال على PC (سكري/اغلقي/طفي/وقفي) مع اسم البرنامج في "arg"، '
+    "multi_task=الطلب فيه أكتر من مهمة واضحة بنفس الرسالة (شغلي X وافتحي Y وسكري Z) "
+    '— ضع نص الطلب كاملاً في "arg" وبدون أي تلخيص. '
     "الطلبات ذات الأداة تصنَّف دائماً tier2.\n"
     "- voice_reply: هل هذا الطلب يليق ردّه صوتاً (رسالة صوتية) بدل النص؟ true فقط إذا "
     "المالك طلب الصوت صراحةً أو بنيته (بدي اسمعك، حابب صوتك، احكيلي عن حالك) أو الجو "
@@ -83,6 +85,7 @@ _VALID_TOOLS: Final = (
     "weather",
     "youtube",
     "close",
+    "multi_task",
 )
 _JSON_RE: Final = re.compile(r"\{.*\}", re.DOTALL)
 
@@ -90,7 +93,32 @@ _JSON_RE: Final = re.compile(r"\{.*\}", re.DOTALL)
 # anti-hallucination keyword net — a defense line BEHIND the router. When the
 # router misses (tool="none") or emits an unknown tool while the text clearly
 # names one, the net forces the real tool path and logs the coercion loudly.
+
+# STT-4: the imperative action verbs — 2+ distinct occurrences in one message
+# is a multi-task request (the net's deterministic multi_task backstop).
+_MULTI_ACTION_VERBS: Final = (
+    r"افتحي|افتحيلي|شغّل|شغل|شغّلي|شغيلي|سكري|سكّري|اغلقي|أغلقي|وقفي|اقفلي|"
+    r"طفي|اطفي|اطفئي|ذكريني|ذكرني|سجّلي|سجلي|ابحثي|دوّري|دوري|لقطي|صوري|"
+    r"ابعثي|ابعتلي|ارسلي|أرسلي|انشئي|أنشئي|اضيفي|أضيفي|افحصي|سويني|اعملي|"
+    r"خذي|جيبي|حطي|احضري|عرضي|نزلي|اكتبيلي|اكتبي"
+)
+
 _TOOL_NET: Final[tuple[tuple[str, re.Pattern[str]], ...]] = (
+    # multi_task (STT-4 2026-09-04) — FIRST: 2+ imperative action verbs joined
+    # by a و/بعدين/ثم/كمان connector = a genuine multi-action request; a single
+    # tool must never swallow the rest (live: «شغلي المتصفح... ووقفي الفيديو
+    # وشغل روكت ليج» ran step 1 only). The connector also guards against two
+    # verb stems inside ONE compound verb («ابعثي-لي» can't match itself twice).
+    # The FULL text rides the arg (the planner needs every clause).
+    (
+        "multi_task",
+        re.compile(
+            rf"(?:{_MULTI_ACTION_VERBS})"
+            rf"[^.،؟!]{{0,60}}?"
+            rf"(?:\s*(?:و|بعدين|بعدها|ثم|كمان)\s*)"
+            rf"(?:{_MULTI_ACTION_VERBS})"
+        ),
+    ),
     # close (live 2026-09-04 §2: «سكري الآلة الحاسبة» misrouted to LAUNCH and
     # spawned duplicates) — closing verbs win over everything; the app name
     # rides the net arg; MUST precede launch's open/start verbs
@@ -214,6 +242,10 @@ def _keyword_net(text: str) -> tuple[str, str]:
         match = pattern.search(clean)
         if match is None:
             continue
+        if tool == "multi_task":
+            # STT-4: the FULL text rides the arg — every clause must reach the
+            # planner (a single tool's arg would swallow the sibling tasks)
+            return ("multi_task", clean)
         if tool == "launch":
             raw_name = match.group(1).strip()
             arg = _LAUNCH_STRIP_RE.sub("", raw_name).strip(" .!؟?،,")
