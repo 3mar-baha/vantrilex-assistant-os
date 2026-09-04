@@ -126,6 +126,17 @@ _TOOL_NET: Final[tuple[tuple[str, re.Pattern[str]], ...]] = (
     ),
     # gmail — colloquial mail words (شغّل/افتح never match mail)
     ("gmail", re.compile(r"جيميل|بريدي|ايميل|إيميل|الايميل|الإيميل|البريد|بريد")),
+    # screenshot — BEFORE telemetry: a capture/delivery verb-phrase is a
+    # screenshot intent even though it contains the word الشاشة (§4 2026-09-04:
+    # «ارسلي لقطة الشاشة» must not fall to telemetry on the bare word)
+    (
+        "screenshot",
+        re.compile(
+            r"عالشاشة|ع الشاشة|الشاشة الحالية|صوري الشاشة|لقطة الشاشة|شو عالشاشة"
+            r"|(?:ابعثي|ابعتلي|بعتيلي|ارسلي|أرسلي|بعثيلي)\s+(?:لي\s+)?"
+            r"(?:ال)?سكرين\s*شوت|لقطة\s+(?:ال)?شاش"
+        ),
+    ),
     # calendar
     ("calendar", re.compile(r"مواعيد|تقويم|مواعيدي|موعد")),
     # tasks
@@ -134,11 +145,6 @@ _TOOL_NET: Final[tuple[tuple[str, re.Pattern[str]], ...]] = (
     ("telemetry", re.compile(r"وضع الجهاز|وضع الجسر|الرام|الشاشة|المعالج|حالة الجهاز|تيليمتري")),
     # brief
     ("brief", re.compile(r"الإحاطة|احاطة|إحاطة|النشرة اليومية")),
-    # screenshot (v2.0 §3-د/2) — «شو عالشاشة؟» / «صوري الشاشة»
-    (
-        "screenshot",
-        re.compile(r"عالشاشة|ع الشاشة|الشاشة الحالية|صوري الشاشة|لقطة الشاشة|شو عالشاشة"),
-    ),
     # app_sessions (v2.0 §3-د/3) — minute-level usage «كم استخدمت برامج اليوم»
     (
         "app_sessions",

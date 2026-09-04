@@ -7,6 +7,7 @@ is yielded the moment ffmpeg emits it; every path reaps the ffmpeg child; no orp
 """
 
 import asyncio
+import re
 from collections.abc import AsyncIterator
 from contextlib import suppress
 from typing import Final
@@ -22,6 +23,27 @@ OGG_READ_CHUNK: Final[int] = 4096
 # V-1 (deferred queue): a hung engine or a stalled encode must hit this wall
 # and fail honestly — never a silent hang eating the turn.
 TOTAL_SYNTHESIS_TIMEOUT_S: Final[float] = 30.0
+
+# Directive §3 (owner 2026-09-04, live 3:42pm): the model hallucinated
+# sara-voice.s3.amazonaws.com links for her own voice — audio is synthesized
+# in-memory and dispatched by US, never linked externally. This sanitizer is
+# the structural defense behind the prompt: any media-CDN/file link dies
+# before a message surface.
+_EXTERNAL_MEDIA_LINK_RE: Final = re.compile(
+    r"https?://\S*(?:s3\.amazonaws|soundcloud|cdn|\.mp3|\.wav|\.ogg|storage\.googleapis"
+    r"|drive\.google|dropbox)\S*",
+    re.IGNORECASE,
+)
+
+
+def strip_external_media_links(text: str) -> str:
+    """Remove hallucinated external media URLs from a reply; the rest of the
+    text survives untouched. Pure, never raises."""
+    try:
+        return _EXTERNAL_MEDIA_LINK_RE.sub("", text).strip()
+    except Exception:  # noqa: BLE001 — sanitation never blocks the reply
+        return text
+
 
 _FFMPEG_ARGS: Final[tuple[str, ...]] = (
     "-hide_banner",

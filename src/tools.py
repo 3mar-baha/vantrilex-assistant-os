@@ -63,6 +63,7 @@ class ToolRegistry:
         web: Any = None,
         weather: Any = None,
         youtube: Any = None,
+        photo_sender: Any = None,
     ) -> None:
         self._inbox = inbox
         self._suite = suite
@@ -76,6 +77,7 @@ class ToolRegistry:
         self._web = web  # pass-4: WebIntel (keyless DDG search + page reads)
         self._weather = weather  # pass-4: WeatherClient (Open-Meteo, keyless)
         self._youtube = youtube  # pass-4: YouTubeClient (quota-gated, env key)
+        self._photo_sender = photo_sender  # §4: sends the captured JPEG as a real photo
         self._tz = tz or ZoneInfo("UTC")
         # Injectable clock: the frozen-date test bomb (2026-09-01 -> 2026-09-02) showed
         # wall-clock reads inside handlers make tests die at midnight rollovers.
@@ -159,9 +161,10 @@ class ToolRegistry:
         return None  # the coordinator notifies the owner itself (audit code inside)
 
     async def _do_screenshot(self, arg: str) -> str:
-        """Pass-1 (v2.0 §3-د/2): live screen capture -> m3 native vision -> her
-        own words. The image is DATA: the prompt pins it; the bridge result is
-        ground truth; failures degrade to honest lines, never silence."""
+        """§3-د/2 + §4 (owner 2026-09-04): live screen capture -> m3 native
+        vision -> her own words. When the owner asked to RECEIVE the capture
+        («بعثيلي السكرين شوت»), the JPEG ALSO lands as a real Telegram photo —
+        not a text-only description (live 3:27-3:33pm «ما وصل صورة»)."""
         if self._bridge is None or self._vision is None:
             return OFFLINE_VISION_AR
         try:
@@ -170,6 +173,15 @@ class ToolRegistry:
             return OFFLINE_VISION_AR
         if payload.get("status") != "ok" or not payload.get("detail"):
             return TOOL_FAIL_AR
+        import base64 as _b64
+
+        jpeg_bytes = _b64.b64decode(payload["detail"])
+        # §4: a delivery request gets the REAL photo dispatched first
+        if self._photo_sender is not None:
+            try:
+                await self._photo_sender(jpeg_bytes)
+            except Exception as error:  # noqa: BLE001 — photo failure never kills the description
+                logger.warning("screenshot photo dispatch failed: {}", error)
         try:
             block = {
                 "type": "image_url",

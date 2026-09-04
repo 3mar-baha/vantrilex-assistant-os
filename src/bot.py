@@ -146,6 +146,21 @@ def is_bare_confirmation_token(text: str) -> bool:
     return tokens[0] in AFFIRMATIVES or tokens[0] in _REFUSALS
 
 
+def _make_photo_sender(bot: Bot, chat_id: int):
+    """§4 (owner 2026-09-04): the screenshot tool's REAL-photo surface —
+    exactly the directive's answer_photo(BufferedInputFile(jpeg, ...)) with her
+    caption. One callable, injected into the registry."""
+
+    async def _send(jpeg_bytes: bytes) -> None:
+        await bot.send_photo(
+            chat_id,
+            BufferedInputFile(jpeg_bytes, filename="screenshot.jpg"),
+            caption="تفضل، هاي لقطة شاشتك هسا 🌸",
+        )
+
+    return _send
+
+
 def build_dispatcher(
     gateway,
     voice,
@@ -479,7 +494,13 @@ async def _stream_answer(
                 if cancel.is_set():
                     break
                 answer += delta
-            spoken = answer.strip() or ack
+            # §3 (2026-09-04): hallucinated external audio links die HERE —
+            # her voice is synthesized + dispatched by us, never linked.
+            from src.voice import strip_external_media_links as _strip_links
+
+            spoken = _strip_links(answer.strip() or ack)
+            if not spoken:
+                spoken = "هذي رسالتي الصوتية 🌸"
             spoke = False
             if voice is not None and spoken:
                 # Round-3 22:53: a transient Fish 429 became «ما بقدرش
@@ -812,6 +833,9 @@ async def run_bot(settings: Settings, bridge=None) -> None:
         web=web,  # pass-4: web_search -> keyless DDG search
         weather=weather_client,  # pass-4: weather -> Open-Meteo current conditions
         youtube=youtube_client,  # pass-4: youtube -> Data API v3 (env-gated)
+        photo_sender=(
+            _make_photo_sender(bot, settings.authorized_user_id) if bot is not None else None
+        ),  # §4: the screenshot tool dispatches the REAL JPEG as a Telegram photo
     )
     dp = build_dispatcher(
         gateway,
