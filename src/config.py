@@ -79,6 +79,8 @@ class Settings(BaseSettings):
     telegram_user_session_string: str | None = None
     # v2.0 pass-4: YouTube Data API v3 (free 10k units/day; empty = staged off)
     youtube_api_key: str | None = None
+    # v2.0 pass-4: Instagram sandbox (§7 staged — live when the owner provides)
+    instagram_session: str | None = None
     voice_name: str = "ar-EG-SalmaNeural"
     voice_rate: str = "+0%"
     voice_pitch: str = "+0Hz"
