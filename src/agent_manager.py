@@ -167,13 +167,20 @@ class AgentManager:
         return steps
 
     async def _run_line(self, line: _Line) -> str:
-        """One line: sub-agent map + ordered execution + honest line report."""
+        """One line: sub-agent map + ordered execution + honest line report.
+
+        Audit round-2 finding (2026-09-05): a None result (launch/close — the
+        coordinator communicates the real outcome directly, which may be
+        EXECUTED *or* AWAITING CONFIRMATION) must never claim ✅ completion in
+        the unified report. None = neutral «status reached you by my notice»;
+        only a returned STRING is a finished outcome."""
         try:
             steps = await self._map_line(line)
         except GatewayError as error:
             logger.warning("agent-manager sub-agent failed: {}", error)
             return f"ما قدرت أنفذ «{line.text}» — خطوة التخطيط الداخلية فشلت."
         done: list[str] = []
+        notified: list[str] = []
         failed: list[str] = []
         dropped: list[str] = []
         for step in steps:
@@ -181,8 +188,12 @@ class AgentManager:
                 dropped.append(step.tool.removeprefix("__drop__"))
                 continue
             try:
-                await self._tools.call(step.tool, step.arg)
-                done.append(f"{step.tool}:{step.arg}".rstrip(":"))
+                result = await self._tools.call(step.tool, step.arg)
+                if result is None:
+                    notified.append(f"{step.tool}:{step.arg}".rstrip(":"))
+                else:
+                    snippet = result.strip().splitlines()[0][:80] if result.strip() else ""
+                    done.append(f"{step.tool}:{step.arg}".rstrip(":") + f" — {snippet}")
             except Exception as error:  # noqa: BLE001 — one step never kills the line
                 logger.warning("agent-manager step {}:{} failed: {}", step.tool, step.arg, error)
                 failed.append(f"{step.tool}:{step.arg}".rstrip(":"))
@@ -191,6 +202,8 @@ class AgentManager:
         parts: list[str] = []
         if done:
             parts.append("✅ " + "، ".join(done))
+        if notified:
+            parts.append("📤 " + "، ".join(notified) + " (الحالة وصلك بإشعار مني)")
         if failed:
             parts.append("⚠️ ما اشتغلت: " + "، ".join(failed))
         if dropped:
