@@ -760,7 +760,18 @@ async def run_bot(settings: Settings, bridge=None) -> None:
         web = WebIntel(http=_httpx.AsyncClient(timeout=15.0, follow_redirects=True))
     except Exception as error:  # noqa: BLE001 — web tools degrade honestly without it
         logger.warning("web intel unavailable; web_search degrades: {}", error)
-    # pass-4 (v2.0 §3-ب/1): keyless weather (Open-Meteo) — shares the web client.
+    # pass-4 (v2.0 §3-ب/1): YouTube search — env-gated staging; the tool stays
+    # honestly offline until the owner drops YOUTUBE_API_KEY in .env (§7).
+    youtube_client = None
+    if (settings.youtube_api_key or "").strip():
+        try:
+            from src.skills.google_extras import YouTubeClient
+
+            youtube_client = YouTubeClient(
+                None, api_key=settings.youtube_api_key
+            )  # session=None: the real GoogleSession binds at first call in prod
+        except Exception as error:  # noqa: BLE001
+            logger.warning("youtube client unavailable: {}", error)
     weather_client = None
     if web is not None:
         try:
@@ -800,6 +811,7 @@ async def run_bot(settings: Settings, bridge=None) -> None:
         task_engine=task_engine,  # pass-2: schedule tool -> Scheduled_Tasks notes
         web=web,  # pass-4: web_search -> keyless DDG search
         weather=weather_client,  # pass-4: weather -> Open-Meteo current conditions
+        youtube=youtube_client,  # pass-4: youtube -> Data API v3 (env-gated)
     )
     dp = build_dispatcher(
         gateway,

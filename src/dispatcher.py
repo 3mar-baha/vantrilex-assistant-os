@@ -48,7 +48,8 @@ _ROUTER_PROMPT_AR: Final[str] = (
     "knowledge_graph=شبكة المعرفة بالمفكرات: مين بيحكي عن مين، الروابط بين "
     'الأفكار، مع اسم المفكرة في "arg" إن وجد، '
     'web_search=بحث حي بالنت بمصادر حقيقية مع نص البحث في "arg"، '
-    'weather=الطقس الحالي مع اسم المدينة في "arg" (عمان افتراضياً). '
+    'weather=الطقس الحالي مع اسم المدينة في "arg" (عمان افتراضياً)، '
+    'youtube=بحث فيديوهات يوتيوب مع نص البحث في "arg". '
     "الطلبات ذات الأداة تصنَّف دائماً tier2.\n"
     "- voice_reply: هل هذا الطلب يليق ردّه صوتاً (رسالة صوتية) بدل النص؟ true فقط إذا "
     "المالك طلب الصوت صراحةً أو بنيته (بدي اسمعك، حابب صوتك، احكيلي عن حالك) أو الجو "
@@ -76,6 +77,7 @@ _VALID_TOOLS: Final = (
     "knowledge_graph",
     "web_search",
     "weather",
+    "youtube",
 )
 _JSON_RE: Final = re.compile(r"\{.*\}", re.DOTALL)
 
@@ -91,6 +93,14 @@ _TOOL_NET: Final[tuple[tuple[str, re.Pattern[str]], ...]] = (
         "web_search",
         re.compile(
             r"(?:دوّر|دور|ابحثي|بحث|لقطي|طلعيلي)\s+(?:بالنت|في النت|عالنت)(?:\s+(?:عن\s+)?(.+))?"
+        ),
+    ),
+    # youtube (v2.0 §3-ب/1) — «دوّر بفيديو يوتيوب X» (query rides the arg);
+    # before web_search's bare «دوّر بالنت» so the youtube intent wins when named
+    (
+        "youtube",
+        re.compile(
+            r"(?:دوّر|دور|ابحثي|بحث|لقيلي|طلعيلي)\s+(?:بفيديو\s+|في\s+)?(?:يوتيوب|باليوتيوب)(?:\s+(?:عن\s+)?(.+))?"
         ),
     ),
     # weather (v2.0 §3-ب/1) — «شو الطقس (بعمان)?» — explicit طقس beats the
@@ -166,6 +176,9 @@ def _keyword_net(text: str) -> tuple[str, str]:
         if tool == "web_search" and match.groups() and match.group(1):
             # the query rides the net arg («دوّر بالنت عن أسعار الرام» -> query)
             return ("web_search", match.group(1).strip(" .!؟?،,"))
+        if tool == "youtube" and match.groups() and match.group(1):
+            # the search query rides the net arg («دوّر بفيديو يوتيوب شرح الفيزياء»)
+            return ("youtube", match.group(1).strip(" .!؟?،,"))
         if tool == "weather" and match.groups():
             # the city rides the net arg: group(2) = a named city («شو الطقس في
             # اربد»), group(1) = the inline default city («شو الطقس بعمان»)
