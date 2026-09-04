@@ -187,11 +187,7 @@ class VaultClient:
             await self._http.aclose()
 
     async def read(self, path: str) -> str:
-        response = await self._http.get(
-            f"/repos/{self._repo}/contents/{path}",
-            params={"ref": self._branch},
-            headers=self._headers,
-        )
+        response = await self._get_with_rate_limit(path)
         if response.status_code == 404:
             raise FileNotFoundError(path)
         response.raise_for_status()  # auth errors propagate loudly (no retry)
@@ -204,6 +200,34 @@ class VaultClient:
         except ValueError as error:
             raise ValueError(f"{path}: {error}") from error
         return text
+
+    async def _get_with_rate_limit(self, path: str) -> httpx.Response:
+        """2.10 (deferred queue): a 429/403 rate limit with Retry-After is
+        honored ONCE — a momentary limit never fails a read; anything
+        persistent surfaces loudly (no silent infinite retry loop)."""
+        response = await self._http.get(
+            f"/repos/{self._repo}/contents/{path}",
+            params={"ref": self._branch},
+            headers=self._headers,
+        )
+        if response.status_code not in (429, 403):
+            return response
+        retry_after = response.headers.get("Retry-After")
+        if retry_after is None or getattr(self, "_rate_limit_used", False):
+            return response  # no header, or we already retried once — surface it
+        try:
+            await asyncio.sleep(min(float(retry_after), 30.0))  # sane cap
+        except ValueError:
+            return response
+        self._rate_limit_used = True
+        try:
+            return await self._http.get(
+                f"/repos/{self._repo}/contents/{path}",
+                params={"ref": self._branch},
+                headers=self._headers,
+            )
+        finally:
+            self._rate_limit_used = False
 
     async def upsert(self, path: str, content: str, *, message: str, merge=None) -> WriteResult:
         """Serialized + conflict-remerged (C-9/V-4 fix, pass-1): every write
@@ -240,6 +264,11 @@ class VaultClient:
             raise VaultConflictError(f"vault conflict persists for {path}")
         response.raise_for_status()
         data = response.json()
+        # C-10: a successful write invalidates the envelope cache — the next
+        # turn reads fresh content, never a stale just-written note.
+        from src.memory import invalidate_context_cache
+
+        invalidate_context_cache()
         return WriteResult(path=path, commit_sha=data["commit"]["sha"], created=sha is None)
 
     async def upsert_note(self, note: Note, *, message: str) -> WriteResult:

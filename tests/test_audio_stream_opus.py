@@ -50,3 +50,48 @@ async def test_first_chunk_arrives_before_completion(monkeypatch):
     assert first_at is not None, "no encoded chunks surfaced"
     assert first_at < producer.done_at  # first chunk beat producer completion
     assert arrivals >= 2  # genuinely streamed, not one blob at EOF
+
+
+# --- deferred queue V-1/V-2: total-timeout + stderr drain ---------------------------
+
+
+async def test_synthesis_total_timeout_raises_and_reaps(monkeypatch):
+    """V-1: a hung engine must hit the ~30s wall and die honestly — never a
+    silent hang eating the turn; the ffmpeg child is reaped either way."""
+    import asyncio as aio
+    import time as _t
+
+    from src.voice import VoicePipeline, VoicePipelineError, _spawn_ffmpeg
+
+    procs = []
+    real_spawn = _spawn_ffmpeg
+
+    async def _spawn_and_track(*args, **kwargs):
+        proc = await real_spawn(*args, **kwargs)
+        procs.append(proc)
+        return proc
+
+    monkeypatch.setattr("src.voice._spawn_ffmpeg", _spawn_and_track)
+
+    class _HungTTS:
+        def __init__(self, *args, **kwargs):
+            pass  # swallow the voice/rate/pitch constructor args
+
+        def stream(self):
+            # the real edge_tts contract: stream() returns an async generator
+            async def _hang():
+                await aio.sleep(3600)
+                yield  # unreachable — a generator that never yields
+
+            return _hang()
+
+    monkeypatch.setattr("edge_tts.Communicate", _HungTTS)
+    t0 = _t.monotonic()
+    with pytest.raises(VoicePipelineError, match="timed out"):
+        # the wall is injectable: 0.5s — proves the pipeline's OWN timeout
+        # fires (not the test's) without waiting 30s in CI
+        await VoicePipeline(**PIPE).synthesize("جملة", timeout_s=0.5)
+    elapsed = _t.monotonic() - t0
+    assert elapsed < 5.0  # the pipeline's own wall fired, fast
+    await aio.sleep(0.2)
+    assert all(p.returncode is not None for p in procs)  # reaped

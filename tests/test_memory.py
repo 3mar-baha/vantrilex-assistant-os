@@ -5,12 +5,15 @@ import json
 from datetime import UTC, datetime
 from zoneinfo import ZoneInfo
 
+import pytest
+
 from src.memory import (
     SECTION_CHAR_CAP,
     ConversationMemory,
     VaultMemoryWriter,
     build_messages,
     load_long_term,
+    reset_context_cache,
 )
 from src.vault import PROFILE_USER_INFO
 
@@ -18,12 +21,27 @@ TZ = ZoneInfo("Asia/Amman")
 NOW = datetime(2026, 9, 1, 15, 30, tzinfo=UTC)  # 18:30 Amman
 
 
+@pytest.fixture(autouse=True)
+def _clean_context_cache():
+    """The C-10 envelope cache is process-global — every test starts and ends
+    with it empty and a real clock."""
+    import src.memory as memory_mod
+
+    reset_context_cache()
+    memory_mod._clock = memory_mod._time_mod.monotonic
+    yield
+    reset_context_cache()
+    memory_mod._clock = memory_mod._time_mod.monotonic
+
+
 class FakeVault:
     def __init__(self, reads: dict[str, str] | None = None) -> None:
         self.reads = dict(reads or {})
         self.appends: list[tuple] = []
+        self.read_calls: list[str] = []
 
     async def read(self, path: str) -> str:
+        self.read_calls.append(path)
         if path not in self.reads:
             raise FileNotFoundError(path)
         return self.reads[path]
@@ -123,6 +141,52 @@ async def test_load_long_term_reads_dialect_notes_header():
     context = await load_long_term(vault, today=NOW.date())
     assert "كفيك" in context and "كفايك" in context  # the pair reached the envelope
     assert "عمر يحكي أردني." in context  # body still rides along
+
+
+async def test_load_long_term_ttl_cache_serves_repeated_turns():
+    """Audit C-10: three sequential GitHub GETs run before EVERY router call —
+    the <250ms ack target is unreachable. A 60s TTL cache serves the envelope:
+    back-to-back turns hit the cache (zero vault reads), a write invalidates
+    it, and expiry re-reads."""
+    import time as _time
+
+    vault = FakeVault({"02_Areas/Profile/User_Info.md": "---\n---\nعمر"})
+    from src.memory import reset_context_cache
+
+    reset_context_cache()
+    await load_long_term(vault, today=NOW.date())
+    first = len(vault.read_calls)
+    await load_long_term(vault, today=NOW.date())  # served from cache
+    await load_long_term(vault, today=NOW.date())  # served again
+    assert len(vault.read_calls) == first  # ZERO extra GitHub reads
+    assert first >= 1
+
+    # TTL expiry re-reads (the cache honors freshness)
+    from src.memory import _bump_cache_clock
+
+    _bump_cache_clock(_time.monotonic() + 61)
+    await load_long_term(vault, today=NOW.date())
+    assert len(vault.read_calls) > first  # expired -> fresh reads
+
+    reset_context_cache()
+
+
+async def test_vault_write_invalidates_context_cache():
+    """The cache must never serve a stale just-written profile: a vault write
+    (upsert path) clears it, so the NEXT turn reads fresh content."""
+    vault = FakeVault({"02_Areas/Profile/User_Info.md": "---\n---\nنسخة أولى"})
+    from src.memory import reset_context_cache
+
+    reset_context_cache()
+    first = await load_long_term(vault, today=NOW.date())
+    assert "نسخة أولى" in first
+    vault.reads["02_Areas/Profile/User_Info.md"] = "---\n---\nنسخة ثانية"
+    from src.memory import invalidate_context_cache
+
+    invalidate_context_cache()
+    second = await load_long_term(vault, today=NOW.date())
+    assert "نسخة ثانية" in second  # the fresh content arrived
+    reset_context_cache()
 
 
 async def test_load_long_term_skips_missing_notes_and_survives_vault_failure():

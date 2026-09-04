@@ -8,6 +8,29 @@ product release tags start independently at v1.0.0.)
 
 ## [Unreleased]
 
+### Fixed — the deferred audit queue cleared (2026-09-04, continuation mandate)
+- **C-10 — envelope TTL cache**: the three sequential GitHub GETs that ran
+  before EVERY router call (killing the <250ms ack target) are now served
+  from a 60s TTL cache; any vault write invalidates it — a just-written
+  profile never serves stale. Back-to-back turns cost ZERO GitHub reads.
+- **V-1 — voice total wall**: a hung engine hits a 30s wall and dies
+  honestly (`timed out` VoicePipelineError), the ffmpeg child reaped —
+  never a silent hang eating the turn.
+- **2.10 — vault 429/403 one-retry**: a rate limit with Retry-After is
+  honored once (capped 30s); persistent limits surface loudly — no silent
+  infinite retry loop.
+- **Security batch (S-2/S-3/S-6)**: the bridge token compare is
+  `hmac.compare_digest` (timing the reject can never leak the prefix);
+  auth-failure logging is bounded; the daemon WARNS loudly when dialing a
+  plaintext ws:// endpoint on the public internet.
+- **§13 — /health honesty**: the report now carries the vault-token and
+  Google-token-cache state — health never reads green while Gmail is
+  actually failing (the absent OAuth cache is THE local cause per the
+  audit).
+- **M-4 — the run_bot boot test**: the REAL production wiring (gateway,
+  voice, vault, memory, tools, coordinator, all six loops) assembles and
+  shuts down cleanly — proven, not assumed.
+
 ### Added — the v1.1 intelligence suite (2026-09-04, owner overnight mission)
 - **Universal multi-speaker diarization & separation**
   (`src/skills/speaker_diarization.py`): a conversation recording splits

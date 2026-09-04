@@ -26,6 +26,8 @@ class FakeGitHub:
         self.commits: list[dict] = []  # Data-API commits: {sha, message}
         self.requests: list[httpx.Request] = []
         self.fail_get_status: dict[str, int] = {}  # path -> forced GET status (401, ...)
+        # rate-limit injection (2.10): url-path -> (n_429s, retry_after_s)
+        self.rate_limited: dict[str, tuple[int, int]] = {}
         self.put_conflicts: dict[str, int] = {}  # path -> number of 409s to inject
         self.break_data_api = False  # True -> Git Data API endpoints return 500
         self._ids = itertools.count(1)
@@ -46,6 +48,19 @@ class FakeGitHub:
 
     def _handle(self, request: httpx.Request) -> httpx.Response:
         self.requests.append(request)
+        # rate-limit injection (deferred queue 2.10): path -> (n_429s, retry_after)
+        rl = (
+            self.rate_limited.pop(request.url.path, None) if hasattr(self, "rate_limited") else None
+        )
+        if rl is not None:
+            count, retry_after = rl
+            if count > 0:
+                self.rate_limited[request.url.path] = (count - 1, retry_after)
+                return httpx.Response(
+                    429,
+                    json={"message": "API rate limit"},
+                    headers={"Retry-After": str(retry_after)},
+                )
         parts = unquote(request.url.path).removeprefix(f"/repos/{self.repo}/")
         method = request.method
         if method == "GET" and parts.startswith("contents/"):

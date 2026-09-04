@@ -52,8 +52,12 @@ def logs():
 @pytest.fixture(autouse=True)
 def _clean_streams():
     _STREAMS.clear()
+    from src.memory import reset_context_cache
+
+    reset_context_cache()  # C-10: the envelope cache is process-global
     yield
     _STREAMS.clear()
+    reset_context_cache()
 
 
 async def _run(shell, bot, update):

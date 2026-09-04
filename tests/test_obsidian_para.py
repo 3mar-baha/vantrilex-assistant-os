@@ -224,3 +224,34 @@ def test_daily_log_path_dated_and_guard_importable():
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     assert "Contacts/" in module.MANDATORY_DIRS
+
+
+# --- deferred queue 2.10: vault 429 rate-limit retry -------------------------------
+
+
+async def test_rate_limited_read_retries_once_after_retry_after():
+    """A 429 with Retry-After is respected (one sleep) and retried ONCE —
+    a momentary rate limit never fails the read; a persistent one does."""
+    gh = FakeGitHub()
+    gh.seed("Daily_Logs/2026-09-04.md", "سطر")
+    client = _client(gh)
+    # force one 429 on the read path (url path form)
+    path_url = "/repos/owner/vault-repo/contents/Daily_Logs/2026-09-04.md"
+    gh.rate_limited[path_url] = (1, 0)  # one 429, retry-after 0s (test-fast)
+
+    text = await client.read("Daily_Logs/2026-09-04.md")
+    assert text == "سطر"  # the single 429 retried clean
+
+
+async def test_persistent_rate_limit_fails_loudly():
+    """Every attempt rate-limited -> the loud HTTPStatusError surfaces (no
+    silent infinite retry loop)."""
+    gh = FakeGitHub()
+    gh.seed("Daily_Logs/2026-09-04.md", "سطر")
+    client = _client(gh)
+    path_url = "/repos/owner/vault-repo/contents/Daily_Logs/2026-09-04.md"
+    gh.rate_limited[path_url] = (99, 0)  # always 429
+    import httpx
+
+    with pytest.raises(httpx.HTTPStatusError):
+        await client.read("Daily_Logs/2026-09-04.md")

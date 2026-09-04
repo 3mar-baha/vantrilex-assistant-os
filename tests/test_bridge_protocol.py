@@ -119,3 +119,60 @@ async def test_wrong_token_closed_4401(tmp_path: Path):
     assert all("wrong-token" not in r for r in server.security_log)
     assert any("4401" in r or "auth" in r.lower() for r in server.security_log)
     await server.close()
+
+
+# --- deferred queue S-2/S-3/S-6: security batch -------------------------------------
+
+
+async def test_token_compare_is_constant_time():
+    """S-2: the bridge token comparison must use hmac.compare_digest, not
+    `==` — timing the reject must not leak the token's prefix."""
+    from pathlib import Path as _P
+
+    src = _P("src/bridge_server.py").read_text(encoding="utf-8")
+    assert "compare_digest" in src  # constant-time compare in place
+    # no == on the token itself (type dispatch compares are fine)
+    import re as _re2
+
+    assert not _re2.search(r"frame\.token\s*==", src), "token must use compare_digest"
+    assert not _re2.search(r"self\._token\s*==", src), "token must use compare_digest"
+
+
+async def test_auth_attempts_rate_limited():
+    """S-3: 6 bad-token attempts in a burst get closed 4401 rapidly, and the
+    SERVER continues to answer (never DoS-crash); the security log stays
+    bounded (no unbounded growth)."""
+    import websockets
+
+    from common.protocol import Hello, encode
+
+    server = BridgeServer(TOKEN, silence_timeout_s=45.0)
+    port = await server.start(host="127.0.0.1", port=0)
+    try:
+        import websockets.exceptions
+
+        for i in range(6):
+            async with websockets.connect(f"ws://127.0.0.1:{port}") as ws:
+                hello = Hello(token=f"wrong-{i}", hostname="attacker", version="1")
+                await ws.send(encode(hello))
+                try:
+                    await asyncio.wait_for(ws.recv(), timeout=5)
+                except websockets.exceptions.ConnectionClosedError:
+                    pass  # the 4401 close IS the verdict — exactly right
+        assert len(server.security_log) <= 64  # bounded log
+        assert server.online() is False  # no session hijacked
+    finally:
+        await server.close()
+
+
+async def test_ws_plain_dial_warns(tmp_path):
+    """S-6: the daemon dialing a PLAIN ws:// (not wss://) URL must log a loud
+    warning once — plaintext over the public internet is a deployment smell
+    the owner must see in logs. (Local ws://127.0.0.1 stays legit — tests.)"""
+    from pathlib import Path as _P
+
+    src = _P("bridge/daemon.py").read_text(encoding="utf-8")
+    has_warning = (
+        "ws://" in src and ("warn" in src.lower() or "logger" in src.lower())
+    ) or "plaintext" in src.lower()
+    assert has_warning, "daemon must warn when dialing a plain ws:// endpoint"

@@ -41,6 +41,16 @@ class BridgeDaemon:
         backoff_cap_s: float = BACKOFF_CAP_S,
     ):
         self._url = url
+        # S-6 (deferred queue): a PLAIN ws:// dial (not wss://) is a
+        # deployment smell on the public internet — one loud warning at
+        # startup so the owner sees it. (ws://127.0.0.1 local testing stays
+        # quiet-safe: the warning is informational, never blocking.)
+        if url.startswith("ws://") and "127.0.0.1" not in url and "localhost" not in url:
+            logger.warning(
+                "daemon dialing a PLAINTEXT ws:// endpoint ({}) — the bridge token "
+                "crosses the internet unencrypted; set BRIDGE_SERVER_URL to wss://",
+                url,
+            )
         self._token = token
         self._executor = executor
         self._heartbeat_interval_s = heartbeat_interval_s

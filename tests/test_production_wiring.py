@@ -180,3 +180,40 @@ async def test_all_loops_cancel_cleanly_mid_tick(make_settings):
     results = await asyncio.gather(*tasks, return_exceptions=True)
     assert all(isinstance(r, asyncio.CancelledError) or r is None for r in results), results
     assert all(loop.ticks > 0 for loop in loops.values())  # they genuinely ran
+
+
+# --- M-4 (deferred queue): the REAL run_bot boots and shuts down --------------------
+
+
+async def test_run_bot_boots_all_components_and_shuts_down(make_settings, monkeypatch, tmp_path):
+    """The production entry assembles EVERYTHING — gateway, voice, vault,
+    memory, writers, tools, coordinator, dispatcher, and all six background
+    loops — and the finally cancels them cleanly. Polling is stubbed (a
+    one-iteration mock); everything else is the REAL wiring."""
+    import asyncio as aio
+    from unittest.mock import AsyncMock
+
+    from src import bot as bot_mod
+
+    settings = make_settings(VAULT_LOCAL_PATH=str(tmp_path / "vault"))
+
+    # stop polling after one loop tick; record the dispatcher it was built with
+    started = aio.Event()
+    real_build = bot_mod.build_dispatcher
+
+    def build_spy(gateway, voice, settings_, **kwargs):
+        started.set()
+        return real_build(gateway, voice, settings_, **kwargs)
+
+    monkeypatch.setattr(bot_mod, "build_dispatcher", build_spy)
+
+    class _OneShotPoller:
+        async def start_polling(self, bot, **kwargs):
+            await aio.sleep(0.05)  # one brief tick — the loops get a heartbeat
+
+    monkeypatch.setattr(bot_mod.Dispatcher, "start_polling", _OneShotPoller.start_polling)
+    # a dead outbound bot never reaches Telegram (no network in tests)
+    monkeypatch.setattr(bot_mod, "Bot", lambda token: AsyncMock())
+
+    await aio.wait_for(bot_mod.run_bot(settings, bridge=None), timeout=30)
+    assert started.is_set()  # the full wiring actually assembled

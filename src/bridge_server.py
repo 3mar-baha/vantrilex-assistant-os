@@ -6,6 +6,7 @@ dropped, and unresolved commands fail honestly with BridgeOffline."""
 from __future__ import annotations
 
 import asyncio
+import hmac
 
 from loguru import logger
 from websockets.asyncio.server import ServerConnection, serve
@@ -35,6 +36,7 @@ class BridgeServer:
         self._pending: dict[str, asyncio.Future] = {}
         self.heartbeats = 0
         self.security_log: list[str] = []
+        self._auth_fails = 0  # S-3: bounded auth logging (cap = 5 entries)
 
     async def start(self, host: str = "127.0.0.1", port: int = 0, *, process_request=None) -> int:
         self._server = await serve(
@@ -83,9 +85,14 @@ class BridgeServer:
                 self.security_log.append(f"auth rejected: first frame not Hello from {peer}")
                 await connection.close(code=4400, reason="expected Hello")
                 return
-            if frame.token != self._token:
-                # log the peer and the verdict, never the presented token itself
-                self.security_log.append(f"auth rejected 4401: bad token from {peer}")
+            if not hmac.compare_digest(frame.token, self._token):
+                # S-2 (deferred queue): constant-time compare — timing the
+                # reject can never leak the token's prefix.
+                # S-3: auth attempts are bounded — after the burst cap the log
+                # stops growing (bounded) and the connection still answers.
+                self._auth_fails += 1
+                if self._auth_fails <= 5:
+                    self.security_log.append(f"auth rejected 4401: bad token from {peer}")
                 await connection.close(code=4401, reason="auth rejected")
                 return
             if self._session is not None:

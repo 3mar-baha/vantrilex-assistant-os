@@ -846,3 +846,29 @@ Owner steps: `docs/08-OWNER-NEXT-STEPS.md`.
       floors green. Round-3 fixes landed earlier this night: f39d95f
       (short-clip biometric floor + enroll centroid blend + voice-retry +
       tool-narration contract + post-stream split).
+
+      ### CONTINUATION RUN (2026-09-04, owner: "اكمل حتى تصل للهدف بدون توقف")
+      The DEFERRED AUDIT QUEUE is now cleared (every implementable item):
+      - C-10 FIXED: 60s TTL envelope cache (test pollution handled with a
+        shared autouse reset in test_memory + test_bot_shell; vault writes
+        invalidate via invalidate_context_cache) — back-to-back turns cost
+        ZERO GitHub GETs; the <250ms ack target is reachable at last.
+      - V-1 FIXED: VoicePipeline.synthesize gains a 30s total wall
+        (injectable timeout_s for the fast test), VoicePipelineError("timed
+        out") + ffmpeg reaped — the hang class is dead.
+      - 2.10 FIXED: VaultClient.read honors Retry-After ONCE (cap 30s) on
+        429/403; persistent limits surface loudly (FakeGitHub gained a
+        rate_limited injection).
+      - Security batch: S-2 hmac.compare_digest on the bridge token; S-3
+        bounded auth-fail logging (cap 5 entries); S-6 the daemon WARNS on
+        plaintext ws:// dials (non-loopback).
+      - §13 FIXED: /health reports vault-token + Google-token-cache state
+        (google=missing is the honest no-OAuth row; overall degrades
+        truthfully) — green-while-failing is dead.
+      - M-4 ADDED: the REAL run_bot boot test (one-shot polling stub;
+        everything else real) — the full production assembly boots and
+        shuts clean, first time it has ever been proven.
+      Remaining queue items are OWNER-RULING class (tier2-gpt-oss narration
+      path §13.1; power/idle/WoL cluster §12) or CI-infra (clean-clone
+      image build §13.5) — none implementable without the owner's word.
+      Gate this run: 505 passed / 87.59% / security+docs green (was 494).

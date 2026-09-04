@@ -19,6 +19,9 @@ from src.dialect import shape_for_tts
 FFMPEG_BIN: Final[str] = "ffmpeg"
 MAX_TTS_CHARS: Final[int] = 4000
 OGG_READ_CHUNK: Final[int] = 4096
+# V-1 (deferred queue): a hung engine or a stalled encode must hit this wall
+# and fail honestly — never a silent hang eating the turn.
+TOTAL_SYNTHESIS_TIMEOUT_S: Final[float] = 30.0
 
 _FFMPEG_ARGS: Final[tuple[str, ...]] = (
     "-hide_banner",
@@ -171,7 +174,16 @@ class VoicePipeline:
             raise ValueError(f"text exceeds MAX_TTS_CHARS ({len(shaped)} > {MAX_TTS_CHARS})")
         return self._stream(shaped)
 
-    async def synthesize(self, text: str) -> bytes:
+    async def synthesize(self, text: str, *, timeout_s: float | None = None) -> bytes:
+        # V-1: the TOTAL wall — a hung engine dies here honestly instead of
+        # eating the turn forever. timeout_s injectable for the wall test.
+        wall = timeout_s if timeout_s is not None else TOTAL_SYNTHESIS_TIMEOUT_S
+        try:
+            return await asyncio.wait_for(self._synthesize_inner(text), wall)
+        except TimeoutError as exc:  # py>=3.11: wait_for raises TimeoutError
+            raise VoicePipelineError(f"voice synthesis timed out after {wall:.0f}s") from exc
+
+    async def _synthesize_inner(self, text: str) -> bytes:
         return b"".join([chunk async for chunk in self.synthesize_stream(text)])
 
     async def _stream(self, text: str) -> AsyncIterator[bytes]:
