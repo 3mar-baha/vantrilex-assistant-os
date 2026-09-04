@@ -494,49 +494,20 @@ async def _stream_answer(
         else:
             reply_modality = "voice" if voice_origin else "text"
         if reply_modality == "voice":
-            # voice reply: the stream is consumed off the wire (no text
-            # bubble), the answer lands as ONE voice note, or as short human
-            # text bubbles when synthesis dies.
-            answer = ""
-            async for delta in stream:
-                if cancel.is_set():
-                    break
-                answer += delta
-            # §3 (2026-09-04): hallucinated external audio links die HERE —
-            # her voice is synthesized + dispatched by us, never linked.
-            from src.voice import strip_external_media_links as _strip_links
-
-            spoken = _strip_links(answer.strip() or ack)
-            if not spoken:
-                spoken = "هذي رسالتي الصوتية 🌸"
-            spoke = False
-            if voice is not None and spoken:
-                # Round-3 22:53: a transient Fish 429 became «ما بقدرش
-                # ابعتلك صوت» in her own words — a rate limit is NOT a
-                # capability loss. One quick retry (free pools burst), then
-                # the honest text lands WITHOUT any voice-denial phrasing.
-                # STT-3: when the 429 announces its recovery window, wait a
-                # bounded slice of IT (never >8s — the owner never hangs),
-                # not the blind 2s.
-                for attempt in (1, 2):
-                    try:
-                        ogg = await voice.synthesize(spoken)
-                        await bot.send_voice(chat_id, BufferedInputFile(ogg, filename="sara.ogg"))
-                        spoke = True
-                        break
-                    except Exception as error:  # noqa: BLE001 — retry once, then text
-                        announced = getattr(error, "retry_in_s", None)
-                        wait_s = min(announced, 8.0) if announced else 2.0
-                        logger.warning(
-                            "voice synthesis attempt {} failed; {}",
-                            attempt,
-                            f"retrying in {wait_s:.0f}s" if attempt == 1 else "text fallback",
-                        )
-                        if attempt == 1:
-                            await asyncio.sleep(wait_s)
-            if not spoke and spoken.strip():
-                await send_split(message, spoken)
-            reply = answer
+            # Speed pass (owner 2026-09-04): the voice note starts with the
+            # FIRST COMPLETE SENTENCE while the brain still streams the rest —
+            # no full-buffer wait before the owner hears Sara.
+            reply, _spoke = await _deliver_voice_reply(
+                bot,
+                chat_id,
+                message,
+                stream,
+                cancel,
+                voice,
+                ack=ack,
+                strip=_strip_links_for_voice(),
+            )
+            # text fallback (if needed) already landed inside the delivery
         else:
             reply = await streamer.stream_reply(_prepend(ack, stream), cancel, transient_ack=True)
             # Round-3 22:56: a long streamed answer (the climate lecture) must
@@ -563,6 +534,141 @@ async def _stream_answer(
         memory.remember(chat_id, "assistant", reply)
     if writer is not None:
         _persist_exchange(writer, text, reply)
+
+
+_SENTENCE_ENDERS: Final = (".", "؟", "!", "?")
+_SPEECH_SEGMENT_MIN_CHARS: Final[int] = 12  # a segment must say something real
+_SPEECH_SEGMENT_MAX: Final[int] = 4  # an essay is 4 notes + the flush, never spam
+_SHORT_ANSWER_CHARS: Final[int] = 120  # below this: ONE note, today's behavior
+
+
+def _next_speech_segment(buffer: str, cut: int) -> tuple[str | None, int]:
+    """The sentence-cutter for streaming voice: return (segment, new_cut) —
+    the next SPEECH-COMPLETE slice ending on a sentence ender (skipping
+    whitespace), or (None, cut) when nothing speakable has landed yet. A
+    region shorter than the minimum waits for more (no word-by-word notes)."""
+    search_from = cut
+    while search_from < len(buffer):
+        idx = min(
+            (i for i in (buffer.find(e, search_from) for e in _SENTENCE_ENDERS) if i >= 0),
+            default=-1,
+        )
+        if idx < 0:
+            return None, cut
+        end = idx + 1
+        segment = buffer[cut:end].strip()
+        if len(segment) >= _SPEECH_SEGMENT_MIN_CHARS:
+            return segment, end
+        search_from = end  # a too-short fragment (e.g. «تمام.») waits for more
+    return None, cut
+
+
+def _strip_links_for_voice():
+    """The §3 media-link sanitizer, imported lazily (keeps module import light)."""
+    from src.voice import strip_external_media_links
+
+    return strip_external_media_links
+
+
+async def _deliver_voice_reply(
+    bot: Bot,
+    chat_id: int,
+    message: Message,
+    stream: AsyncIterator[str],
+    cancel: asyncio.Event,
+    voice,
+    *,
+    ack: str,
+    strip,
+) -> tuple[str, bool]:
+    """Streaming voice delivery (speed pass 2026-09-04): sentence-complete
+    segments synthesize + dispatch WHILE the brain still streams. Returns
+    (full_answer, spoke_any).
+
+    - First segment carries the STT-3 window-aware retry (voice-vs-text verdict)
+    - Short answers (<120 chars) stay ONE note with today's exact retry loop
+    - Voice dead from the start -> FULL text as chat bubbles
+    - Voice dead mid-stream -> the UNSENT remainder as text (nothing lost)
+    """
+    answer = ""
+    spoke = False
+    segments_sent = 0
+    cut = 0  # how far the buffer has been consumed into sent notes
+    voice_dead_midstream = False
+    # -- consume the stream, cutting speakable sentences as they land ---------
+    async for delta in stream:
+        if cancel.is_set():
+            break
+        answer += delta
+        if segments_sent >= _SPEECH_SEGMENT_MAX or voice_dead_midstream:
+            continue  # cap/dead: the flush handles the tail
+        while segments_sent < _SPEECH_SEGMENT_MAX:
+            segment, new_cut = _next_speech_segment(answer, cut)
+            if segment is None:
+                break
+            spoken_seg = strip(segment)
+            if not spoken_seg:
+                cut = new_cut
+                continue
+            if segments_sent == 0:
+                spoke = await _speak_with_retry(bot, chat_id, voice, spoken_seg, attempts=2)
+                if not spoke:
+                    break  # full-text fallback happens at the flush (cut=0)
+                cut = new_cut
+                segments_sent += 1
+            else:
+                try:
+                    ogg = await voice.synthesize(spoken_seg)
+                    await bot.send_voice(chat_id, BufferedInputFile(ogg, filename="sara.ogg"))
+                except Exception as error:  # noqa: BLE001 — mid-stream: text takes the tail
+                    logger.warning("voice segment failed mid-stream: {}", error)
+                    voice_dead_midstream = True
+                    break  # cut stays BEFORE this segment: the flush owns it as text
+                cut = new_cut
+                segments_sent += 1
+    # -- the flush: whatever the stream held that never became a note ----------
+    full_answer = answer
+    if cancel.is_set():
+        return full_answer, spoke
+    remainder = answer[cut:].strip() if (spoke and cut) else ""
+    if not spoke:
+        # voice never landed: the ACK or the full text reaches the owner
+        spoken_all = strip(full_answer.strip() or ack) or "هذي رسالتي الصوتية 🌸"
+        if voice is not None and spoken_all and len(spoken_all) <= _SHORT_ANSWER_CHARS:
+            spoke = await _speak_with_retry(bot, chat_id, voice, spoken_all, attempts=2)
+        if not spoke and spoken_all.strip():
+            await send_split(message, spoken_all)
+    elif remainder and len(remainder) >= _SPEECH_SEGMENT_MIN_CHARS:
+        # mid-stream death or cap overflow: the tail lands as text, never lost
+        try:
+            ogg = await voice.synthesize(strip(remainder))
+            await bot.send_voice(chat_id, BufferedInputFile(ogg, filename="sara.ogg"))
+        except Exception as error:  # noqa: BLE001 — the text is the last resort
+            logger.warning("voice tail flush failed: {}", error)
+            await send_split(message, strip(remainder))
+    return full_answer, spoke
+
+
+async def _speak_with_retry(bot: Bot, chat_id: int, voice, text: str, *, attempts: int) -> bool:
+    """The STT-3 window-aware retry: a 429 announcing its recovery window
+    waits a bounded slice of it (never >8s); other failures wait 2s. Returns
+    whether the note landed."""
+    for attempt in range(1, attempts + 1):
+        try:
+            ogg = await voice.synthesize(text)
+            await bot.send_voice(chat_id, BufferedInputFile(ogg, filename="sara.ogg"))
+            return True
+        except Exception as error:  # noqa: BLE001 — retry once, then text
+            announced = getattr(error, "retry_in_s", None)
+            wait_s = min(announced, 8.0) if announced else 2.0
+            logger.warning(
+                "voice synthesis attempt {} failed; {}",
+                attempt,
+                f"retrying in {wait_s:.0f}s" if attempt < attempts else "text fallback",
+            )
+            if attempt < attempts:
+                await asyncio.sleep(wait_s)
+    return False
 
 
 async def send_split(message: Message, text: str, *, max_bubbles: int = 3) -> None:
