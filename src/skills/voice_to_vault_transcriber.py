@@ -24,11 +24,71 @@ from loguru import logger
 
 AMMAN: Final[ZoneInfo] = ZoneInfo("Asia/Amman")
 
-# Remediation 2.6 (audit mishear class): pin faster-whisper to Jordanian
-# colloquial Arabic — language + beam + an initial_prompt seeded with the
-# dialect context (and the owner's learned pairs when provided) so
-# «كفيك»-class mishears are choked at the source.
-_DEFAULT_PROMPT_TERMS: Final[tuple[str, ...]] = ("عمر، مالك سارة، يحكي عربي عامي أردني.",)
+# STT-1 (owner 2026-09-04 evening): the transcription prompt REWRITTEN as
+# natural Jordanian speech — the live session transcribed «الآلة الحاسبة» as
+# «القادر الحاسبي» because a one-line MSA-ish register hint gave the decoder
+# nothing to lean on for APP NAMES or command verbs. faster-whisper's
+# initial_prompt biases the decoder toward the TEXT's register, so the seed is
+# written the way Omar actually talks, carrying his apps and his verbs.
+_DEFAULT_PROMPT_TERMS: Final[tuple[str, ...]] = (
+    (
+        "عمر بيقول لسارة بالعامية الأردنية: افتحي الآلة الحاسبة، سكري كروم، "
+        "شغّلي المفكرة، اطفّي المتصفح، افتحي يوتيوب وقفي الفيديو، "
+        "افتحي CMD، سجّلي مهمة بكرة، ذكريني بعد عشر دقايق، "
+        "افحصي الجيميل والتقويم، شو وضع الجهاز، "
+        "كلمني بصوتك، كيفك اليوم، شكراً سارة حبيبتي."
+    ),
+)
+
+# hotwords: exact-match bias for the app names + Sara + Omar (the decoder
+# boosts these tokens directly — the belt under the prompt's suspenders)
+_HOTWORDS: Final[tuple[str, ...]] = (
+    "سارة",
+    "عمر",
+    "الآلة الحاسبة",
+    "الحاسبة",
+    "كروم",
+    "المفكرة",
+    "يوتيوب",
+    "CMD",
+    "أوبسيديان",
+    "سبوتيفاي",
+    "ديسكورد",
+    "تيليجرام",
+    "الكروم",
+    "الديسكورد",
+)
+
+_PROMPT_BUDGET: Final[int] = 1100  # chars — the seed (~330) + newest teaches
+
+
+def build_prompt(taught: tuple[tuple[str, str], ...] = ()) -> str:
+    """The full initial_prompt: the Jordanian seed + the owner's taught pairs
+    (APPENDED, never replacing the seed — the live bug lost the base register
+    the moment one pair was taught). Newest teachings kept; oldest dropped
+    first when the budget fills; the seed NEVER drops."""
+    seed = " ".join(_DEFAULT_PROMPT_TERMS)
+    if not taught:
+        return seed
+    lines = [f"{term} -> {phon}" for term, phon in taught]
+    prompt = f"{seed} {' '.join(lines)}"
+    while len(prompt) > _PROMPT_BUDGET and lines:
+        lines.pop(0)  # FIFO: the oldest teach drops first
+        prompt = f"{seed} {' '.join(lines)}"
+    return prompt
+
+
+def _parse_taught(terms: tuple) -> tuple[tuple[str, str], ...]:
+    """One shape for taught pairs everywhere: ("a -> b",) strings OR ((a, b),)
+    tuples — both normalize to ((a, b),); anything else drops."""
+    parsed: list[tuple[str, str]] = []
+    for item in terms:
+        if isinstance(item, tuple) and len(item) == 2:
+            parsed.append((str(item[0]), str(item[1])))
+        elif isinstance(item, str) and "->" in item:
+            left, _, right = item.partition("->")
+            parsed.append((left.strip(), right.strip()))
+    return tuple(parsed)
 
 
 class TranscriberError(RuntimeError):
@@ -89,12 +149,18 @@ class VoiceToVault:
         self._vault_dir = Path(vault_dir)
         self._load = model_loader or _load_model
         self._tz = tz
-        self._prompt_terms = initial_prompt_terms
+        self._taught_pairs = (
+            ()
+            if initial_prompt_terms == _DEFAULT_PROMPT_TERMS
+            else _parse_taught(initial_prompt_terms)
+        )
         self._whisper: object | None = None
 
     def update_prompt_terms(self, terms: tuple[str, ...]) -> None:
-        """2.5/2.6 loop: «تعلمي:» refreshes the transcription bias live (no reboot)."""
-        self._prompt_terms = terms
+        """«تعلمي:» loop (STT-1): taught pairs JOIN the seed — never replace it.
+        Accepts either ("term -> phonetic",) strings or ((term, phon),) tuples;
+        the Jordanian seed always rides with them."""
+        self._taught_pairs = _parse_taught(terms)
 
     def _model(self) -> object:
         if self._whisper is None:
@@ -109,13 +175,17 @@ class VoiceToVault:
 
     def _infer_sync(self, pcm: bytes) -> tuple[list, object]:
         audio = np.frombuffer(pcm, dtype=np.int16).astype(np.float32) / 32768.0
-        # 2.6: Arabic pinned + beam 5 + the dialect context as initial_prompt —
-        # the model leans Jordanian colloquial instead of MSA-guessing.
+        # STT-1: Arabic pinned + beam 5 + the Jordanian seed prompt (app names
+        # + command verbs in the owner's register) + hotwords (exact-match
+        # app-name bias) + vad_filter (leading silence stops eating decode).
+        # The taught pairs JOIN the seed inside build_prompt — never replace.
         segments, info = self._model().transcribe(  # type: ignore[attr-defined]
             audio,
             language="ar",
             beam_size=5,
-            initial_prompt=" ".join(self._prompt_terms),
+            initial_prompt=build_prompt(getattr(self, "_taught_pairs", ())),
+            hotwords=" ".join(_HOTWORDS),
+            vad_filter=True,
         )
         return list(segments), info
 
