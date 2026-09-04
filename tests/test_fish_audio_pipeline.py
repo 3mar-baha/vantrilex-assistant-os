@@ -127,6 +127,35 @@ async def test_http_error_raises_fishvoiceerror_for_fallback():
             await fish.synthesize("نص")
 
 
+async def test_429_window_rides_the_error():
+    """STT-3 (2026-09-04): a Fish 429 announcing «try again in 12m30s» carries
+    retry_in_s — the bot's retry waits a bounded slice of IT, not a blind 2s."""
+
+    class _Body(httpx.MockTransport):
+        def __init__(self):
+            super().__init__(self._h)
+
+        def _h(self, request: httpx.Request) -> httpx.Response:
+            return httpx.Response(
+                429,
+                content=b"Rate limit reached. Please try again in 12m30s",
+                headers={"Content-Type": "text/plain"},
+            )
+
+    fish = FishVoice(model="m", voice_ref="ref", api_key="k", transport=_Body())
+    with pytest.raises(FishVoiceError) as exc_info:
+        await fish.synthesize("نص")
+    assert exc_info.value.retry_in_s == 12 * 60 + 30
+
+
+async def test_plain_429_has_no_window():
+    """A window-less 429 keeps retry_in_s None — the caller's default short wait."""
+    fish = FishVoice(model="m", voice_ref="ref", api_key="k", transport=_Recorder(status=429))
+    with pytest.raises(FishVoiceError) as exc_info:
+        await fish.synthesize("نص")
+    assert exc_info.value.retry_in_s is None
+
+
 async def test_network_timeout_raises_fishvoiceerror():
     def _hang(request: httpx.Request) -> httpx.Response:
         raise httpx.ConnectTimeout("net down")

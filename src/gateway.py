@@ -2,12 +2,16 @@
 
 3-tier model chains (ADR-16) walked per request; free-pool survival: quota ->
 immediate fallback, transient -> capped-backoff retries, fatal -> loud stop.
-Sprint 2+ consume this blindly.
+STT-3 (2026-09-04): a 429 that ANNOUNCES its recovery window («try again in
+17m25s», Retry-After) skips the model for that window (capped) instead of
+burning fast retries against a server-side wall — the rest of the chain still
+serves the turn.
 """
 
 import asyncio
 import json
 import re
+import time
 from collections.abc import AsyncIterator, Mapping, Sequence
 from enum import Enum
 from typing import Final, Literal, Self
@@ -19,6 +23,10 @@ RETRY_ATTEMPTS: Final[int] = 3
 BACKOFF_BASE_S: Final[float] = 0.5
 BACKOFF_CAP_S: Final[float] = 8.0
 REQUEST_TIMEOUT_S: Final[float] = 120.0
+# STT-3: a model that announced a recovery window is skipped for
+# min(window, cap) — the cap keeps a bogus giant window from retiring a model
+# for hours.
+COOLDOWN_CAP_S: Final[float] = 1200.0
 
 _sleep: Final = asyncio.sleep  # test seam; monkeypatched to instant in backoff tests
 
@@ -43,14 +51,69 @@ class _TransientFailure(RuntimeError):
     pass
 
 
-def _classify(status_code: int, body_snippet: str) -> Literal["fatal", "quota", "transient"]:
+class _WindowRateLimit(RuntimeError):
+    """429 whose body/header ANNOUNCES the recovery window — the model is hot
+    for that window; the rest of the chain serves the turn."""
+
+    def __init__(self, detail: str, window_s: float) -> None:
+        super().__init__(detail)
+        self.window_s = window_s
+
+
+# STT-3: model -> epoch-s until it may be probed again (process-wide; the
+# live groq TPD 429 burned 3 retries x N models EVERY turn for 17 minutes).
+_MODEL_COOLDOWNS: dict[str, float] = {}
+
+_RETRY_WINDOW_RE: Final = re.compile(
+    r"(?:try\s+again\s+in|retry\s+in)\s+"
+    r"(?:(\d+)\s*h)?\s*(?:(\d+)\s*m)?\s*(?:(\d+(?:\.\d+)?)\s*s)?",
+    re.IGNORECASE,
+)
+
+
+def parse_retry_window_s(body: str, *, retry_after: str | None = None) -> float | None:
+    """Seconds until the provider says it will serve again: the
+    «try again in Xh Ym Zs» body form or a numeric Retry-After header.
+    None = nothing announced (fast transient retries stay correct)."""
+    if retry_after:
+        try:
+            return float(retry_after)
+        except ValueError:
+            pass  # HTTP-date form: providers we use send seconds; ignore the rest
+    match = _RETRY_WINDOW_RE.search(body or "")
+    if not match:
+        return None
+    hours, minutes, seconds = match.groups()
+    parts = [float(g or 0) for g in (hours, minutes, seconds)]
+    window = parts[0] * 3600 + parts[1] * 60 + parts[2]
+    return window or None
+
+
+def _model_hot(model: str) -> float | None:
+    """Remaining cooldown on a model, or None when it may be probed."""
+    until = _MODEL_COOLDOWNS.get(model)
+    if until is None or until <= time.time():
+        _MODEL_COOLDOWNS.pop(model, None)
+        return None
+    return until - time.time()
+
+
+def _classify(
+    status_code: int, body_snippet: str
+) -> Literal["fatal", "quota", "transient", "window"]:
     if status_code in (400, 401, 403, 404, 422):
         return "fatal"
     if status_code == 402:
         return "quota"
     if status_code == 429:
-        markers = ("quota", "exhausted", "insufficient", "credit", "billing")
-        return "quota" if any(m in body_snippet.lower() for m in markers) else "transient"
+        if any(
+            m in body_snippet.lower()
+            for m in ("quota", "exhausted", "insufficient", "credit", "billing")
+        ):
+            return "quota"
+        if parse_retry_window_s(body_snippet) is not None:
+            return "window"
+        return "transient"
     if status_code in (408, 409, 425) or status_code >= 500:
         return "transient"
     return "fatal"
@@ -59,9 +122,20 @@ def _classify(status_code: int, body_snippet: str) -> Literal["fatal", "quota", 
 _EMBEDDED_STATUS: Final = re.compile(r"\[(\d{3})\]")
 
 
-def _raise_for_gateway_error(model: str, kind: str, source: str, detail: str) -> None:
+def _raise_for_gateway_error(
+    model: str,
+    kind: str,
+    source: str,
+    detail: str,
+    *,
+    retry_after: str | None = None,
+) -> None:
     if kind == "quota":
         raise _QuotaExhausted(f"{source}: {detail}")
+    if kind == "window":
+        window = parse_retry_window_s(detail, retry_after=retry_after)
+        assert window is not None, "window classification without a parseable window"
+        raise _WindowRateLimit(f"{source}: {detail}", window_s=min(window, COOLDOWN_CAP_S))
     if kind == "transient":
         raise _TransientFailure(f"{source}: {detail}")
     logger.error("gateway fatal | model={} {} :: {}", model, source, detail)
@@ -140,7 +214,13 @@ class OmniRouteClient:
             "stream": True,
         }
         last_cause = "unknown"
+        hot_skips: list[str] = []
         for model in chain:
+            remaining = _model_hot(model)
+            if remaining is not None:
+                logger.info("gateway skip hot model {} (cooldown {:.0f}s left)", model, remaining)
+                hot_skips.append(model)
+                continue
             delay = BACKOFF_BASE_S
             for attempt in range(1, RETRY_ATTEMPTS + 1):
                 deltas = 0
@@ -154,6 +234,19 @@ class OmniRouteClient:
                         "gateway quota | model={} attempt={} -> immediate fallback", model, attempt
                     )
                     last_cause = str(exc)
+                    break
+                except _WindowRateLimit as exc:
+                    # STT-3: the provider announced its recovery window — retrying
+                    # against a server-side wall is pure waste. Mark the model hot
+                    # for the window and let the NEXT model serve this turn.
+                    _MODEL_COOLDOWNS[model] = time.time() + exc.window_s
+                    last_cause = str(exc)
+                    logger.warning(
+                        "gateway rate-window | model={} window={:.0f}s -> model hot, "
+                        "next model serves",
+                        model,
+                        exc.window_s,
+                    )
                     break
                 except _TransientFailure as exc:
                     last_cause = str(exc)
@@ -204,6 +297,12 @@ class OmniRouteClient:
                             RETRY_ATTEMPTS,
                             exc,
                         )
+        if hot_skips and not any(
+            model not in hot_skips for model in chain
+        ):  # every model hot: the honest cooldown cause, not a vague exhaustion
+            raise GatewayError(
+                f"all models ({', '.join(chain)}) in rate-limit cooldown; last cause: {last_cause}"
+            )
         raise GatewayError(f"all models exhausted ({', '.join(chain)}); last cause: {last_cause}")
 
     async def _attempt(self, model: str, payload: dict) -> AsyncIterator[str]:
@@ -221,7 +320,13 @@ class OmniRouteClient:
                 await response.aclose()
             snippet = response.text[:500]
             kind = _classify(response.status_code, snippet)
-            _raise_for_gateway_error(model, kind, f"HTTP {response.status_code}", snippet)
+            _raise_for_gateway_error(
+                model,
+                kind,
+                f"HTTP {response.status_code}",
+                snippet,
+                retry_after=response.headers.get("retry-after"),
+            )
 
         received = 0
         done_seen = False

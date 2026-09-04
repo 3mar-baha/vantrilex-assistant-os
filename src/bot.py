@@ -515,20 +515,25 @@ async def _stream_answer(
                 # ابعتلك صوت» in her own words — a rate limit is NOT a
                 # capability loss. One quick retry (free pools burst), then
                 # the honest text lands WITHOUT any voice-denial phrasing.
+                # STT-3: when the 429 announces its recovery window, wait a
+                # bounded slice of IT (never >8s — the owner never hangs),
+                # not the blind 2s.
                 for attempt in (1, 2):
                     try:
                         ogg = await voice.synthesize(spoken)
                         await bot.send_voice(chat_id, BufferedInputFile(ogg, filename="sara.ogg"))
                         spoke = True
                         break
-                    except Exception:  # noqa: BLE001 — retry once, then text
+                    except Exception as error:  # noqa: BLE001 — retry once, then text
+                        announced = getattr(error, "retry_in_s", None)
+                        wait_s = min(announced, 8.0) if announced else 2.0
                         logger.warning(
                             "voice synthesis attempt {} failed; {}",
                             attempt,
-                            "retrying" if attempt == 1 else "text fallback",
+                            f"retrying in {wait_s:.0f}s" if attempt == 1 else "text fallback",
                         )
                         if attempt == 1:
-                            await asyncio.sleep(2.0)  # free-pool burst window
+                            await asyncio.sleep(wait_s)
             if not spoke and spoken.strip():
                 await send_split(message, spoken)
             reply = answer

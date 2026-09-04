@@ -22,6 +22,12 @@ _TIMEOUT = httpx.Timeout(connect=5.0, read=60.0, write=10.0, pool=5.0)
 class FishVoiceError(RuntimeError):
     """Fish/OpenRouter speech failure — the caller falls back to Edge-TTS."""
 
+    def __init__(self, message: str, *, retry_in_s: float | None = None) -> None:
+        super().__init__(message)
+        # STT-3: when the 429 body announces its recovery window, the caller
+        # can wait a bounded slice of it instead of a blind fixed sleep.
+        self.retry_in_s = retry_in_s
+
 
 class FishVoice:
     """Thin async client over OpenRouter's audio/speech endpoint (Fish s2.1 voices)."""
@@ -91,8 +97,14 @@ class FishVoice:
         except httpx.HTTPError as error:
             raise FishVoiceError(f"fish speech network failure: {error}") from error
         if response.status_code != 200:
+            from src.gateway import parse_retry_window_s
+
+            retry_in = parse_retry_window_s(
+                response.text[:500], retry_after=response.headers.get("retry-after")
+            )
             raise FishVoiceError(
-                f"fish speech HTTP {response.status_code}: {response.text[:120]!r}"
+                f"fish speech HTTP {response.status_code}: {response.text[:120]!r}",
+                retry_in_s=retry_in,
             )
         content_type = response.headers.get("content-type", "")
         if not response.content or "json" in content_type:
