@@ -64,6 +64,7 @@ class ToolRegistry:
         weather: Any = None,
         youtube: Any = None,
         photo_sender: Any = None,
+        orchestrator: Any = None,
     ) -> None:
         self._inbox = inbox
         self._suite = suite
@@ -78,6 +79,7 @@ class ToolRegistry:
         self._weather = weather  # pass-4: WeatherClient (Open-Meteo, keyless)
         self._youtube = youtube  # pass-4: YouTubeClient (quota-gated, env key)
         self._photo_sender = photo_sender  # §4: sends the captured JPEG as a real photo
+        self._orchestrator = orchestrator  # §5: timed reminders fire proactively
         self._tz = tz or ZoneInfo("UTC")
         # Injectable clock: the frozen-date test bomb (2026-09-01 -> 2026-09-02) showed
         # wall-clock reads inside handlers make tests die at midnight rollovers.
@@ -291,15 +293,35 @@ class ToolRegistry:
         return snapshot
 
     async def _do_schedule(self, arg: str) -> str:
-        """Pass-2 (v2.0 §3-ج/2): «ذكرني/سجلي مهمة ...» -> ONE vault note in
-        01_Projects/Scheduled_Tasks/ (with [sara:task:id]) mirrored to Calendar
-        + Tasks. `arg` = the task title; a trailing «بكرة»/«اليوم» sets the day.
-        Vault-first: the note ALWAYS lands; Google mirrors best-effort."""
-        if self._tasks is None:
-            return GOOGLE_OFFLINE_AR
+        """§5 (2026-09-04) + §3-ج/2: «ذكرني/سجلي مهمة...» — TWO lanes by time
+        shape: a relative delay («بعد 60 ثانية/7 دقايق») or a wallclock («على
+        الساعة 3:47 مساء») arms the ORCHESTRATOR (real timer, proactive
+        dispatch when it fires — the live 3:46pm never-fired reminders); a day
+        phrase («بكرة») lands the vault note + Google mirrors as before."""
         title = arg.strip()
         if not title:
             return "شو المهمة اللي بدك أسجلها؟ قولي عنوانها وموعدها."
+        now = self._now().astimezone(self._tz)
+        # §5: timed lane — the orchestrator's real timer (fires proactively)
+        if self._orchestrator is not None:
+            from src.task_orchestrator import parse_delay_ar, parse_wallclock_ar
+
+            delayed = parse_delay_ar(title, now=now)
+            if delayed is not None:
+                delay, _t = delayed
+                await self._orchestrator.schedule_delay(
+                    f"⏰ تذكير: {_t or title}", delay=delay, title=_t or title
+                )
+                return None  # the orchestrator confirmed (launch-tool contract)
+            wall = parse_wallclock_ar(title, now=now)
+            if wall is not None:
+                when, _t = wall
+                await self._orchestrator.schedule_wallclock(
+                    f"⏰ تذكير: {_t or title}", when=when, title=_t or title
+                )
+                return None  # the orchestrator confirmed (launch-tool contract)
+        if self._tasks is None:
+            return GOOGLE_OFFLINE_AR
         when = self._now() + timedelta(days=1)
         if "بكرة" in title or "غدا" in title:
             when = (self._now() + timedelta(days=1)).replace(hour=9, minute=0)

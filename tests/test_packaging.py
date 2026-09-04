@@ -215,6 +215,7 @@ def test_durable_state_only_in_vault():
         "src/skills/voice_biometric_auth.py": "sealed owner voiceprint (ADR-17) + tempfile model cache",
         "src/skills/voice_to_vault_transcriber.py": "Voice_Memos notes — this IS the vault",
         "bridge/app_sessions.py": "PC-local per-minute usage JSON (v2.0 pass-1 §3-د/3) — machine-scoped telemetry state under data/app_sessions/, describes the PC it lives on, gitignored like vault/",
+        "src/task_orchestrator.py": "reminder timers state (§5 2026-09-04) — vault-mirror State/ pattern, gitignored; re-armed on restart so a registered reminder can never vanish",
     }
     offenders = []
     for tree in ("src", "bridge", "common"):

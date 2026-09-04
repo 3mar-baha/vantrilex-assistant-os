@@ -153,10 +153,15 @@ _TOOL_NET: Final[tuple[tuple[str, re.Pattern[str]], ...]] = (
             "شو فتحت اليوم|كم جلسة|وقت الشاشة"
         ),
     ),
-    # schedule (v2.0 §3-ج/2) — «ذكرني بكرة...» / «سجلي مهمة...» (title rides the net arg)
+    # schedule (§3-ج/2 + §5) — «ذكرني بكرة...» / «سجلي مهمة...» AND the timed
+    # shapes «بعد 60 ثانية ذكريني...» / «على الساعة 3:47 مساء ذكريني...»;
+    # the FULL text rides the arg (the tool's parsers need the timing words)
     (
         "schedule",
-        re.compile(r"(?:ذكرني|ذكريني|سجل?ي?\s+مهمة|سجّلي|مهمة\s+جديدة|تذكير)\s+(.+)"),
+        re.compile(
+            r"(?:(?:بعد\s+[\d٠-٩]+\s*\S+|على\s+الساعة\s+[\d:،\s]+\s*(?:مساء|صباح)?)\s*)?"
+            r"(?:ذكرني|ذكريني|سجل?ي?\s+مهمة|سجّلي|مهمة\s+جديدة|تذكير)\s*(.*)"
+        ),
     ),
     # knowledge_graph (v2.0 §3-و) — the relations web «مين بيحكي عن...»
     (
@@ -187,10 +192,11 @@ def _keyword_net(text: str) -> tuple[str, str]:
             raw_name = match.group(1).strip()
             arg = _LAUNCH_STRIP_RE.sub("", raw_name).strip(" .!؟?،,")
             return ("launch", arg) if arg else ("launch", raw_name)
-        if tool == "schedule" and match.groups():
-            # the reminder title rides the net arg («ذكرني بكرة أراجع الفيزياء»
-            # -> «بكرة أراجع الفيزياء»); strip device/trailing clauses like launch
-            return ("schedule", _LAUNCH_STRIP_RE.sub("", match.group(1)).strip(" .!؟?،,"))
+        if tool == "schedule":
+            # §5: the WHOLE user text rides the arg — the timing phrase may
+            # precede OR follow the verb («بعد 60 ثانية ذكريني X» /
+            # «ذكرني X بعد ساعة»), and the tool's parsers scan it either way
+            return ("schedule", clean)
         if tool == "web_search" and match.groups() and match.group(1):
             # the query rides the net arg («دوّر بالنت عن أسعار الرام» -> query)
             return ("web_search", match.group(1).strip(" .!؟?،,"))

@@ -682,6 +682,7 @@ def start_background_loops(
     outreach=None,
     evolution=None,
     task_engine=None,
+    orchestrator=None,
 ) -> list[asyncio.Task]:
     """Remediation 3.1: the owner-promised background loops, ONE stitch point
     (testable without polling). Brief suppressed by BRIEF_ENABLED=false; gmail
@@ -704,6 +705,9 @@ def start_background_loops(
         tasks.append(asyncio.create_task(gmail_poll(inbox, dispatcher, classifier, settings)))
     if task_engine is not None:
         tasks.append(asyncio.create_task(_run_task_sync(task_engine)))
+    if orchestrator is not None:
+        # §5: the reminder timers — proactive dispatch when a timer fires
+        tasks.append(asyncio.create_task(orchestrator.run_forever()))
     return tasks
 
 
@@ -819,6 +823,17 @@ async def run_bot(settings: Settings, bridge=None) -> None:
         if bridge is not None
         else None
     )
+    # §5 (2026-09-04): the dual task engine — timed reminders fire PROACTIVELY
+    # (the live 3:46pm never-fired lessons); state persists next to the vault.
+    from src.task_orchestrator import Orchestrator
+
+    orchestrator = Orchestrator(
+        bot=bot,  # send_message(chat_id, text) — proactive dispatch surface
+        chat_id=settings.authorized_user_id,
+        tz=ZoneInfo(settings.tz),
+    )
+    orchestrator.bind_state_path(Path(settings.vault_local_path) / "State")
+    orchestrator.load_pending()
     tools = ToolRegistry(
         inbox=inbox,
         suite=suite,
@@ -836,6 +851,7 @@ async def run_bot(settings: Settings, bridge=None) -> None:
         photo_sender=(
             _make_photo_sender(bot, settings.authorized_user_id) if bot is not None else None
         ),  # §4: the screenshot tool dispatches the REAL JPEG as a Telegram photo
+        orchestrator=orchestrator,  # §5: timed reminders fire proactively
     )
     dp = build_dispatcher(
         gateway,
@@ -900,6 +916,7 @@ async def run_bot(settings: Settings, bridge=None) -> None:
         outreach=outreach,
         evolution=SelfEvolutionWorker(brain=gateway, vault=vault, tz=ZoneInfo(settings.tz)),
         task_engine=task_engine,  # pass-2: mirror catch-up rides the loop set
+        orchestrator=orchestrator,  # §5: the reminder timers ride the loop set
     )
     try:
         await dp.start_polling(bot, skip_updates=True)
