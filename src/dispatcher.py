@@ -32,7 +32,8 @@ _ACK_CLAIM_WORDS: Final[tuple[str, ...]] = ("تم فتح", "فتحت", "بعت",
 _ROUTER_PROMPT_AR: Final[str] = (
     "صنّف طلب المالك وأجب بسطر JSON واحد فقط:\n"
     '{"route": "direct"|"tier2"|"tier3", "tool": "none"|"gmail"|"calendar"|"tasks"'
-    '|"telemetry"|"launch"|"brief", "arg": "...", "ack": "...", "voice_reply": true|false}\n'
+    '|"telemetry"|"launch"|"brief"|"screenshot"|"app_sessions", "arg": "...", '
+    '"ack": "...", "voice_reply": true|false}\n'
     '- "ack" إقرار من كلمتين إلى خمس كلمات فقط (مثل «من عيوني هسا» أو «لحظة بفحصلك») '
     "— ممنوع تجيب على السؤال داخله، الرد الكامل يُبث بعد التصنيف.\n"
     "- direct: دردشة أو سؤال بسيط.\n"
@@ -41,7 +42,9 @@ _ROUTER_PROMPT_AR: Final[str] = (
     '- tool: "none" للدردشة الصرفة؛ وإلا الأداة المطلوبة حصراً:\n'
     "  gmail=فحص البريد، calendar=مواعيد التقويم، tasks=المهام المستحقة، "
     'telemetry=حالة الجهاز والجسر، launch=فتح برنامج على PC مع اسم البرنامج في "arg"، '
-    "brief=الإحاطة اليومية الشاملة. الطلبات ذات الأداة تصنَّف دائماً tier2.\n"
+    "brief=الإحاطة اليومية الشاملة، screenshot=لقطة حية لشاشة الجهاز وشو عليها، "
+    "app_sessions=كم استخدم البرامج اليوم وبأي دقيقة. "
+    "الطلبات ذات الأداة تصنَّف دائماً tier2.\n"
     "- voice_reply: هل هذا الطلب يليق ردّه صوتاً (رسالة صوتية) بدل النص؟ true فقط إذا "
     "المالك طلب الصوت صراحةً أو بنيته (بدي اسمعك، حابب صوتك، احكيلي عن حالك) أو الجو "
     "حميمي/عاطفي يستدعي الصوت؛ false للدردشة العادية والأوامر والمعلومات العملية.\n"
@@ -54,7 +57,17 @@ _ROUTES: Final[dict[str, Tier]] = {
     "tier3": Tier.HEAVY,
 }
 _VALID_ROUTES: Final = ("direct", "tier2", "tier3")
-_VALID_TOOLS: Final = ("none", "gmail", "calendar", "tasks", "telemetry", "launch", "brief")
+_VALID_TOOLS: Final = (
+    "none",
+    "gmail",
+    "calendar",
+    "tasks",
+    "telemetry",
+    "launch",
+    "brief",
+    "screenshot",
+    "app_sessions",
+)
 _JSON_RE: Final = re.compile(r"\{.*\}", re.DOTALL)
 
 # Remediation 2.1 (owner directive 2026-09-03, audit C-1): deterministic
@@ -72,6 +85,19 @@ _TOOL_NET: Final[tuple[tuple[str, re.Pattern[str]], ...]] = (
     ("telemetry", re.compile(r"وضع الجهاز|وضع الجسر|الرام|الشاشة|المعالج|حالة الجهاز|تيليمتري")),
     # brief
     ("brief", re.compile(r"الإحاطة|احاطة|إحاطة|النشرة اليومية")),
+    # screenshot (v2.0 §3-د/2) — «شو عالشاشة؟» / «صوري الشاشة»
+    (
+        "screenshot",
+        re.compile(r"عالشاشة|ع الشاشة|الشاشة الحالية|صوري الشاشة|لقطة الشاشة|شو عالشاشة"),
+    ),
+    # app_sessions (v2.0 §3-د/3) — minute-level usage «كم استخدمت برامج اليوم»
+    (
+        "app_sessions",
+        re.compile(
+            r"كم استخدمت|استخدام البرامج|جلسات البرامج|برامج اليوم|ساعات الشاشة|"
+            "شو فتحت اليوم|كم جلسة|وقت الشاشة"
+        ),
+    ),
     # launch — imperative open/start verbs; the app name follows the verb,
     # stripped of trailing device clauses («على جهازي», «بجهازي», «لو سمحت»...)
     # (?<!ال) keeps the noun الشغل out — bare شغل substring-matches inside it.

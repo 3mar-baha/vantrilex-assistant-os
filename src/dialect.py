@@ -100,6 +100,10 @@ _SEED_TTS_LEXICON: Final[dict[str, str]] = {
     # greeting / acknowledgment family (she says these constantly)
     "هلا": "هَلا",
     "اهلا": "أهلاً",
+    # pass-1 (v2.0 directive §3-أ/2): her own name + the daily greeting verbs,
+    # the explicit phonetic pins the owner named.
+    "سارة": "سارَا",
+    "كيفك": "كِيفَك",
     # the daily verbs of her live replies
     "بعرف": "بَعْرِف",
     "بقدر": "بَقْدِر",

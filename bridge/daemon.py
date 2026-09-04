@@ -8,11 +8,14 @@ from __future__ import annotations
 import asyncio
 import platform
 import random
+from contextlib import suppress
+from datetime import UTC, datetime
 
 from loguru import logger
 from websockets.asyncio.client import connect
 from websockets.exceptions import WebSocketException
 
+from bridge.app_sessions import AppSessionTracker, UnknownForeground
 from bridge.executor import ExecResult, Executor, mint_audit_code
 from bridge.telemetry import live_state
 from bridge.wol import send_wol
@@ -30,6 +33,12 @@ from common.protocol import (
 )
 
 
+def _suppress_cancel():
+    """Session-state flush during task teardown: a CancelledError must not
+    interrupt the final save, and must still propagate afterwards."""
+    return suppress(asyncio.CancelledError)
+
+
 class BridgeDaemon:
     def __init__(
         self,
@@ -39,6 +48,8 @@ class BridgeDaemon:
         *,
         heartbeat_interval_s: float = HEARTBEAT_INTERVAL_S,
         backoff_cap_s: float = BACKOFF_CAP_S,
+        sessions: AppSessionTracker | None = None,
+        session_tick_s: float = 60.0,
     ):
         self._url = url
         # S-6 (deferred queue): a PLAIN ws:// dial (not wss://) is a
@@ -55,6 +66,9 @@ class BridgeDaemon:
         self._executor = executor
         self._heartbeat_interval_s = heartbeat_interval_s
         self._backoff_cap_s = backoff_cap_s
+        # pass-1 (v2.0 §3-د/3): minute-level app-session tracking on the daemon
+        self._sessions = sessions
+        self._session_tick_s = session_tick_s
 
     async def run(self, stop: asyncio.Event) -> None:
         attempt = 0
@@ -83,15 +97,50 @@ class BridgeDaemon:
                 raise ProtocolError(f"auth refused: {reason}")
             logger.info("bridge session established")
             heartbeat = asyncio.create_task(self._heartbeat_loop(ws))
+            sessions_task = (
+                asyncio.create_task(self._session_loop()) if self._sessions is not None else None
+            )
             try:
                 await self._serve_frames(ws, stop)
             finally:
                 heartbeat.cancel()
+                if sessions_task is not None:
+                    sessions_task.cancel()
+                    # flush the partial minute's state so a restart keeps the day
+                    with _suppress_cancel():
+                        self._sessions.save(now=datetime.now(UTC))
 
     async def _heartbeat_loop(self, ws) -> None:
         while True:
             await asyncio.sleep(self._heartbeat_interval_s)
             await ws.send(encode(new_envelope(type="heartbeat")))
+
+    async def _session_loop(self) -> None:
+        """Pass-1: sample the foreground app once per minute; a sample = a minute
+        on that app's row. Locked/idle screens are gaps, probe failures are gaps —
+        the loop itself never dies (best-effort telemetry, never a dependency)."""
+        from bridge.app_sessions import categorize, whitelist_categories
+
+        categories = whitelist_categories("config/whitelist.json")
+        while True:
+            try:
+                from bridge.app_sessions import windows_foreground_app
+
+                app = windows_foreground_app()
+            except UnknownForeground:
+                app = None
+            except Exception:  # noqa: BLE001 — probe must never kill the loop
+                app = None
+            try:
+                if app is not None:
+                    self._sessions.tick(
+                        app,
+                        now=datetime.now(UTC),
+                        category=categorize(app, categories),
+                    )
+            except Exception:  # noqa: BLE001
+                logger.warning("app-session tick failed (skipped)")
+            await asyncio.sleep(self._session_tick_s)
 
     async def _serve_frames(self, ws, stop: asyncio.Event) -> None:
         while not stop.is_set():
@@ -132,6 +181,14 @@ class BridgeDaemon:
                     confirmation_id=args["confirmation_id"],
                     audit_code=args.get("audit_code"),
                 )
+            elif frame.cmd == "exec.close":
+                result = await self._executor.close(
+                    args["name"],
+                    confirmation_id=args.get("confirmation_id"),
+                    audit_code=args.get("audit_code"),
+                )
+            elif frame.cmd == "exec.screenshot":
+                result = await self._executor.screenshot(audit_code=args.get("audit_code"))
             elif frame.cmd == "wol":
                 sent = await send_wol(
                     args["mac"], args.get("ip", "255.255.255.255"), args.get("port", 9)
@@ -144,6 +201,19 @@ class BridgeDaemon:
             elif frame.cmd == "telemetry.state":
                 # never raises: live_state degrades unmeasurable metrics to None
                 return "ok", live_state().model_dump(mode="json")
+            elif frame.cmd == "telemetry.app_sessions":
+                # pass-1 (v2.0 §3-د/3): the live tracker's day report — apps,
+                # category totals, boot log. Missing tracker (legacy ctor) is
+                # the honest empty report, never a crash.
+                if self._sessions is not None:
+                    return "ok", self._sessions.report(now=datetime.now(UTC))
+                return "ok", {
+                    "apps": [],
+                    "categories": {},
+                    "total_minutes": 0,
+                    "screen_hours": 0.0,
+                    "boot_log": [],
+                }
             else:
                 result = ExecResult(
                     status="error",

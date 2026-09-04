@@ -20,7 +20,18 @@ AUTH_TIMEOUT_S = 10
 MAX_FRAME_BYTES = 1_048_576
 BACKOFF_CAP_S = 30.0
 
-CmdName = Literal["exec.launch", "exec.open", "power", "wol", "telemetry.state"]
+# v2.0 pass-1: +exec.screenshot (in-memory capture), +exec.close (guard-checked
+# app close), +telemetry.app_sessions (minute-level usage report)
+CmdName = Literal[
+    "exec.launch",
+    "exec.open",
+    "exec.close",
+    "exec.screenshot",
+    "power",
+    "wol",
+    "telemetry.state",
+    "telemetry.app_sessions",
+]
 
 
 class ProtocolError(Exception):

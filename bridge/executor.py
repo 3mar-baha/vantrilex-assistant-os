@@ -5,6 +5,7 @@ detached, shell-free, and mirrored to the audit ledger by the core coordinator."
 from __future__ import annotations
 
 import asyncio
+import base64
 import os
 import secrets
 import shutil
@@ -40,12 +41,72 @@ OPEN_BLOCKED_SUFFIXES = {".exe", ".bat", ".cmd", ".com", ".scr", ".msi", ".ps1",
 
 
 class Executor:
-    """Runs guard-checked actions. _spawn/_open are the OS edges (spy points for tests)."""
+    """Runs guard-checked actions. _spawn/_open/_grab are the OS edges (spy points)."""
 
     def __init__(self, guard: Guard):
         self._guard = guard
         self._spawn = self._spawn_real
         self._open = self._open_real
+        self._grab = self._grab_real
+
+    async def screenshot(self, audit_code: str | None = None) -> ExecResult:
+        """Pass-1 (v2.0 §3-د/2): ONE full-screen capture, entirely in memory —
+        Pillow grabs, downsizes, JPEG-encodes into a BytesIO; bytes go back over
+        the tunnel as base64. Zero disk writes, zero secrets on disk."""
+        code = audit_code or mint_audit_code()
+        try:
+            data = await asyncio.to_thread(self._grab)
+        except Exception as exc:  # noqa: BLE001 — capture failure must not kill the daemon
+            logger.exception("screenshot capture failed")
+            return ExecResult(
+                status="error",
+                detail=f"screenshot failed: {exc}",
+                audit_code=code,
+            )
+        if not data:
+            return ExecResult(status="error", detail="empty capture", audit_code=code)
+        return ExecResult(
+            status="ok",
+            detail=base64.b64encode(data).decode(),
+            audit_code=code,
+        )
+
+    @staticmethod
+    def _grab_real() -> bytes:
+        """Real OS edge: Pillow ImageGrab -> max 1600px wide JPEG in memory."""
+        from io import BytesIO
+
+        import PIL.ImageGrab as imagegrab
+        from PIL import Image
+
+        with imagegrab.grab() as img:
+            img = img.convert("RGB")
+            if img.width > 1600:
+                ratio = 1600 / img.width
+                img = img.resize((1600, int(img.height * ratio)), Image.LANCZOS)
+            buf = BytesIO()
+            img.save(buf, format="JPEG", quality=70, optimize=True)
+            return buf.getvalue()
+
+    async def close(
+        self, name: str, confirmation_id: str | None = None, audit_code: str | None = None
+    ) -> ExecResult:
+        """Pass-1 (v2.0 §3-د/1): close a running app by whitelist name. A close
+        is a destructive action on the owner's live session — the SAME gate as
+        launching: auto_approve entries may close directly; anything else needs
+        a live confirmation id (fail-closed)."""
+        code = audit_code or mint_audit_code()
+        verdict = self._guard.check_app(name)
+        if not verdict.allowed_without_confirmation and not (confirmation_id or "").strip():
+            return ExecResult(status="error", detail=verdict.reason, audit_code=code)
+        exe = verdict.executable or name
+        image = PureWindowsPath(exe).name or exe  # taskkill /IM wants the image name
+        try:
+            await self._spawn(["taskkill", "/IM", image, "/F"])
+        except OSError as exc:
+            logger.exception("close of {name} failed", name=name)
+            return ExecResult(status="error", detail=str(exc), audit_code=code)
+        return ExecResult(status="ok", detail=verdict.reason, audit_code=code)
 
     async def launch(
         self, name: str, confirmation_id: str | None = None, audit_code: str | None = None

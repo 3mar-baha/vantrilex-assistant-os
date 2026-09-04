@@ -110,3 +110,13 @@ def test_shape_for_tts_strips_quotation_marks():
     assert shape_for_tts("«من عيوني» يا عمر") == "من عيوني يا عمر"
     assert shape_for_tts('قال "تمام" وخرج') == "قال تمام وخرج"
     assert shape_for_tts("««كثير اقتباس»»") == "كثير اقتباس"
+
+
+def test_directive_lexicon_words_present():
+    """Pass-1 (v2.0 directive §3-أ/2): the explicitly named phonetic mappings are
+    pinned in the seed lexicon — her own name + the daily Jordanian words."""
+    from src.dialect import _SEED_TTS_LEXICON
+
+    assert _SEED_TTS_LEXICON.get("سارة") == "سارَا"
+    assert _SEED_TTS_LEXICON.get("كيفك") == "كِيفَك"
+    assert _SEED_TTS_LEXICON.get("كيفك") != "كيفك"  # actually vocalized

@@ -737,6 +737,8 @@ async def run_bot(settings: Settings, bridge=None) -> None:
         coordinator=coordinator,
         composer=composer,
         tz=ZoneInfo(settings.tz),
+        bridge=bridge,  # pass-1: exec.screenshot + telemetry.app_sessions tunnel
+        vision=gateway,  # the conversation-lane brain sees the capture natively
     )
     dp = build_dispatcher(
         gateway,

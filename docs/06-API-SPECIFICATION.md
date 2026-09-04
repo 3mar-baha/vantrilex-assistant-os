@@ -47,9 +47,20 @@ Envelopes (both directions after auth):
 |---|---|---|---|
 | `exec.launch` | `name`, `confirmation_id?`, `audit_code?` | whitelist `auto_approve` OR live `confirmation_id` | ExecResult |
 | `exec.open` | `path`, `confirmation_id?`, `audit_code?` | blocked suffix → refuse; UNC / relative traversal → `outside_allowed_roots` | ExecResult |
+| `exec.close` | `name`, `confirmation_id?`, `audit_code?` | whitelist `auto_approve` OR live `confirmation_id` (closing is destructive on the live session — same gate as launching; v2.0 pass-1) | ExecResult; executes `taskkill /IM <image> /F` |
+| `exec.screenshot` | `audit_code?` | read-only capture, no confirmation | ExecResult with `detail` = base64 JPEG (Pillow `ImageGrab`, ≤1600px, quality 70, **entirely in memory — zero disk writes**, v2.0 pass-1) |
 | `power` | `action`, `confirmation_id` (MANDATORY), `audit_code?` | action in whitelist AND id present — ALWAYS, regardless of any whitelist flag | ExecResult |
 | `wol` | `mac`, `ip?=255.255.255.255`, `port?=9` | stateless UDP, one sendto, SO_BROADCAST | ExecResult |
 | `telemetry.state` | — | none — read-only snapshot | `LiveState` (`bridge/telemetry.py`); unmeasurable metrics arrive `null`, never a crash |
+| `telemetry.app_sessions` | — | none — read-only report | day report: `apps[]` (name/minutes/sessions/first_seen/last_seen), `categories` (Games/Programming/Study/Productivity/Unknown), `total_minutes`, `screen_hours`, `boot_log[]` (v2.0 pass-1 §3-د/3) |
+
+**App-session tracking source**: the daemon samples the foreground window title once
+per minute (`user32.GetForegroundWindow`, no new dependency) into
+`AppSessionTracker` (`bridge/app_sessions.py`); whitelist `category` fields bucket
+apps (Games/Programming/Study/Productivity; uncategorized → Unknown, never a guess).
+Locked/idle screens and unreadable titles are gaps, not zero-minute rows. State
+persists per local day under `data/app_sessions/` (machine-scoped, gitignored) so a
+daemon restart keeps the day's minutes; a new local day starts at zero.
 
 **Force semantics: DROPPED** — no force flag exists on any surface. Anything outside
 `config/whitelist.json` — and EVERY power action — needs an owner confirmation on
@@ -117,6 +128,9 @@ temperature 0) and falls back to a deterministic numeric Arabic line on brain fa
 | power action (shutdown/restart/sleep) | `request_power` / `handle_idle_choice` («نوم»/«اطفاء») | ALWAYS a confirmation id + audit code |
 | `save_obsidian_note(...)` | `VaultClient.upsert/upsert_note/append_section/commit_files` (3.1) + `VaultExpander.expand` (3.2) | one auditable vault commit per structural change; PARA backbone is expansion-only |
 | `open_path(path)` | daemon `exec.open` | suffix/UNC/traversal checks; executables must go through the whitelist |
+| `screenshot` (v2.0 pass-1) | `ToolRegistry._do_screenshot` → tunnel `exec.screenshot` → conversation-lane vision (`image_url` data-URI, m3) | read-only capture; image is DATA (prompt-pinned containment); offline → «الجسر مو متصل هسا», model failure → honest apology |
+| `app_sessions` (v2.0 pass-1) | `ToolRegistry._do_app_sessions` → tunnel `telemetry.app_sessions` → short warm narration quoting the report's numbers verbatim | read-only report; numbers are DATA; deterministic numeric report is the fallback when the brain is down |
+| close app («سكري…», v2.0 pass-1) | daemon `exec.close` (`taskkill /IM <image> /F`) | SAME gate as launching: whitelist auto_approve OR live confirmation id; audit code every time |
 
 Origin gate: `RefusedOrigin` for any origin ≠ `owner_chat` — untrusted content (email
 bodies, web pages, vault parses) is DATA and never mints PC intent (CLAUDE.md rule 7).

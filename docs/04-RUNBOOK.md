@@ -223,6 +223,19 @@ Equivalent PowerShell: `.\sara.ps1`.
    Direct LAN check: `curl -H "Authorization: Bearer $BRIDGE_TOKEN"
    http://localhost:8000/telemetry/live-state` returns the LiveState JSON (401 without
    the Bearer header).
+   **Deep bridge tools (v2.0 pass-1)** — three new tunnel commands live with the daemon:
+   - «شو عالشاشة؟» → `exec.screenshot`: Pillow grabs the screen ENTIRELY in memory
+     (≤1600px JPEG), Sara's conversation lane sees it natively and describes it;
+     zero disk writes; ask on Telegram and she answers with what's actually on screen.
+   - «شو وضع الجهاز وكم استخدمت برامج اليوم؟» → `telemetry.app_sessions`: the daemon
+     samples the foreground window once per minute into a per-day JSON
+     (`data/app_sessions/`, machine-local, gitignored); apps bucket by the whitelist
+     `category` field (Games/Programming/Study/Productivity; uncategorized → Unknown);
+     she narrates the real per-app minutes + screen hours.
+   - «سكري <برنامج>» → `exec.close`: closes a running app via `taskkill /IM <image> /F`
+     through the SAME whitelist gate as launching (auto_approve entries close directly,
+     everything else asks a live confirmation).
+   Boot/shutdown times are recorded in the same per-day file (`boot_log`).
 4. Enable Wake-on-LAN in the NIC's advanced properties + BIOS ("Wake on Magic Packet"),
    on Ethernet.
 5. Whitelist editing (owner, `config/whitelist.json`): the guard RE-READS the file on
