@@ -15,8 +15,19 @@ from typing import Any, Final
 from loguru import logger
 from pydantic import BaseModel
 
-# the directive's four buckets + the honest fifth for uncategorized apps
+# the directive's four buckets + the honest fifth for uncategorized apps.
+# Audit finding (2026-09-05): the real whitelist spells its categories
+# Gaming/Coding (owner usage), not the directive's Games/Programming — both
+# spellings now map so a Gaming app is never misreported as Productivity.
 CATEGORIES = ("Games", "Programming", "Study", "Productivity", "Unknown")
+_CATEGORY_ALIASES = {
+    "games": "Games",
+    "gaming": "Games",
+    "programming": "Programming",
+    "coding": "Programming",
+    "study": "Study",
+    "productivity": "Productivity",
+}
 
 _TICK_S = 60  # one sample = one foreground minute (the directive's unit)
 
@@ -34,13 +45,14 @@ class _AppStat(BaseModel):
 
 
 def categorize(name: str, whitelist_categories: dict[str, str]) -> str:
-    """Map an app to one of the directive's buckets using its whitelist category
-    (case-insensitive name match); unknowns stay honest as Unknown."""
+    """Map an app to one of the directive's buckets using its whitelist
+    category (case-insensitive name match, Gaming/Coding aliases honored);
+    anything unrecognized stays honest as Unknown — NEVER misbucketed to
+    Productivity."""
     if whitelist_categories:
         for wl_name, category in whitelist_categories.items():
             if wl_name.casefold() == name.casefold():
-                wanted = category.title() if category.title() in CATEGORIES else None
-                return wanted or "Productivity" if category else "Unknown"
+                return _CATEGORY_ALIASES.get(category.strip().casefold(), "Unknown")
     return "Unknown"
 
 
@@ -243,8 +255,9 @@ def _running_processes() -> list[tuple[str, str | None]]:
 
 
 def running_apps_report() -> dict:
-    """STT-2: what's ACTUALLY running — deduped, system-noise excluded,
-    whitelist display names preferred over raw images. Wire-ready dict."""
+    """STT-2: what's ACTUALLY running — deduped, system-noise excluded RAW
+    process image names (the honest contract; audit 2026-09-05 confirmed no
+    whitelist display-name mapping ships — the raw image IS the report)."""
     seen: dict[str, str] = {}  # casefolded image -> display name
     for image, _title in _running_processes():
         folded = image.casefold()

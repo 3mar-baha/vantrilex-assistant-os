@@ -98,7 +98,8 @@ _JSON_RE: Final = re.compile(r"\{.*\}", re.DOTALL)
 # is a multi-task request (the net's deterministic multi_task backstop).
 _MULTI_ACTION_VERBS: Final = (
     r"افتحي|افتحيلي|شغّل|شغل|شغّلي|شغيلي|سكري|سكّري|اغلقي|أغلقي|وقفي|اقفلي|"
-    r"طفي|اطفي|اطفئي|ذكريني|ذكرني|سجّلي|سجلي|ابحثي|دوّري|دوري|لقطي|صوري|"
+    r"طفي|اطفي|اطفئي|ذكريني|ذكرني|ذكّرني|نبّهيني|نبهيني|فكّرني|سجّلي|سجلي|"
+    r"ابحثي|دوّري|دوري|لقطي|صوري|"
     r"ابعثي|ابعتلي|ارسلي|أرسلي|انشئي|أنشئي|اضيفي|أضيفي|افحصي|سويني|اعملي|"
     r"خذي|جيبي|حطي|احضري|عرضي|نزلي|اكتبيلي|اكتبي"
 )
@@ -155,6 +156,21 @@ _TOOL_NET: Final[tuple[tuple[str, re.Pattern[str]], ...]] = (
             r"(?:شو\s+|شو)?(?:الطقس|طقس|الحرارة|درجة\s+الحرارة)(?:\s+(بعمان|هون))?(?:\s+([^؟?،,]+))?",
         ),
     ),
+    # schedule (§3-ج/2 + §5) — «ذكرني بكرة...» / «سجلي مهمة...» AND the timed
+    # shapes «بعد 60 ثانية ذكريني...» / «على الساعة 3:47 مساء ذكريني...»;
+    # the FULL text rides the arg (the tool's parsers need the timing words).
+    # AUDIT 2026-09-05: moved ABOVE the topic-noun tools (gmail/calendar/tasks/
+    # telemetry) — a reminder that MENTIONS its subject («ذكّرني بعد ساعة
+    # انرّد الجيميل») is a scheduling imperative, not a mail read; the shadda
+    # spellings (ذكّرني/نبّهيني/فكّرني) join the verb list — they fell to gmail.
+    (
+        "schedule",
+        re.compile(
+            r"(?:(?:بعد\s+[\d٠-٩]+\s*\S+|على\s+الساعة\s+[\d:،\s]+\s*(?:مساء|صباح)?)\s*)?"
+            r"(?:ذكّرني|ذكرني|ذكريني|نبّهيني|نبهيني|نبّهني|نبهني|فكّرني|فكرني|"
+            r"سجل?ي?\s+مهمة|سجّلي|مهمة\s+جديدة|تذكير)\s*(.*)"
+        ),
+    ),
     # gmail — colloquial mail words (شغّل/افتح never match mail)
     ("gmail", re.compile(r"جيميل|بريدي|ايميل|إيميل|الايميل|الإيميل|البريد|بريد")),
     # screenshot — BEFORE telemetry: a capture/delivery verb-phrase is a
@@ -196,16 +212,6 @@ _TOOL_NET: Final[tuple[tuple[str, re.Pattern[str]], ...]] = (
             r"وين\s+(?:التطبيقات|البرامج)|"
             r"افحصي\s+(?:التطبيقات|البرامج)|"
             r"شو\s+شغال|مين\s+شغال"
-        ),
-    ),
-    # schedule (§3-ج/2 + §5) — «ذكرني بكرة...» / «سجلي مهمة...» AND the timed
-    # shapes «بعد 60 ثانية ذكريني...» / «على الساعة 3:47 مساء ذكريني...»;
-    # the FULL text rides the arg (the tool's parsers need the timing words)
-    (
-        "schedule",
-        re.compile(
-            r"(?:(?:بعد\s+[\d٠-٩]+\s*\S+|على\s+الساعة\s+[\d:،\s]+\s*(?:مساء|صباح)?)\s*)?"
-            r"(?:ذكرني|ذكريني|سجل?ي?\s+مهمة|سجّلي|مهمة\s+جديدة|تذكير)\s*(.*)"
         ),
     ),
     # create_folder (§6 2026-09-04) — «انشئي/اضيفي فولدر X» in the VAULT;
