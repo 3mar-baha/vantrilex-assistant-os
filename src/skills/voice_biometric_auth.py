@@ -20,7 +20,6 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Final
 
-from aiogram import Bot
 from cryptography.fernet import Fernet, InvalidToken
 from loguru import logger
 
@@ -101,39 +100,37 @@ def stage_guest_note(
     return path
 
 
-async def verify_or_lockdown(
+async def owner_voice_gate(
     *,
     bio: VoiceBiometrics,
-    bot: Bot,
-    chat_id: int,
     ogg_opus: bytes,
+    chat_id: int,
+    authorized_id: int,
     vault_root: Path,
     enc_key: str,
-    registry=None,
 ) -> bool:
-    """True -> continue normal owner handling. False -> non-owner handled: a known
-    contact gets the warm CONTACT_MODE_AR reply (message-taking only), anyone else
-    gets the Guest Mode lockdown (one staging note + reply) — in both cases NOTHING
-    privileged runs (no gateway calls carrying personal context, no whitelist, no
-    PC actions, no writes beyond the guest staging note)."""
-    if await bio.verify(ogg_opus):
-        return True
-    if registry is not None and bio.last_vector is not None:
-        from src.skills.social_enrollment import CONTACT_MODE_AR  # local: avoids import cycle
-
-        try:
-            verdict = await registry.match_vector(bio.last_vector)
-        except Exception:  # noqa: BLE001 — registry failure fails closed to Guest Mode
-            logger.exception("voiceprint registry match failed — treating as unknown")
-            verdict = None
-        if verdict is not None and verdict.role == "contact":
-            await bot.send_message(chat_id, CONTACT_MODE_AR)
-            return False
+    """Directive §1 (owner 2026-09-04): EXECUTION AUTHORIZATION IS 100%
+    SENDER-ID. The voice biometric NEVER gates the owner's account — the owner
+    speaks from many devices/mics and a missed match on HIS OWN account is a
+    labeling note, never Guest Mode. This gate answers exactly one question:
+    does the chat id equal the authorized owner id? The biometric measurement
+    still runs (for the diarization/transcript-labeling lane) but its verdict
+    carries no authorization weight on the owner account. A chat that is NOT
+    the authorized account stays locked (belt under the middleware)."""
+    is_owner = chat_id == authorized_id
     try:
-        stage_guest_note(vault_root, bio.last_vector or [], enc_key=enc_key)
-    except Exception:  # noqa: BLE001 — staging failure never blocks the lockdown reply
-        logger.exception("guest staging write failed; lockdown reply still sent")
-    await bot.send_message(chat_id, GUEST_LOCKDOWN_AR)
+        await bio.verify(ogg_opus)  # measurement for labeling; verdict unused here
+    except Exception:  # noqa: BLE001 — a labeling probe can never break the turn
+        logger.debug("biometric labeling probe skipped (owner turn proceeds)")
+    if is_owner:
+        if bio.last_vector is not None:
+            try:
+                # stage the unmatched print for the diarization lane — a different
+                # device/mic is a LABELING event, not a security event
+                stage_guest_note(vault_root, bio.last_vector, enc_key=enc_key)
+            except Exception:  # noqa: BLE001
+                logger.debug("labeling staging skipped")
+        return True
     return False
 
 

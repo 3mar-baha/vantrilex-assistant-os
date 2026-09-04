@@ -27,6 +27,24 @@ class ExecResult(BaseModel):
     status: str  # "ok" | "error"
     detail: str = ""
     audit_code: str
+    killed_processes: int = 0  # directive §2: psutil-verified termination count
+
+
+def _count_running(image: str) -> int:
+    """Directive §2: count live processes by image name — the verification
+    behind every close confirmation. psutil is the bridge's existing
+    dependency (telemetry); a psutil failure reads as 0 (fail-open count for
+    the KILLED math, but the honest detail line still reports)."""
+    try:
+        import psutil
+
+        return sum(
+            1
+            for p in psutil.process_iter(attrs=["name"])
+            if (p.info.get("name") or "").casefold() == image.casefold()
+        )
+    except Exception:  # noqa: BLE001 — verification is best-effort, never a crash
+        return 0
 
 
 POWER_ARGV = {
@@ -91,22 +109,32 @@ class Executor:
     async def close(
         self, name: str, confirmation_id: str | None = None, audit_code: str | None = None
     ) -> ExecResult:
-        """Pass-1 (v2.0 §3-د/1): close a running app by whitelist name. A close
-        is a destructive action on the owner's live session — the SAME gate as
-        launching: auto_approve entries may close directly; anything else needs
-        a live confirmation id (fail-closed)."""
+        """Directive §2 (owner 2026-09-04): REAL app termination — the same
+        whitelist gate as launching, taskkill by image name, and psutil-VERIFIED
+        results: the returned count is what actually died (never a claimed
+        success while copies remain running — live lesson 3:23pm «لم يتم
+        اغلاق ولا واحدة»)."""
         code = audit_code or mint_audit_code()
         verdict = self._guard.check_app(name)
         if not verdict.allowed_without_confirmation and not (confirmation_id or "").strip():
             return ExecResult(status="error", detail=verdict.reason, audit_code=code)
         exe = verdict.executable or name
         image = PureWindowsPath(exe).name or exe  # taskkill /IM wants the image name
+        before = _count_running(image)
         try:
-            await self._spawn(["taskkill", "/IM", image, "/F"])
+            await self._spawn(["taskkill", "/IM", image, "/F", "/T"])
         except OSError as exc:
             logger.exception("close of {name} failed", name=name)
             return ExecResult(status="error", detail=str(exc), audit_code=code)
-        return ExecResult(status="ok", detail=verdict.reason, audit_code=code)
+        # verification window: taskkill returns before the OS reaps the
+        # processes — poll briefly, then report what actually died
+        for _ in range(10):  # ~2s max
+            await asyncio.sleep(0.2)
+            if _count_running(image) == 0:
+                break
+        killed = before - _count_running(image)
+        detail = f"closed {killed} of {before}" if killed else "no running copies found"
+        return ExecResult(status="ok", detail=detail, audit_code=code, killed_processes=killed)
 
     async def launch(
         self, name: str, confirmation_id: str | None = None, audit_code: str | None = None

@@ -42,9 +42,8 @@ from src.memory import (
 )
 from src.middleware import OwnerOnlyMiddleware
 from src.pc_actions import PCActionCoordinator
-from src.skills.social_enrollment import VoiceprintRegistry
 from src.skills.telegram_chat_streamer import ChatStreamer
-from src.skills.voice_biometric_auth import VoiceBiometrics, verify_or_lockdown
+from src.skills.voice_biometric_auth import VoiceBiometrics, owner_voice_gate
 from src.skills.voice_to_vault_transcriber import _DEFAULT_PROMPT_TERMS, VoiceToVault
 from src.telemetry import TelemetryClient
 from src.tools import ToolRegistry
@@ -195,12 +194,8 @@ def build_dispatcher(
         model_id=settings.voiceprint_model,
         enc_key=settings.vault_enc_key,
     )
-    registry = VoiceprintRegistry(
-        bio=bio,
-        vault_root=Path(settings.vault_local_path),
-        enc_key=settings.vault_enc_key,
-        threshold=settings.voiceprint_threshold,
-    )
+    # §1 (2026-09-04): the VoiceprintRegistry no longer rides the voice gate —
+    # sender-ID is the sole authorization; ECAPA vectors feed diarization only.
 
     @dp.message(CommandStart())
     async def on_start(message: Message) -> None:
@@ -229,14 +224,19 @@ def build_dispatcher(
             await bio.enroll(ogg)
             await message.answer(ENROLL_DONE_AR)
             return
-        allowed = await verify_or_lockdown(
+        # Directive §1 (owner 2026-09-04): EXECUTION AUTHORIZATION IS 100%
+        # SENDER-ID — any voice note from the owner's account has full
+        # permissions from ANY device/mic; the biometric NEVER locks his own
+        # account (it feeds the diarization/labeling lane only). Non-owner
+        # accounts never reach here (OwnerOnlyMiddleware drops them silently);
+        # owner_voice_gate keeps the belt under those suspenders.
+        allowed = await owner_voice_gate(
             bio=bio,
-            bot=bot,
-            chat_id=message.chat.id,
             ogg_opus=ogg,
+            chat_id=message.chat.id,
+            authorized_id=int(settings.authorized_user_id),
             vault_root=Path(settings.vault_local_path),
             enc_key=settings.vault_enc_key,
-            registry=registry,
         )
         if not allowed:
             return

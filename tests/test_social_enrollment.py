@@ -155,8 +155,13 @@ def test_pending_briefs_survive_restart(tmp_path):
 
 
 async def test_contact_mode_zero_privileged_calls(fake_bot, make_shell, monkeypatch, tmp_path):
-    """Containment proof: a recognized contact gets ONLY the warm message-taking
-    reply — zero gateway calls, zero subprocess, zero guest staging notes."""
+    """§1 re-anchored (owner 2026-09-04): EXECUTION AUTHORIZATION IS SENDER-ID.
+    A recognized contact's voice arriving ON THE OWNER'S ACCOUNT no longer
+    drops into contact-mode (the biometric gate never gates the owner account);
+    the note proceeds as an owner turn — the ECAPA vector stays a LABELING
+    signal (diarization), not an authorization one. The zero-privileged-calls
+    contract lives on at the TRUE boundary: non-owner accounts never reach
+    handlers at all (OwnerOnlyMiddleware, test_owner_middleware.py floor)."""
     from src.bot import _ENROLL_PENDING
     from tests.conftest import OWNER_ID, make_update
 
@@ -173,11 +178,7 @@ async def test_contact_mode_zero_privileged_calls(fake_bot, make_shell, monkeypa
     async def fake_download(file, destination=None, **kwargs):
         destination.write(b"FAKE-OGG")
 
-    def _no_subprocess(*args, **kwargs):
-        raise AssertionError("privileged subprocess ran during contact mode")
-
     monkeypatch.setattr(bot, "download", fake_download)
-    monkeypatch.setattr("src.skills.voice_biometric_auth.subprocess.run", _no_subprocess)
     monkeypatch.setattr(VoiceBiometrics, "_embed_pcm_sync", lambda self, pcm: list(OWNER_VEC))
     monkeypatch.setattr(VoiceBiometrics, "_decode_pcm", lambda self, ogg: b"0" * 64000)
     try:
@@ -189,9 +190,11 @@ async def test_contact_mode_zero_privileged_calls(fake_bot, make_shell, monkeypa
         monkeypatch.setattr(VoiceBiometrics, "_embed_pcm_sync", lambda self, pcm: list(AHMAD_VEC))
         monkeypatch.setattr(VoiceBiometrics, "_decode_pcm", lambda self, ogg: b"0" * 64000)
         await shell.dp.feed_update(bot, make_update(3, OWNER_ID, voice=True))
-        assert bot.session.sent("SendMessage")[-1].method.text == CONTACT_MODE_AR
-        assert shell.gateway.router_calls == []
-        assert shell.gateway.stream_calls == []
-        assert list((vault / "Voice_Memos" / "Pending_Speakers").glob("*.json")) == []
+        # §1: sender-ID wins — NO contact-mode reply, NO guest lockdown; the
+        # owner-account turn proceeds (the unmatched print is staged for the
+        # diarization/labeling lane).
+        last_text = bot.session.sent("SendMessage")[-1].method.text
+        assert last_text != CONTACT_MODE_AR
+        assert "مش صوت عمر" not in last_text
     finally:
         _ENROLL_PENDING.clear()

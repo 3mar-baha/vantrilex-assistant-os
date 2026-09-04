@@ -17,6 +17,7 @@ from loguru import logger
 
 from bridge.executor import mint_audit_code
 from common.consent import is_affirmative
+from src.bridge_server import BridgeOffline
 from src.vault import AUDIT_DIR, CONFIRMATIONS_DIR, VaultClient, write_frontmatter
 
 PENDING_TTL = timedelta(minutes=10)
@@ -75,6 +76,15 @@ _APP_ALIASES: dict[str, str] = {
     "الوثب": "WhatsApp",
     "واتساب": "WhatsApp",
     "الضغط": "7-Zip",
+    # command-line tools (live 2026-09-04 3:22pm: «افتحي CMD» refused — the
+    # terminal family was never in the alias table)
+    "cmd": "Command Prompt",
+    "سي ام دي": "Command Prompt",
+    "الدوس": "Command Prompt",
+    "دوس": "Command Prompt",
+    "التيرمنال": "Windows Terminal",
+    "تيرمنال": "Windows Terminal",
+    "باورشيل": "PowerShell",
     "السيف مود": None,  # placeholder never matched — kept for table honesty
 }
 
@@ -130,6 +140,60 @@ class PCActionCoordinator:
             self._pending = None
             return False
         return True
+
+    async def request_close(self, name: str, *, origin: str) -> LaunchStatus:
+        """Directive §2 (owner 2026-09-04): real app closing — «سكري X» routes
+        HERE, never to launch. The daemon guards (same whitelist gate), runs
+        taskkill, and VERIFIES termination via psutil before we confirm; an
+        honest still-running line if the process survived."""
+        self._require_owner_origin(origin)
+        resolved = resolve_app_alias(name)
+        if self._guard is not None:
+            verdict = self._guard.check_app(resolved)
+            if verdict.reason == "not whitelisted" and resolved == name:
+                line = UNKNOWN_APP_AR.format(name)
+                await self._notifier.notify(line)
+                self._remember("assistant", line)
+                return LaunchStatus.REFUSED
+        try:
+            result = await self._send("exec.close", {"name": resolved})
+        except BridgeOffline:
+            # the bridge-down launch honesty (round-2) applies to close too
+            await self._notifier.notify("الجسر مو متصل هسا")
+            self._remember("assistant", "الجسر مو متصل هسا")
+            return LaunchStatus.REFUSED
+        code = result["audit_code"]
+        if result["status"] == "ok":
+            # termination-verified confirmation only (live lesson 2026-09-04
+            # 3:23pm: «اغلقها هي كمان؟» then «لم يتم اغلاق ولا واحدة»)
+            killed = int(result.get("killed_processes", 0) or 0)
+            await self._ledger(code, "close", "executed", resolved)
+            if killed > 0:
+                await self._notifier.notify(
+                    f"✅ سكّرت {resolved} ({killed} نسخة). رمز التدقيق: {code}"
+                )
+                self._remember("assistant", f"سكّرت {resolved} ({killed} نسخة)")
+            else:
+                await self._notifier.notify(
+                    f"✅ أرسلت أمر الإغلاق لـ{resolved} وما لقيت نسخة شغالة هسا. "
+                    f"رمز التدقيق: {code}"
+                )
+                self._remember("assistant", f"أمر إغلاق {resolved}: ما في نسخة شغالة")
+            return LaunchStatus.EXECUTED
+        if "confirmation" in result["detail"] or "not whitelisted" in result["detail"]:
+            prompt = (
+                f"«{resolved}» مش بالقائمة المعتمدة — بتحب أسمح بإغلاقه هالمرة؟ "
+                f"رد بـ«نعم» للتأكيد. رمز التدقيق: {code}"
+            )
+            self._pending = _Pending("close", resolved, datetime.now(UTC))
+            await self._ledger(code, "close", "refused", result["detail"])
+            await self._notifier.notify(prompt)
+            self._remember("assistant", prompt)
+            return LaunchStatus.CONFIRMATION_REQUIRED
+        await self._ledger(code, "close", "error", result["detail"])
+        await self._notifier.notify(f"⚠️ ما قدرت أسكّر {resolved}: {result['detail']}")
+        self._remember("assistant", f"ما قدرت أسكّر {resolved}: {result['detail']}")
+        return LaunchStatus.REFUSED
 
     async def request_launch(self, name: str, *, origin: str) -> LaunchStatus:
         self._require_owner_origin(origin)
@@ -216,6 +280,11 @@ class PCActionCoordinator:
         if kind == "launch":
             result = await self._send(
                 "exec.launch",
+                {"name": target, "confirmation_id": confirmation_id, "audit_code": audit_code},
+            )
+        elif kind == "close":
+            result = await self._send(
+                "exec.close",
                 {"name": target, "confirmation_id": confirmation_id, "audit_code": audit_code},
             )
         else:

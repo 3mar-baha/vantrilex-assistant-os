@@ -355,9 +355,15 @@ async def test_enroll_voice_flow_and_biometric_gate(fake_bot, make_shell, monkey
 
         monkeypatch.setattr(VoiceBiometrics, "_embed_pcm_sync", lambda self, pcm: [0.8, -0.6, 0.0])
         monkeypatch.setattr(VoiceBiometrics, "_decode_pcm", lambda self, ogg: b"0" * 64000)
+        # Directive §1 (owner 2026-09-04): a MISSED biometric match on the
+        # OWNER'S OWN account NEVER locks him out — sender-ID authorization
+        # wins; the unmatched print is staged for the diarization lane and the
+        # turn proceeds (guests never reach this handler — the middleware
+        # drops non-owner accounts silently).
         await _run(shell, bot, make_update(4, OWNER_ID, voice=True))
-        assert bot.session.sent("SendMessage")[-1].method.text == GUEST_LOCKDOWN_AR
-        assert shell.gateway.stream_calls == []
+        last_text = bot.session.sent("SendMessage")[-1].method.text
+        assert last_text != GUEST_LOCKDOWN_AR  # §1: the owner is never the guest
+        assert (tmp_path / "vault" / "State" / "owner_voiceprint.enc").exists()
     finally:
         _ENROLL_PENDING.clear()
 
@@ -417,12 +423,16 @@ async def test_owner_voice_transcribed_filed_and_streamed(
         brain_messages = shell.gateway.stream_calls[0][0]
         assert any(transcriber.text in m["content"] for m in brain_messages)
 
-        # Guest containment: below-threshold voice never reaches the transcriber.
+        # §1 (2026-09-04): the owner's OWN account is NEVER guested on a missed
+        # biometric — sender-ID authorization wins; the turn proceeds normally
+        # (the unmatched print feeds the diarization lane, not a gate).
         monkeypatch.setattr(VoiceBiometrics, "_embed_pcm_sync", lambda self, pcm: [0.8, -0.6, 0.0])
         monkeypatch.setattr(VoiceBiometrics, "_decode_pcm", lambda self, ogg: b"0" * 64000)
         await _run(shell, bot, make_update(4, OWNER_ID, voice=True))
-        assert bot.session.sent("SendMessage")[-1].method.text == GUEST_LOCKDOWN_AR
-        assert len(transcriber.ogg_calls) == 1
+        assert (
+            bot.session.sent("SendMessage")[-1].method.text != GUEST_LOCKDOWN_AR
+        )  # §1: owner is never the guest
+        assert len(transcriber.ogg_calls) == 2  # the turn transcribed like any owner note
     finally:
         _ENROLL_PENDING.clear()
 
