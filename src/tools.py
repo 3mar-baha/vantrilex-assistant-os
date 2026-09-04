@@ -35,6 +35,9 @@ SHOT_PROMPT_AR = (
 )
 NO_SESSIONS_AR = "ما سجلت جلسات استخدام اليوم — الجسر ما كان شغال أو ما في شي مفتوح."
 
+# pass-2 (v2.0 §3-و): the knowledge-graph tool
+NO_GRAPH_AR = "ما قدرت ابنِ شبكة المعرفة هسا — الخزينة مو متوصلة أو ما فيها مذكرات."
+
 
 class ToolRegistry:
     def __init__(
@@ -49,6 +52,8 @@ class ToolRegistry:
         now_fn: Callable[[], datetime] | None = None,
         bridge: Any = None,
         vision: Any = None,
+        vault: Any = None,
+        task_engine: Any = None,
     ) -> None:
         self._inbox = inbox
         self._suite = suite
@@ -57,6 +62,8 @@ class ToolRegistry:
         self._composer = composer
         self._bridge = bridge  # pass-1: the tunnel for exec.screenshot / app_sessions
         self._vision = vision  # the conversation-lane brain with native image input
+        self._vault = vault  # pass-2: knowledge-graph snapshots
+        self._tasks = task_engine  # pass-2: ScheduledTasksEngine (create/mark_done)
         self._tz = tz or ZoneInfo("UTC")
         # Injectable clock: the frozen-date test bomb (2026-09-01 -> 2026-09-02) showed
         # wall-clock reads inside handlers make tests die at midnight rollovers.
@@ -217,6 +224,67 @@ class ToolRegistry:
         except Exception as error:  # noqa: BLE001 — the numbers ARE the answer
             logger.warning("app-sessions narration failed: {}", error)
             return report
+
+    async def _do_knowledge_graph(self, arg: str) -> str:
+        """Pass-2 (v2.0 §3-و): the wikilink web over the vault — backlinks,
+        neighbors, orphans for the note named in arg (or a graph overview with
+        no arg). Pure local index, zero LLM: the DATA block is the answer."""
+        if self._vault is None:
+            return NO_GRAPH_AR
+        from src.skills.knowledge_graph import build_graph
+
+        try:
+            snapshot = await self._graph_snapshot()
+        except Exception as error:  # noqa: BLE001 — a dead scan degrades honestly
+            logger.warning("knowledge-graph snapshot failed: {}", error)
+            return NO_GRAPH_AR
+        graph = build_graph(snapshot)
+        if not arg.strip():
+            orphans = graph.orphans()[:MAX_LINES]
+            return f"شبكة المعرفة: {graph.node_count} مفكرة و{graph.edge_count} رابط.\n" + (
+                "مذكرات معزولة: " + "، ".join(orphans) if orphans else "ما في مذكرات معزولة"
+            )
+        # the arg may arrive bare («User_Info») — resolve onto a real note path
+        target = arg.strip()
+        for path in snapshot:
+            if path == target or path.removesuffix(".md") == target:
+                target = path
+                break
+        return graph.brief_ar(target)
+
+    async def _graph_snapshot(self) -> dict[str, str]:
+        """Fetch the main vault dirs' notes (bounded read, best-effort)."""
+        snapshot: dict[str, str] = {}
+        for directory in ("Daily_Logs", "Studies", "01_Projects/Scheduled_Tasks"):
+            for path in await self._vault.list_dir(directory):
+                try:
+                    snapshot[path] = await self._vault.read(path)
+                except (FileNotFoundError, ValueError):
+                    continue
+        return snapshot
+
+    async def _do_schedule(self, arg: str) -> str:
+        """Pass-2 (v2.0 §3-ج/2): «ذكرني/سجلي مهمة ...» -> ONE vault note in
+        01_Projects/Scheduled_Tasks/ (with [sara:task:id]) mirrored to Calendar
+        + Tasks. `arg` = the task title; a trailing «بكرة»/«اليوم» sets the day.
+        Vault-first: the note ALWAYS lands; Google mirrors best-effort."""
+        if self._tasks is None:
+            return GOOGLE_OFFLINE_AR
+        title = arg.strip()
+        if not title:
+            return "شو المهمة اللي بدك أسجلها؟ قولي عنوانها وموعدها."
+        when = self._now() + timedelta(days=1)
+        if "بكرة" in title or "غدا" in title:
+            when = (self._now() + timedelta(days=1)).replace(hour=9, minute=0)
+        elif "بعد بكرة" in title:
+            when = (self._now() + timedelta(days=2)).replace(hour=9, minute=0)
+        elif "اليوم" in title or "هسا" in title or "هلق" in title:
+            when = self._now() + timedelta(hours=1)
+        note = await self._tasks.create_task(title=title, when=when)
+        return (
+            f"سجلت المهمة «{note.title}» بموعدها {when:%Y-%m-%d %H:%M} — "
+            "نزلتها بمفكرة المهام وبتنعكس على التقويم وقايمة مهام غوغل."
+        )
 
     async def _do_brief(self, arg: str) -> str:
         if self._composer is None:

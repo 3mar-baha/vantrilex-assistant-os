@@ -201,6 +201,24 @@ class VaultClient:
             raise ValueError(f"{path}: {error}") from error
         return text
 
+    async def list_dir(self, path: str) -> list[str]:
+        """List note paths under a vault directory (v2.0 pass-2: the knowledge
+        graph + Scheduled_Tasks sync need directory scans). Returns
+        `dir/file.md` paths; a missing directory is an empty list (an honest
+        empty vault section, never an error)."""
+        response = await self._get_with_rate_limit(path)
+        if response.status_code == 404:
+            return []
+        response.raise_for_status()
+        data = response.json()
+        if not isinstance(data, list):
+            raise TypeError(f"{path} is a note, not a directory")
+        return [
+            f"{path}/{entry['name']}"
+            for entry in data
+            if entry.get("type") == "file" and str(entry.get("name", "")).endswith(".md")
+        ]
+
     async def _get_with_rate_limit(self, path: str) -> httpx.Response:
         """2.10 (deferred queue): a 429/403 rate limit with Retry-After is
         honored ONCE — a momentary limit never fails a read; anything

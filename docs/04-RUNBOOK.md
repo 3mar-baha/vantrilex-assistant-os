@@ -36,7 +36,7 @@ make run-bridge     # PC bridge daemon (on the Windows PC)
 The core talks to Telegram via long polling (outbound-only), so local development
 needs no open ports and no public endpoint.
 
-### Active background loops (remediation 3.1 + 3.2)
+### Active background loops (remediation 3.1 + 3.2 + v2.0 pass-2)
 
 `run_bot` starts every loop through `start_background_loops` and cancels them all
 on shutdown:
@@ -48,6 +48,8 @@ on shutdown:
 | Evening check-in (`EveningJournaler`) | 18:00–19:30 window, once | `JOURNALER_ENABLED`, calendar-busy guard | partial (degrades honest) |
 | Proactive outreach (`ProactiveOutreach`) | ~45 min ticks | `PROACTIVE_ENABLED`, 08:00–22:30 window, cooldown, max 3/day, calendar guard | no (context = vault + time) |
 | Gmail watch (`run_gmail_poll`) | `GMAIL_POLL_SECONDS` | Google stack healthy | yes |
+| Self-evolution reflection (`SelfEvolutionWorker`, v1.1 f4) | ~23:40 local | due() tick | no |
+| Scheduled-tasks mirror catch-up (v2.0 pass-2) | ~10 min ticks | engine present (Google up) | yes (parked notes wait) |
 
 Proactive tuning (`.env`, restart to apply): `PROACTIVE_INTERVAL_MIN`,
 `PROACTIVE_MAX_PER_DAY`, `PROACTIVE_WINDOW_START/END`, `PROACTIVE_COOLDOWN_MIN`.

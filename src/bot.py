@@ -645,12 +645,14 @@ def start_background_loops(
     settings: Settings,
     outreach=None,
     evolution=None,
+    task_engine=None,
 ) -> list[asyncio.Task]:
     """Remediation 3.1: the owner-promised background loops, ONE stitch point
     (testable without polling). Brief suppressed by BRIEF_ENABLED=false; gmail
     poll suppressed by a degraded Google boot (inbox None); outreach (3.2, the
     proactive engine) suppressed by PROACTIVE_ENABLED=false inside its own
-    loop; every task is the caller's to cancel (run_bot's finally reaps them)."""
+    loop; every task is the caller's to cancel (run_bot's finally reaps them).
+    pass-2: the scheduled-tasks mirror catch-up rides a ~10-min tick."""
     tasks: list[asyncio.Task] = [asyncio.create_task(summarizer.run_forever())]
     if settings.brief_enabled and brief is not None:
         tasks.append(asyncio.create_task(brief.run_forever()))
@@ -664,7 +666,20 @@ def start_background_loops(
         tasks.append(asyncio.create_task(evolution.run_forever()))
     if inbox is not None:
         tasks.append(asyncio.create_task(gmail_poll(inbox, dispatcher, classifier, settings)))
+    if task_engine is not None:
+        tasks.append(asyncio.create_task(_run_task_sync(task_engine)))
     return tasks
+
+
+async def _run_task_sync(engine, *, tick_s: float = 600.0) -> None:
+    """pass-2: catch up Scheduled_Tasks notes whose Google mirror failed —
+    exception-proof tick loop (journaler pattern)."""
+    while True:
+        try:
+            await engine.sync_pending()
+        except Exception:  # noqa: BLE001 — the loop outlives any single failure
+            logger.warning("scheduled-tasks sync tick failed (skipped)")
+        await asyncio.sleep(tick_s)
 
 
 async def run_bot(settings: Settings, bridge=None) -> None:
@@ -719,6 +734,13 @@ async def run_bot(settings: Settings, bridge=None) -> None:
         logger.warning("google stack unavailable; google tools degrade: {}", error)
         composer = None
     telemetry = TelemetryClient(bridge, gateway) if bridge is not None else None
+    # pass-2 (v2.0 §3-ج/2): the scheduled-tasks engine — Google suite may be
+    # absent (no OAuth yet); the note lane degrades honestly in that case.
+    task_engine = None
+    if suite is not None and vault is not None:
+        from src.skills.scheduled_tasks import ScheduledTasksEngine
+
+        task_engine = ScheduledTasksEngine(vault, suite, tz=ZoneInfo(settings.tz))
     coordinator = (
         PCActionCoordinator(
             bridge,
@@ -739,6 +761,8 @@ async def run_bot(settings: Settings, bridge=None) -> None:
         tz=ZoneInfo(settings.tz),
         bridge=bridge,  # pass-1: exec.screenshot + telemetry.app_sessions tunnel
         vision=gateway,  # the conversation-lane brain sees the capture natively
+        vault=vault,  # pass-2: knowledge-graph snapshots over the vault
+        task_engine=task_engine,  # pass-2: schedule tool -> Scheduled_Tasks notes
     )
     dp = build_dispatcher(
         gateway,
@@ -802,6 +826,7 @@ async def run_bot(settings: Settings, bridge=None) -> None:
         settings=settings,
         outreach=outreach,
         evolution=SelfEvolutionWorker(brain=gateway, vault=vault, tz=ZoneInfo(settings.tz)),
+        task_engine=task_engine,  # pass-2: mirror catch-up rides the loop set
     )
     try:
         await dp.start_polling(bot, skip_updates=True)

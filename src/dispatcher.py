@@ -43,7 +43,10 @@ _ROUTER_PROMPT_AR: Final[str] = (
     "  gmail=فحص البريد، calendar=مواعيد التقويم، tasks=المهام المستحقة، "
     'telemetry=حالة الجهاز والجسر، launch=فتح برنامج على PC مع اسم البرنامج في "arg"، '
     "brief=الإحاطة اليومية الشاملة، screenshot=لقطة حية لشاشة الجهاز وشو عليها، "
-    "app_sessions=كم استخدم البرامج اليوم وبأي دقيقة. "
+    "app_sessions=كم استخدم البرامج اليوم وبأي دقيقة، "
+    'schedule=تسجيل مهمة/تذكير جديد مع عنوانه في "arg"، '
+    "knowledge_graph=شبكة المعرفة بالمفكرات: مين بيحكي عن مين، الروابط بين "
+    'الأفكار، مع اسم المفكرة في "arg" إن وجد. '
     "الطلبات ذات الأداة تصنَّف دائماً tier2.\n"
     "- voice_reply: هل هذا الطلب يليق ردّه صوتاً (رسالة صوتية) بدل النص؟ true فقط إذا "
     "المالك طلب الصوت صراحةً أو بنيته (بدي اسمعك، حابب صوتك، احكيلي عن حالك) أو الجو "
@@ -67,6 +70,8 @@ _VALID_TOOLS: Final = (
     "brief",
     "screenshot",
     "app_sessions",
+    "schedule",
+    "knowledge_graph",
 )
 _JSON_RE: Final = re.compile(r"\{.*\}", re.DOTALL)
 
@@ -98,6 +103,19 @@ _TOOL_NET: Final[tuple[tuple[str, re.Pattern[str]], ...]] = (
             "شو فتحت اليوم|كم جلسة|وقت الشاشة"
         ),
     ),
+    # schedule (v2.0 §3-ج/2) — «ذكرني بكرة...» / «سجلي مهمة...» (title rides the net arg)
+    (
+        "schedule",
+        re.compile(r"(?:ذكرني|ذكريني|سجل?ي?\s+مهمة|سجّلي|مهمة\s+جديدة|تذكير)\s+(.+)"),
+    ),
+    # knowledge_graph (v2.0 §3-و) — the relations web «مين بيحكي عن...»
+    (
+        "knowledge_graph",
+        re.compile(
+            r"شبكة المعرفة|مين بيحكي عن|الروابط بين|المفكرات المترابطة|مين بيرجع ل|"
+            "المذكرات المعزولة|خريطة المعرفة"
+        ),
+    ),
     # launch — imperative open/start verbs; the app name follows the verb,
     # stripped of trailing device clauses («على جهازي», «بجهازي», «لو سمحت»...)
     # (?<!ال) keeps the noun الشغل out — bare شغل substring-matches inside it.
@@ -119,6 +137,10 @@ def _keyword_net(text: str) -> tuple[str, str]:
             raw_name = match.group(1).strip()
             arg = _LAUNCH_STRIP_RE.sub("", raw_name).strip(" .!؟?،,")
             return ("launch", arg) if arg else ("launch", raw_name)
+        if tool == "schedule" and match.groups():
+            # the reminder title rides the net arg («ذكرني بكرة أراجع الفيزياء»
+            # -> «بكرة أراجع الفيزياء»); strip device/trailing clauses like launch
+            return ("schedule", _LAUNCH_STRIP_RE.sub("", match.group(1)).strip(" .!؟?،,"))
         return tool, ""
     return ("none", "")
 

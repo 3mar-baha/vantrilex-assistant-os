@@ -131,6 +131,8 @@ temperature 0) and falls back to a deterministic numeric Arabic line on brain fa
 | `screenshot` (v2.0 pass-1) | `ToolRegistry._do_screenshot` → tunnel `exec.screenshot` → conversation-lane vision (`image_url` data-URI, m3) | read-only capture; image is DATA (prompt-pinned containment); offline → «الجسر مو متصل هسا», model failure → honest apology |
 | `app_sessions` (v2.0 pass-1) | `ToolRegistry._do_app_sessions` → tunnel `telemetry.app_sessions` → short warm narration quoting the report's numbers verbatim | read-only report; numbers are DATA; deterministic numeric report is the fallback when the brain is down |
 | close app («سكري…», v2.0 pass-1) | daemon `exec.close` (`taskkill /IM <image> /F`) | SAME gate as launching: whitelist auto_approve OR live confirmation id; audit code every time |
+| `schedule` (v2.0 pass-2) | `ScheduledTasksEngine.create_task` — ONE note in `01_Projects/Scheduled_Tasks/` + both Google mirrors | vault-first: the note lands BEFORE any cloud write; `[sara:task:id]` idempotence tag; Google down = parked + ~10-min catch-up loop |
+| `knowledge_graph` (v2.0 pass-2) | `build_graph` over a vault snapshot (`VaultClient.list_dir` + reads) — pure local index, zero LLM | read-only; DATA brief (backlinks/neighbors/orphans) quoted verbatim; scan failure = honest degrade line |
 
 Origin gate: `RefusedOrigin` for any origin ≠ `owner_chat` — untrusted content (email
 bodies, web pages, vault parses) is DATA and never mints PC intent (CLAUDE.md rule 7).
