@@ -39,6 +39,8 @@ NO_SESSIONS_AR = "ما سجلت جلسات استخدام اليوم — الج�
 NO_GRAPH_AR = "ما قدرت ابنِ شبكة المعرفة هسا — الخزينة مو متوصلة أو ما فيها مذكرات."
 # pass-4 (v2.0 §3-هـ): the web-search tool
 NO_WEB_AR = "ما قدرت أوصل للنت هالمرة — جربها بعد شوي."
+# pass-4 (v2.0 §3-ب/1): the weather tool (Open-Meteo, keyless)
+NO_WEATHER_AR = "ما قدرت جيب حالة الطقس هالمرة — جربها بعد شوي."
 
 
 class ToolRegistry:
@@ -57,6 +59,7 @@ class ToolRegistry:
         vault: Any = None,
         task_engine: Any = None,
         web: Any = None,
+        weather: Any = None,
     ) -> None:
         self._inbox = inbox
         self._suite = suite
@@ -68,6 +71,7 @@ class ToolRegistry:
         self._vault = vault  # pass-2: knowledge-graph snapshots
         self._tasks = task_engine  # pass-2: ScheduledTasksEngine (create/mark_done)
         self._web = web  # pass-4: WebIntel (keyless DDG search + page reads)
+        self._weather = weather  # pass-4: WeatherClient (Open-Meteo, keyless)
         self._tz = tz or ZoneInfo("UTC")
         # Injectable clock: the frozen-date test bomb (2026-09-01 -> 2026-09-02) showed
         # wall-clock reads inside handlers make tests die at midnight rollovers.
@@ -302,6 +306,17 @@ class ToolRegistry:
         except Exception as error:  # noqa: BLE001 — a dead web is an honest line
             logger.warning("web search failed: {}", error)
             return NO_WEB_AR
+
+    async def _do_weather(self, arg: str) -> str:
+        """Pass-4 (v2.0 §3-ب/1): «شو الطقس؟» — Open-Meteo current conditions with
+        real numbers; unknown city geocodes once; failures degrade honestly."""
+        place = arg.strip() or "عمان"  # the owner's home city is the default
+        if self._weather is None:
+            return NO_WEATHER_AR
+        block = await self._weather.current(place)
+        if block is None:
+            return NO_WEATHER_AR
+        return block
 
     async def _do_brief(self, arg: str) -> str:
         if self._composer is None:

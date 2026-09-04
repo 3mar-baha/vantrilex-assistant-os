@@ -760,6 +760,15 @@ async def run_bot(settings: Settings, bridge=None) -> None:
         web = WebIntel(http=_httpx.AsyncClient(timeout=15.0, follow_redirects=True))
     except Exception as error:  # noqa: BLE001 — web tools degrade honestly without it
         logger.warning("web intel unavailable; web_search degrades: {}", error)
+    # pass-4 (v2.0 §3-ب/1): keyless weather (Open-Meteo) — shares the web client.
+    weather_client = None
+    if web is not None:
+        try:
+            from src.skills.weather import WeatherClient
+
+            weather_client = WeatherClient(http=web._http)
+        except Exception as error:  # noqa: BLE001
+            logger.warning("weather client unavailable; weather degrades: {}", error)
     # pass-2 (v2.0 §3-ج/2): the scheduled-tasks engine — Google suite may be
     # absent (no OAuth yet); the note lane degrades honestly in that case.
     task_engine = None
@@ -790,6 +799,7 @@ async def run_bot(settings: Settings, bridge=None) -> None:
         vault=vault,  # pass-2: knowledge-graph snapshots over the vault
         task_engine=task_engine,  # pass-2: schedule tool -> Scheduled_Tasks notes
         web=web,  # pass-4: web_search -> keyless DDG search
+        weather=weather_client,  # pass-4: weather -> Open-Meteo current conditions
     )
     dp = build_dispatcher(
         gateway,

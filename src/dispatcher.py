@@ -47,7 +47,8 @@ _ROUTER_PROMPT_AR: Final[str] = (
     'schedule=تسجيل مهمة/تذكير جديد مع عنوانه في "arg"، '
     "knowledge_graph=شبكة المعرفة بالمفكرات: مين بيحكي عن مين، الروابط بين "
     'الأفكار، مع اسم المفكرة في "arg" إن وجد، '
-    'web_search=بحث حي بالنت بمصادر حقيقية مع نص البحث في "arg". '
+    'web_search=بحث حي بالنت بمصادر حقيقية مع نص البحث في "arg"، '
+    'weather=الطقس الحالي مع اسم المدينة في "arg" (عمان افتراضياً). '
     "الطلبات ذات الأداة تصنَّف دائماً tier2.\n"
     "- voice_reply: هل هذا الطلب يليق ردّه صوتاً (رسالة صوتية) بدل النص؟ true فقط إذا "
     "المالك طلب الصوت صراحةً أو بنيته (بدي اسمعك، حابب صوتك، احكيلي عن حالك) أو الجو "
@@ -74,6 +75,7 @@ _VALID_TOOLS: Final = (
     "schedule",
     "knowledge_graph",
     "web_search",
+    "weather",
 )
 _JSON_RE: Final = re.compile(r"\{.*\}", re.DOTALL)
 
@@ -89,6 +91,15 @@ _TOOL_NET: Final[tuple[tuple[str, re.Pattern[str]], ...]] = (
         "web_search",
         re.compile(
             r"(?:دوّر|دور|ابحثي|بحث|لقطي|طلعيلي)\s+(?:بالنت|في النت|عالنت)(?:\s+(?:عن\s+)?(.+))?"
+        ),
+    ),
+    # weather (v2.0 §3-ب/1) — «شو الطقس (بعمان)?» — explicit طقس beats the
+    # temperature words; the capture eats the trailing words (city), connector
+    # prefixes (بعمان/في عمان) stripped in _keyword_net
+    (
+        "weather",
+        re.compile(
+            r"(?:شو\s+|شو)?(?:الطقس|طقس|الحرارة|درجة\s+الحرارة)(?:\s+(بعمان|هون))?(?:\s+([^؟?،,]+))?",
         ),
     ),
     # gmail — colloquial mail words (شغّل/افتح never match mail)
@@ -155,6 +166,15 @@ def _keyword_net(text: str) -> tuple[str, str]:
         if tool == "web_search" and match.groups() and match.group(1):
             # the query rides the net arg («دوّر بالنت عن أسعار الرام» -> query)
             return ("web_search", match.group(1).strip(" .!؟?،,"))
+        if tool == "weather" and match.groups():
+            # the city rides the net arg: group(2) = a named city («شو الطقس في
+            # اربد»), group(1) = the inline default city («شو الطقس بعمان»)
+            city = (match.group(2) or match.group(1) or "").strip(" .!؟?،,")
+            for prefix in ("ب", "في", "مع", "الى", "إلى", "على"):
+                if city.startswith(prefix) and len(city) > len(prefix):
+                    city = city[len(prefix) :]
+                    break
+            return ("weather", city.strip())
         return tool, ""
     return ("none", "")
 
