@@ -176,3 +176,27 @@ async def test_ws_plain_dial_warns(tmp_path):
         "ws://" in src and ("warn" in src.lower() or "logger" in src.lower())
     ) or "plaintext" in src.lower()
     assert has_warning, "daemon must warn when dialing a plain ws:// endpoint"
+
+
+# --- live 2026-09-04: the silent-no-op entry bug -------------------------------
+
+
+def test_daemon_module_has_real_main_guard():
+    """`python -m bridge.daemon` was a SILENT no-op for the whole project's
+    life (no __main__ guard: the module imported, exited rc=0, and the bridge
+    NEVER started — the owner's bridge was never actually up from
+    make/sara.ps1). Both entries must run the real daemon."""
+    import subprocess
+    import sys
+
+    proc = subprocess.run(
+        [sys.executable, "-c", "import bridge.daemon, bridge; assert bridge.daemon.__name__"],
+        capture_output=True,
+        text=True,
+        timeout=20,
+        check=False,
+    )
+    assert proc.returncode == 0
+    src = Path("bridge/daemon.py").read_text(encoding="utf-8")
+    assert 'if __name__ == "__main__"' in src  # the guard exists
+    assert "from bridge.__main__ import main" in src  # and runs the REAL entry

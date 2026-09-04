@@ -156,3 +156,14 @@ class BridgeDaemon:
             logger.exception("command {cmd} crashed", cmd=frame.cmd)
             return "error", {"detail": str(exc), "audit_code": mint_audit_code()}
         return result.status, result.model_dump()
+
+
+if __name__ == "__main__":
+    # `python -m bridge.daemon` used to be a SILENT no-op (no main guard — the
+    # module imported, exited rc=0, and the bridge NEVER started; live finding
+    # 2026-09-04). Both entries now run the real daemon.
+    import asyncio as _asyncio
+
+    from bridge.__main__ import main as _main
+
+    raise SystemExit(_asyncio.run(_main()))
