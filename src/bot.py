@@ -977,6 +977,9 @@ async def run_bot(settings: Settings, bridge=None) -> None:
     from src.agent_manager import AgentManager
 
     tools.bind_agent_manager(AgentManager(gateway=gateway, tools=tools))
+    # Live-6 (owner 2026-09-05 7:25am): «شو في تطبيقات عندك في القائمة» —
+    # the whitelist_apps tool reads the REAL config/whitelist.json.
+    tools.bind_whitelist_path("config/whitelist.json")
     dp = build_dispatcher(
         gateway,
         voice,

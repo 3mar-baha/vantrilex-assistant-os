@@ -90,6 +90,7 @@ _VALID_TOOLS: Final = (
     "multi_task",
     "list_reminders",
     "cancel_reminder",
+    "whitelist_apps",
 )
 _JSON_RE: Final = re.compile(r"\{.*\}", re.DOTALL)
 
@@ -219,6 +220,21 @@ _TOOL_NET: Final[tuple[tuple[str, re.Pattern[str]], ...]] = (
         re.compile(
             r"كم استخدمت|استخدام البرامج|جلسات البرامج|برامج اليوم|ساعات الشاشة|"
             "شو فتحت اليوم|كم جلسة|وقت الشاشة"
+        ),
+    ),
+    # whitelist_apps (live-6 2026-09-05) — «شو التطبيقات اللي عندك صلاحية
+    # عليها/شو البرامج المسموحة/وين القائمة»: the AUTHORIZED list question.
+    # BEFORE running_apps: both ask about تطبيقات — this one names the
+    # whitelist, running_apps names the live processes.
+    (
+        "whitelist_apps",
+        re.compile(
+            r"(?:عندك|معك)\s+(?:في\s+|بال)?(?:ال)?قائمة"
+            r"|(?:البرامج|التطبيقات)\s+(?:المسموحة|المعتمدة|اللي\s+عندك)"
+            r"|قائمة\s+(?:التطبيقات|البرامج|الاسمح|المعتمدة)"
+            r"|وين\s+(?:ال)?قائمة"
+            r"|(?:على\s+)?(?:شو|مين)\s+(?:التطبيقات|البرامج)\s+(?:اللي\s+)?(?:عندك|معك|مسموحة|معتمدة)"
+            r"|صلاحية\s+(?:عليها|عليه)"
         ),
     ),
     # running_apps (STT-2 2026-09-04 7:07pm) — «شو التطبيقات المفتوحة/الشغالة»;

@@ -307,6 +307,54 @@ class ToolRegistry:
         registry needs it for multi_task — wired late in run_bot (no cycle)."""
         self._agent_manager = manager
 
+    def bind_whitelist_path(self, path: Any) -> None:
+        """Live-6: the whitelist_apps tool reads the REAL whitelist file
+        (injected — the registry never owns config paths at construction)."""
+        self._whitelist_path = path
+
+    async def _do_whitelist_apps(self, arg: str) -> str:
+        """Live-6 (owner 7:25am): «شو في تطبيقات عندك في القائمة» — the REAL
+        authorized list, narrated with the count + names, and mirrored to the
+        vault (02_Areas/PC/Apps_Whitelist.md) so Sara's permissions live in
+        Obsidian memory (the owner's explicit morning request)."""
+        import json as _json
+        from pathlib import Path as _Path
+
+        path = getattr(self, "_whitelist_path", None)
+        if path is None:
+            return "ما قدرت اوصل لقائمة التطبيقات هسا 🌸"
+        try:
+            data = _json.loads(_Path(path).read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return "ما لقيت قائمة التطبيقات — الملف مو موجود أو فيه عطل 🌸"
+        entries = [e for e in (data.get("allowed_apps") or []) if isinstance(e, dict)]
+        names = [str(e.get("name") or "").strip() for e in entries]
+        names = [n for n in names if n]
+        if not names:
+            return "القائمة فاضية — ما في تطبيقات معتمدة مسجلة هسا 🌸"
+        listed = "، ".join(names[:MAX_LINES])
+        more = f" (و{len(names) - MAX_LINES} غيرهم)" if len(names) > MAX_LINES else ""
+        head = f"عندي صلاحية على {len(names)} تطبيق بالقائمة المعتمدة:"
+        answer = f"{head}\n{listed}{more}."
+        # the vault mirror (best-effort — the answer never blocks on it)
+        if self._vault is not None:
+            try:
+                lines = "\n".join(
+                    f"- {e.get('name', '')} (`{e.get('executable', '')}`)"
+                    + (" — تلقائي" if e.get("auto_approve") else " — يحتاج تأكيد")
+                    for e in entries
+                    if e.get("name")
+                )
+                await self._vault.upsert(
+                    "02_Areas/PC/Apps_Whitelist.md",
+                    f"---\ndate: {self._now().isoformat()}\n---\n\n"
+                    f"# التطبيقات المعتمدة ({len(names)})\n\n{lines}\n",
+                    message="sara: mirror apps whitelist",
+                )
+            except Exception as error:  # noqa: BLE001 — the mirror is best-effort
+                logger.warning("whitelist vault mirror failed: {}", error)
+        return answer
+
     async def _do_multi_task(self, arg: str) -> str:
         """STT-4: multi-task requests decompose into lines (HEAVY plan, MEDIUM
         sub-agents) and run against the REAL handlers; one unified report."""
