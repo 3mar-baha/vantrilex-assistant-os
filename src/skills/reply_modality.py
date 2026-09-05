@@ -31,17 +31,33 @@ TEXT_FORCE_RE: Final = re.compile(
     r"ردّ?\s*(نصي|كتابي)|بالنص|رد\s*نص|جاوبيني\s*كتابة|اكتبيلي|بصيغة نص"
 )
 
+# P0-A (master directive 2026-09-05): the STRICT VOICE DEMAND gate. Any of
+# these forms in the owner's message forces the VOICE surface with ZERO
+# exception — text-check runs FIRST («رد نصي مش صوتي» still wins), but a
+# matching demand can never degrade to a text-only reply.
+VOICE_DEMAND_RE: Final = re.compile(
+    r"رسالة\s*صوتية|صوتية"
+    r"|ابعثي(لي)?\s*فويس|فويس"
+    r"|احكي\s*بصوتك|بصوتك"
+    r"|بدي\s*اسمع\s*صوتك|اسمع\s*صوتك"
+    r"|ملاحظة\s*صوتية|رسائل\s*صوتية"
+    r"|بصوتي|بالصوت|بصوت"
+)
+
 
 def forced_modality(text: str) -> str | None:
     """The owner's explicit channel request in his message, if any.
 
     Checked BEFORE the probabilistic chooser — an explicit request is always
     honored. Text-request patterns are evaluated first so «رد نصي مش صوتي»
-    resolves to text (the strongest recent signal)."""
+    resolves to text (the strongest recent signal). P0-A: the VOICE_DEMAND
+    gate follows — a voice demand forces voice with zero exception."""
     if not text:
         return None
     if TEXT_FORCE_RE.search(text):
         return "text"
+    if VOICE_DEMAND_RE.search(text):
+        return "voice"
     if VOICE_FORCE_RE.search(text):
         return "voice"
     return None

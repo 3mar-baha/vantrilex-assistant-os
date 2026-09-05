@@ -183,6 +183,7 @@ def build_dispatcher(
     decide_modality=None,
     initial_prompt_terms=None,
     affect=None,
+    edge_lane=None,  # P0-A: the local Edge-TTS failover for DEMANDED notes
 ) -> Dispatcher:
     """gateway: the OmniRouteClient; wrapped here in the ADR-18 front door.
     transcriber: injectable for tests; production builds the local Whisper one.
@@ -381,6 +382,7 @@ def build_dispatcher(
                 transcriber=transcriber,
                 affect=affect,
                 acoustic=acoustic,
+                edge_lane=edge_lane,
             )
         )
         _STREAMS[message.chat.id] = (task, cancel)
@@ -439,6 +441,7 @@ async def _stream_answer(
     transcriber=None,
     affect=None,
     acoustic: str = "",
+    edge_lane=None,  # P0-A: the local Edge-TTS failover for DEMANDED notes
 ) -> None:
     chat_id = message.chat.id
     streamer = ChatStreamer(bot, chat_id, edit_interval_ms=settings.stream_edit_interval_ms)
@@ -493,6 +496,13 @@ async def _stream_answer(
             reply_modality = "voice"
         else:
             reply_modality = "voice" if voice_origin else "text"
+        # P0-A: a DEMANDED voice note is the strictest surface — it can never
+        # degrade to text (the router's own drift is overruled by the gate)
+        from src.skills.reply_modality import VOICE_DEMAND_RE
+
+        demanded = bool(VOICE_DEMAND_RE.search(text or ""))
+        if demanded:
+            reply_modality = "voice"
         if reply_modality == "voice":
             # Speed pass (owner 2026-09-04): the voice note starts with the
             # FIRST COMPLETE SENTENCE while the brain still streams the rest —
@@ -506,6 +516,8 @@ async def _stream_answer(
                 voice,
                 ack=ack,
                 strip=_strip_links_for_voice(),
+                demanded=demanded,
+                edge=edge_lane,
             )
             # text fallback (if needed) already landed inside the delivery
         else:
@@ -580,6 +592,8 @@ async def _deliver_voice_reply(
     *,
     ack: str,
     strip,
+    demanded: bool = False,  # P0-A: the strict surface — never text-only
+    edge=None,  # P0-A: the local Edge-TTS failover lane
 ) -> tuple[str, bool]:
     """Streaming voice delivery (speed pass 2026-09-04): sentence-complete
     segments synthesize + dispatch WHILE the brain still streams. Returns
@@ -589,6 +603,9 @@ async def _deliver_voice_reply(
     - Short answers (<120 chars) stay ONE note with today's exact retry loop
     - Voice dead from the start -> FULL text as chat bubbles
     - Voice dead mid-stream -> the UNSENT remainder as text (nothing lost)
+    - P0-A (demanded): the note NEVER lands text-only — the primary lane's
+      failure escalates to _speak_demanded (Edge failover), and only when BOTH
+      engines die does the honest apology land (as text, with a loud log).
     """
     answer = ""
     spoke = False
@@ -635,15 +652,35 @@ async def _deliver_voice_reply(
         # voice never landed: the ACK or the full text reaches the owner
         spoken_all = strip(full_answer.strip() or ack) or "هذي رسالتي الصوتية 🌸"
         if voice is not None and spoken_all and len(spoken_all) <= _SHORT_ANSWER_CHARS:
-            spoke = await _speak_with_retry(bot, chat_id, voice, spoken_all, attempts=2)
+            if demanded:
+                # P0-A: a demanded note NEVER lands text-only — Edge failover
+                spoke = await _speak_demanded(voice, edge, spoken_all, bot=bot, chat_id=chat_id)
+            else:
+                spoke = await _speak_with_retry(bot, chat_id, voice, spoken_all, attempts=2)
         if not spoke and spoken_all.strip():
-            await send_split(message, spoken_all)
+            if demanded:
+                # both lanes dead: the honest apology (text, loud, named)
+                await send_split(
+                    message,
+                    "صوتي تعطل هالمرة حتى بالمسار الاحتياطي — الرد الكامل بالنص وبتعويضها "
+                    "بأول ملاحظة صوتية لما يرجع الصوت 🌷\n\n" + spoken_all,
+                )
+            else:
+                await send_split(message, spoken_all)
     elif remainder and len(remainder) >= _SPEECH_SEGMENT_MIN_CHARS:
         # mid-stream death or cap overflow: the tail lands as text, never lost
         try:
             ogg = await voice.synthesize(strip(remainder))
             await bot.send_voice(chat_id, BufferedInputFile(ogg, filename="sara.ogg"))
         except Exception as error:  # noqa: BLE001 — the text is the last resort
+            if demanded and edge is not None:
+                # P0-A: the demanded tail tries Edge before any text
+                try:
+                    ogg = await edge.synthesize(strip(remainder))
+                    await bot.send_voice(chat_id, BufferedInputFile(ogg, filename="sara.ogg"))
+                    return full_answer, spoke
+                except Exception:  # noqa: BLE001 — then text, never lost
+                    logger.warning("Edge tail failover failed too")
             logger.warning("voice tail flush failed: {}", error)
             await send_split(message, strip(remainder))
     return full_answer, spoke
@@ -668,6 +705,34 @@ async def _speak_with_retry(bot: Bot, chat_id: int, voice, text: str, *, attempt
             )
             if attempt < attempts:
                 await asyncio.sleep(wait_s)
+    return False
+
+
+async def _speak_demanded(voice, edge, text: str, *, bot=None, chat_id: int | None = None) -> bool:
+    """P0-A (master directive 2026-09-05): a DEMANDED voice note NEVER lands
+    text-only. The primary lane tries once; on ANY failure the LOCAL Edge-TTS
+    lane (ar-EG-SalmaNeural) synthesizes the same text so the voice bubble
+    still dispatches. Only when BOTH engines die -> False (the honest line).
+    Identity note (owner 2026-09-03): the no-fallback law stays for ordinary
+    voice turns; a DEMAND is the exception — the directive's law is that the
+    audio bubble itself must arrive."""
+    try:
+        ogg = await voice.synthesize(text)
+        if bot is not None and chat_id is not None:
+            await bot.send_voice(chat_id, BufferedInputFile(ogg, filename="sara.ogg"))
+        return True
+    except Exception as error:  # noqa: BLE001 — the demanded bubble must still land
+        logger.warning("demanded-note primary lane failed -> Edge failover: {}", error)
+    if edge is None:
+        return False
+    try:
+        ogg = await edge.synthesize(text)
+        if bot is not None and chat_id is not None:
+            await bot.send_voice(chat_id, BufferedInputFile(ogg, filename="sara.ogg"))
+        logger.info("demanded note delivered via the local Edge failover")
+        return True
+    except Exception as error:  # noqa: BLE001 — both lanes dead: the honest line
+        logger.error("Edge failover failed too — demanded note could not speak: {}", error)
     return False
 
 
@@ -852,6 +917,14 @@ async def run_bot(settings: Settings, bridge=None) -> None:
         },
     )
     voice = build_voice(settings)  # 2.5: boot notes load below, once the vault exists
+    # P0-A (2026-09-05): the local Edge-TTS lane — the failover for DEMANDED
+    # voice notes (Fish 429/timeout must never degrade a demand to text). It
+    # shares the shaper/lexicon with the primary lane.
+    edge_lane = VoicePipeline(
+        voice=settings.voice_name,
+        rate=settings.voice_rate,
+        pitch=settings.voice_pitch,
+    )
     vault = VaultClient(
         settings.vault_github_repo,
         settings.vault_github_token.get_secret_value(),
@@ -862,6 +935,8 @@ async def run_bot(settings: Settings, bridge=None) -> None:
 
         boot_notes = parse_notes(await vault.read(DIALECT_NOTES_PATH))
         voice.update_notes(boot_notes)
+        if edge_lane is not None:
+            edge_lane.update_notes(boot_notes)  # P0-A: the failover speaks the same lexicon
     except Exception as error:  # noqa: BLE001 — no notes = no lexicon, the bot still boots
         logger.warning("boot dialect notes load skipped: {}", error)
         boot_notes = []
@@ -993,6 +1068,7 @@ async def run_bot(settings: Settings, bridge=None) -> None:
         affect=AffectiveStateTracker(
             brain=gateway, history=[], baseline=""
         ),  # f2: per-turn tracker reads live history
+        edge_lane=edge_lane,  # P0-A: the local Edge-TTS failover (demanded notes)
     )
     summarizer = DailySummarizer(vault, gateway, tz=ZoneInfo(settings.tz))
     # 3.1: the owner-promised loops, all through one testable stitch point —

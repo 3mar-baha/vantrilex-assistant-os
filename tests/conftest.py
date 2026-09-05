@@ -315,6 +315,7 @@ def make_shell(make_settings):
         tools=None,
         coordinator=None,
         decide_modality=None,
+        edge_lane=None,
         **settings_overrides,
     ):
         # Round-2 (2026-09-03): the decider returns ONLY the explicit request
@@ -337,6 +338,7 @@ def make_shell(make_settings):
             tools=tools,
             coordinator=coordinator,
             decide_modality=decide_modality,
+            edge_lane=edge_lane,
         )
         return SimpleNamespace(
             dp=dp,
@@ -350,6 +352,7 @@ def make_shell(make_settings):
             tools=tools,
             coordinator=coordinator,
             decide=decide_modality,
+            edge_lane=edge_lane,
         )
 
     return _make
