@@ -25,6 +25,13 @@ from src.skills.reply_modality import choose_reply_modality, forced_modality
         ("بدي اسمع صوتك وانت تحكي عن حالك", "voice"),  # the full live phrasing
         ("سمعيني صوتك", "voice"),
         ("احكيلي عن حالك بصوتك", "voice"),
+        # live 2026-09-05 7:19-7:20am — explicit voice asks that answered
+        # TEXT (the gap): the plural form + the bare بالصوت/بالصوتي
+        ("احكي كل اشي بتعرفيه عني في رسائل صوتية", "voice"),
+        ("اشرحيها بالصوت", "voice"),
+        ("اشرحيلي الموضوع بالصوت", "voice"),
+        ("احكيلي عن الفيزياء بالصوت", "voice"),
+        ("احكي كل اشي بتعرفيه عني برسائل صوتية", "voice"),
         # «شو صوتك؟» needs NO forced pattern — the ROUTER judges curiosity
         # about her voice as voice-worthy (round-2: the model decides).
         ("رد نصي", "text"),
