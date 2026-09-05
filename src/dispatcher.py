@@ -117,6 +117,12 @@ _MULTI_ACTION_VERBS: Final = (
     r"ابحثي|دوّري|دوري|لقطي|صوري|"
     r"ابعثي|ابعتلي|ارسلي|أرسلي|انشئي|أنشئي|اضيفي|أضيفي|افحصي|سويني|اعملي|"
     r"خذي|جيبي|حطي|احضري|عرضي|نزلي|اكتبيلي|اكتبي"
+    # table-prep audit 2026-09-05: the feminine control verbs were missing —
+    # «ارفعي الصوت وفتحي المفكرة» fell to volume instead of multi_task
+    r"|ارفعي|ارفع|زيدي|كبّري|وطي|وطّي|خفّضي|اكتمي|اسكتي|فكّي"
+    # ...and the post-waw hamza-drop stems: after و the hamza drops
+    # («وافتحي» -> «وفتحي») — the bare stems keep the connector match alive
+    r"|فتحي|شغلي|سكري|اغلقي|وقفي|طفي|ذكّري|نبّهي|سجّلي|دوّري|لقطي"
 )
 
 _TOOL_NET: Final[tuple[tuple[str, re.Pattern[str]], ...]] = (
