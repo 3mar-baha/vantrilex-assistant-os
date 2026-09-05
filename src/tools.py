@@ -183,8 +183,10 @@ class ToolRegistry:
         import base64 as _b64
 
         jpeg_bytes = _b64.b64decode(payload["detail"])
-        # §4: a delivery request gets the REAL photo dispatched first
-        if self._photo_sender is not None:
+        # §4: a delivery request gets the REAL photo dispatched first;
+        # Live-5 (2026-09-05 7:12am): «لا ترسلي الصورة» — an EXPLICIT negation
+        # skips the photo; the description alone arrives.
+        if self._photo_sender is not None and "no-send" not in (arg or ""):
             try:
                 await self._photo_sender(jpeg_bytes)
             except Exception as error:  # noqa: BLE001 — photo failure never kills the description

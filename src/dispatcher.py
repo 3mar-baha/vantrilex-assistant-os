@@ -261,6 +261,15 @@ _LAUNCH_STRIP_RE: Final = re.compile(
     r"\s+(?:على\s+جهاز\w*|على\s+الجهاز|بجهاز\w*|على\s+الحاسوب|لو\s+سمحت|بليز|منشان\s+الله).*$"
 )
 
+# Live-5 (2026-09-05 7:12am): «لا ترسلي الصورة» — the owner explicitly
+# negated the photo and it arrived anyway. The negation of a photo SEND.
+_NO_SEND_PHOTO_RE: Final = re.compile(
+    r"لا\s+(?:ترسلي|تبعتيلي|تبعثي|تبعثيلي|تبعتلي|ترسليني|ترسلي)"
+    r"|(?:بدون|بلا|ما\s+بدي|مو\s+بدي)\s*(?:ما\s+)?(?:ال)?صورة"
+    r"|بدون\s+(?:ما\s+)?(?:تبعتيلي|تبعثيلي|ترسلي)\s+(?:ال)?صورة"
+    r"|بس\s+صفيلي|بس\s+احكيلي\s+(?:شو|شو\s+في)"
+)
+
 
 def _keyword_net(text: str) -> tuple[str, str]:
     """Return (tool, arg) the deterministic net detects, ("none", "") on no match."""
@@ -443,6 +452,11 @@ class FrontDoorDispatcher:
                 yield delta
             return
         try:
+            # Live-5: the screenshot negation lives HERE — the full user text
+            # exists only at this seam, whichever surface (router/net) chose
+            # the tool; the marker rides the arg to the handler.
+            if tool == "screenshot" and _NO_SEND_PHOTO_RE.search(user_text or ""):
+                arg = (arg + " no-send").strip()
             result = await tools.call(tool, arg)
         except Exception as error:  # noqa: BLE001 — a dead tool never hangs the chat
             logger.exception("dispatcher tool {!r} failed -> plain tier2: {}", tool, error)
