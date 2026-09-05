@@ -198,6 +198,11 @@ def build_dispatcher(
     dp = Dispatcher()
     dp.update.outer_middleware(OwnerOnlyMiddleware(settings.authorized_user_id))
     front = FrontDoorDispatcher(gateway, settings)
+    # M6 (owner's mediating-layer design, 2026-09-05): every tool turn's
+    # narration carries THAT tool's skill guide — the dispatcher consults the
+    # bound vault; run_bot syncs the guides at boot so they stay current.
+    if vault is not None:
+        front.set_skill_vault(vault)
     decide = decide_modality
     if decide is None:
         from src.skills.reply_modality import decide_reply_modality  # local: lands with its usage
@@ -1077,6 +1082,12 @@ async def run_bot(settings: Settings, bridge=None) -> None:
 
     if not await sync_capabilities_manifest(vault):
         logger.warning("capabilities manifest sync skipped — the envelope degrades honestly")
+    # M6 (owner's mediating-layer design): the per-tool skill guides — synced
+    # at boot so every tool's narration reads the CURRENT usage guide.
+    from src.skills.sara_tool_skills import sync_skill_guides
+
+    synced_guides = await sync_skill_guides(vault)
+    logger.info("tool skill guides synced: {}", synced_guides)
     memory = ConversationMemory()
     writer = VaultMemoryWriter(vault, gateway, tz=ZoneInfo(settings.tz))
     bot = Bot(token=settings.telegram_bot_token)
