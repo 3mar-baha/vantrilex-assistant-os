@@ -95,6 +95,12 @@ _VALID_TOOLS: Final = (
     "media",
     "screen_ocr",
     "file_fetch",
+    "prayer_times",
+    "crypto_price",
+    "convert_currency",
+    "tech_trending",
+    "network_status",
+    "read_page",
 )
 _JSON_RE: Final = re.compile(r"\{.*\}", re.DOTALL)
 
@@ -166,6 +172,47 @@ _TOOL_NET: Final[tuple[tuple[str, re.Pattern[str]], ...]] = (
     (
         "file_fetch",
         re.compile(r"(?:ابعثي?لي|ارسلي?لي|بعتيلي|بعتولي)\s+ملف\s+(.+)"),
+    ),
+    # M4 (master directive 2026-09-05 §4): the external-API zones. Each rides
+    # before its sibling-word owners; the FULL text rides the arg where a
+    # parser lives in the tool (amounts, coins, URLs).
+    (
+        "read_page",
+        re.compile(
+            r"(?:اقراي|اقري|اقرأي|اقرئي|افتحي|لخصي|زاكريني)\s+(?:ها?ل?رابط|الرابط|هاد الرابط|المقال|الصفحة)\s*(\S*)"
+            r"|(?:اقراي|اقري|اقرأي|اقرئي|لخصي)\s+(https?://\S+)"
+        ),
+    ),
+    (
+        "prayer_times",
+        re.compile(r"اوقات\s+الصلاة|أوقات\s+الصلاة|وقت\s+صلاة|اوقات\s+صلاة|صلاتي"),
+    ),
+    (
+        "convert_currency",
+        re.compile(
+            r"(?:حولي?|حوّلي?|كم)\s+(?:يساوي\s+)?[\d٠-٩,\.]+\s*(?:دولار|يورو|ريال|دينار|جنيه)"
+            r"|كم\s+(?:سعر|قيمة)\s+[\d٠-٩,\.]*\s*(?:دولار|يورو|ريال|دينار|جنيه)"
+        ),
+    ),
+    (
+        "crypto_price",
+        re.compile(
+            r"(?:سعر|قيمة|كم)\s+(?:سعر\s+)?(?:عملة\s+)?(?:البيتكوين|بيتكوين|الاثيريوم|اثيريوم|الإيثيريوم)"
+            r"|(?:البيتكوين|بيتكوين)\s+(?:بسعر|اليوم|هسا)"
+            r"|(?:شو|كم)\s+(?:سعر|قيمة)\s+(?:ال)?كريبتو"
+        ),
+    ),
+    (
+        "tech_trending",
+        re.compile(
+            r"(?:شو|ايش|شو)\s+(?:اخبار|أخبار)\s+(?:التقنية|التكنولوجيا|التك)"
+            r"|(?:شو|ايش)\s+جديد\s+(?:بالتقنية|بالتكنولوجيا|بعالم\s+التك)"
+            r"|اخبار\s+التكنولوجيا|أخبار\s+التكنولوجيا"
+        ),
+    ),
+    (
+        "network_status",
+        re.compile(r"رقم\s+الايبي|الايبي|الـ?IP|شبكة\s+الجهاز|شو\s+الشبكة"),
     ),
     # close (live 2026-09-04 §2: «سكري الآلة الحاسبة» misrouted to LAUNCH and
     # spawned duplicates) — closing verbs win over everything; the app name
@@ -353,6 +400,20 @@ def _keyword_net(text: str) -> tuple[str, str]:
         if tool == "file_fetch":
             # M2 (§3-A): the filename + folder words ride the arg
             return ("file_fetch", (match.group(1) or "").strip(" .!؟?،,"))
+        if tool == "read_page":
+            # M4: the URL rides the arg (group 1 = after هالرابط, group 2 = bare URL)
+            url = (match.group(1) or match.group(2) or "").strip()
+            return ("read_page", url)
+        if tool in (
+            "prayer_times",
+            "convert_currency",
+            "crypto_price",
+            "tech_trending",
+            "network_status",
+        ):
+            # M4: the FULL text rides the arg — the tool parsers read the
+            # amounts/coins/words from the owner's own phrasing
+            return (tool, clean)
         if tool == "launch":
             raw_name = match.group(1).strip()
             arg = _LAUNCH_STRIP_RE.sub("", raw_name).strip(" .!؟?،,")

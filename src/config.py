@@ -82,6 +82,9 @@ class Settings(BaseSettings):
     # M3 (master directive 2026-09-05 §2): /start_station — the PC's MAC for
     # the Wake-on-LAN magic packet (None/"" = the command answers honestly)
     pc_mac_address: str | None = None
+    # M4 (master directive 2026-09-05 §4): ExchangeRate pair key (empty = the
+    # currency tool answers honestly offline)
+    exchangerate_api_key: str | None = None
     # v2.0 pass-4: Instagram sandbox (§7 staged — live when the owner provides)
     instagram_session: str | None = None
     # v2.0 pass-4: Firecrawl (§7 staged — free tier; empty = WebIntel fallback)

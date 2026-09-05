@@ -21,6 +21,7 @@ from pathlib import Path
 from typing import Final
 from zoneinfo import ZoneInfo
 
+import httpx  # M4: the shared external-APIs client
 from aiogram import Bot, Dispatcher, F
 from aiogram.filters import Command, CommandStart
 from aiogram.types import BufferedInputFile, ErrorEvent, Message
@@ -30,6 +31,7 @@ from bridge.guard import Guard
 from common.consent import AFFIRMATIVES
 from src.config import Settings
 from src.dispatcher import FrontDoorDispatcher
+from src.external_apis import ExternalAPIs
 from src.fish_voice import FishFirstVoice, FishVoice
 from src.gateway import GatewayError, OmniRouteClient, Tier
 from src.memory import (
@@ -1169,6 +1171,10 @@ async def run_bot(settings: Settings, bridge=None) -> None:
         web=web,  # pass-4: web_search -> keyless DDG search
         weather=weather_client,  # pass-4: weather -> Open-Meteo current conditions
         youtube=youtube_client,  # pass-4: youtube -> Data API v3 (env-gated)
+        externals=ExternalAPIs(
+            http=httpx.AsyncClient(timeout=30.0),
+            fx_key=settings.exchangerate_api_key or "",
+        ),  # M4 (§4): the five free external APIs, one shared client
         photo_sender=(
             _make_photo_sender(bot, settings.authorized_user_id) if bot is not None else None
         ),  # §4: the screenshot tool dispatches the REAL JPEG as a Telegram photo

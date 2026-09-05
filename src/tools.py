@@ -36,6 +36,8 @@ SHOT_PROMPT_AR = (
 NO_SESSIONS_AR = "ما سجلت جلسات استخدام اليوم — الجسر ما كان شغال أو ما في شي مفتوح."
 # Gap-أ (owner 2026-09-05): the reminder-management honest lines
 NO_REMINDERS_AR = "ما في تذكيرات مسجلة هسا 🌸"
+# M4 (master directive 2026-09-05 §4): the external-APIs honest line
+NO_EXTERNALS_AR = "ما قدرت اوصل للمصدر هالمرة — جربها بعد شوي 🌸"
 # STT-4 (owner 2026-09-04 evening): the agent manager lane
 NO_AGENT_MANAGER_AR = "ما قدرت أنظم مهامك هالمرة — مدير المهام المتعددة مو مربوط هسا."
 
@@ -70,6 +72,7 @@ class ToolRegistry:
         photo_sender: Any = None,
         orchestrator: Any = None,
         document_sender: Any = None,  # M2: PC->phone file dispatch (send_document)
+        externals: Any = None,  # M4: the five free external APIs
     ) -> None:
         self._inbox = inbox
         self._suite = suite
@@ -86,6 +89,7 @@ class ToolRegistry:
         self._photo_sender = photo_sender  # §4: sends the captured JPEG as a real photo
         self._orchestrator = orchestrator  # §5: timed reminders fire proactively
         self._document_sender = document_sender  # M2 (§3-A): file.download dispatch
+        self._externals = externals  # M4 (§4): the five free APIs
         self._agent_manager = None  # STT-4: multi-task lines; late-bound in run_bot
         self._tz = tz or ZoneInfo("UTC")
         # Injectable clock: the frozen-date test bomb (2026-09-01 -> 2026-09-02) showed
@@ -497,6 +501,119 @@ class ToolRegistry:
             except Exception as error:  # noqa: BLE001 — the read result still lands
                 logger.warning("document dispatch failed: {}", error)
         return f"قرأت الملف {clean_name} — بس ما قدرت أبعته هون، جرب بعد شوي 🌸"
+
+    # -- M4 (master directive 2026-09-05 §4): the external-API tools -------
+
+    def _externals_offline(self) -> str:
+        if self._externals is None:
+            return NO_EXTERNALS_AR
+        return ""
+
+    async def _do_prayer_times(self, arg: str) -> str:
+        """«شو اوقات الصلاة» — Amman's five prayers; the raw times ARE the
+        answer (no narration round)."""
+        if self._externals is None:
+            return NO_EXTERNALS_AR
+        times = await self._externals.get_prayer_times()
+        if not times:
+            return NO_EXTERNALS_AR
+        pairs = {
+            "Fajr": "الفجر",
+            "Dhuhr": "الظهر",
+            "Asr": "العصر",
+            "Maghrib": "المغرب",
+            "Isha": "العشاء",
+        }
+        lines = [f"• {ar}: {times.get(en, '')}" for en, ar in pairs.items()]
+        return "اوقات الصلاة اليوم بعمان:\n" + "\n".join(lines)
+
+    async def _do_convert_currency(self, arg: str) -> str:
+        """«حولي 100 دولار» — the amount + currencies parsed from the owner's
+        phrasing; the honest offline line when the key is unset."""
+        if self._externals is None:
+            return NO_EXTERNALS_AR
+        import re as _re
+
+        text = _re.sub(r"[٠-٩]", lambda m: str(ord(m.group()) - 1632), arg or "")
+        amount_match = _re.search(r"[\d,]+(?:\.\d+)?", text)
+        amount = float(amount_match.group().replace(",", "")) if amount_match else 1.0
+        currencies = {
+            "دولار": "USD",
+            "يورو": "EUR",
+            "ريال": "SAR",
+            "جنيه": "EGP",
+        }
+        from_curr = next((code for word, code in currencies.items() if word in text), "USD")
+        to_curr = "JOD"  # the owner's home currency (the directive's default)
+        out = await self._externals.convert_currency(amount, from_curr, to_curr)
+        if not out:
+            return NO_EXTERNALS_AR
+        return (
+            f"₩ {amount:g} {from_curr} = {out['total']:.2f} {to_curr} "
+            f"(سعر الصرف {out['rate']:.4f}) 🌸"
+        ).replace("₩", "💸")
+
+    async def _do_crypto_price(self, arg: str) -> str:
+        """«شو سعر البيتكوين» — the coin from the owner's word; JOD default."""
+        if self._externals is None:
+            return NO_EXTERNALS_AR
+        coins = {
+            "بيتكوين": "bitcoin",
+            "البيتكوين": "bitcoin",
+            "اثيريوم": "ethereum",
+            "الاثيريوم": "ethereum",
+            "الإيثيريوم": "ethereum",
+        }
+        coin = next((cid for word, cid in coins.items() if word in (arg or "")), "bitcoin")
+        data = await self._externals.get_crypto_price(coin, "jod")
+        if not data or coin not in data:
+            return NO_EXTERNALS_AR
+        price = data[coin].get("jod")
+        if price is None:
+            return NO_EXTERNALS_AR
+        names = {"bitcoin": "البيتكوين", "ethereum": "الاثيريوم"}
+        return f"₿ سعر {names.get(coin, coin)} هسا ≈ {price:,.2f} دينار أردني 🌸"
+
+    async def _do_tech_trending(self, arg: str) -> str:
+        """«شو اخبار التقنية» — the top 5 Hacker News stories: title + link."""
+        if self._externals is None:
+            return NO_EXTERNALS_AR
+        stories = await self._externals.get_tech_trending(limit=5)
+        if not stories:
+            return NO_EXTERNALS_AR
+        lines = [
+            f"{i + 1}. {s['title']}" + (f" — {s['url']}" if s["url"] else "")
+            for i, s in enumerate(stories)
+        ]
+        return "أهم اخبار التقنية هسا:\n" + "\n".join(lines)
+
+    async def _do_network_status(self, arg: str) -> str:
+        """«شو رقم الايبي» — the public IP/ISP/city/proxy of the core's egress."""
+        if self._externals is None:
+            return NO_EXTERNALS_AR
+        status = await self._externals.check_network_status()
+        if not status:
+            return NO_EXTERNALS_AR
+        proxy_line = " (فيه بروكسي/VPN)" if status["proxy"] else ""
+        return (
+            f"الشبكة: الايبي {status['ip']} عبر {status['isp']} — {status['city']}{proxy_line} 🌸"
+        )
+
+    async def _do_read_page(self, arg: str) -> str:
+        """«اقرئي هالرابط» — Jina's clean Markdown of the target URL; the
+        head of the text IS the answer (bounded, honest truncation)."""
+        if self._externals is None:
+            return NO_EXTERNALS_AR
+        url = (arg or "").strip()
+        if not url or not url.startswith(("http://", "https://")):
+            return "بعتلي الرابط كامل (يبدأ بـ https://) وبقرأهلك فوراً 🌸"
+        text = await self._externals.read_webpage_clean(url)
+        if not text:
+            return NO_EXTERNALS_AR
+        clean = " ".join(text.split())
+        if len(clean) > 1200:
+            clean = clean[:1200] + "…"
+        return f"📄 {url}\n\n{clean}"
 
     async def _do_knowledge_graph(self, arg: str) -> str:
         if self._vault is None:
