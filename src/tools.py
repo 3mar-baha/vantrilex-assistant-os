@@ -425,9 +425,13 @@ class ToolRegistry:
                     return f"✅ ألغيت {removed} تذكير/تذكيرات كلهم 🌸"
                 return NO_REMINDERS_AR
             if not target:
-                return "شو التذكير اللي بدك ألغيه؟ قولي رقمه (مثل job-1) أو «الكل»."
-            if await self._orchestrator.cancel(target):
-                return f"✅ ألغيت التذكير {target} 🌸"
+                return "شو التذكير اللي بدك ألغيه؟ قولي رقمه (مثل job-1) أو الساعة (مثل 7:10) أو «الكل»."
+            # Live-2: cancel by SPOKEN TIME first («الغي التذكير 7:10») — the
+            # natural owner phrasing; fall through to the job-id path
+            matched_id = self._orchestrator.find_by_time(target)
+            effective = matched_id or (target if target.startswith("job-") else f"job-{target}")
+            if await self._orchestrator.cancel(effective):
+                return f"✅ ألغيت التذكير {effective} 🌸"
             return f"ما لقيت تذكير بهالرقم ({target}) — شو تذكيراتي بورجيك القايمة."
         except Exception as error:  # noqa: BLE001 — a dead engine never hangs the chat
             logger.warning("cancel_reminder failed: {}", error)

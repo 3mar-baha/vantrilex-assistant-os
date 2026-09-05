@@ -143,6 +143,9 @@ async def test_cancel_reminder_tool_routes_arg(tmp_path):
         def list_for_owner(self):
             return []
 
+        def find_by_time(self, spoken):  # Live-2: the time-cancel seam
+            return None
+
     orch = _Orch()
     registry = ToolRegistry(orchestrator=orch)
 

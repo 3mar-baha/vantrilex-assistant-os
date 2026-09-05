@@ -194,6 +194,23 @@ class Orchestrator:
             rows.append(f"{job.id} — {local:%H:%M} — {job.message or '(مهام مجدولة)'}")
         return rows
 
+    def find_by_time(self, spoken: str) -> str | None:
+        """Live-2 (2026-09-05 7:05am): «الغي التذكير 7:10» — the owner cancels
+        by the SPOKEN time, not a job id. Match the pending job whose local
+        hour[:minute] equals the spoken «h[:m]»; None when nothing matches."""
+        import re as _re
+
+        match = _re.search(r"(\d{1,2})(?:[:،](\d{1,2}))?", spoken)
+        if not match:
+            return None
+        hour = int(match.group(1))
+        minute = int(match.group(2) or 0)
+        for job in self._jobs.values():
+            local = job.when.astimezone(self._tz)
+            if local.hour == hour and local.minute == minute:
+                return job.id
+        return None
+
     async def cancel(self, job_id: str) -> bool:
         """Remove ONE reminder now + persist. Unknown id: False (the caller
         answers honestly; nothing fabricated, nothing harmed)."""

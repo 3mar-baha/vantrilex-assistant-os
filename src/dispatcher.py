@@ -458,7 +458,10 @@ class FrontDoorDispatcher:
         # line). A second HEAVY narration round burns a full nemotron call per
         # multi-task request AND risks rewriting the manager's honest markers
         # (the same class as the launch-tool contract: the result IS the answer).
-        if tool == "multi_task":
+        # Live-2 7:00am: list_reminders joins the exemption — the narration
+        # round DROPPED the job ids (the owner's cancel targets) and returned
+        # a prose summary he could not act on.
+        if tool in ("multi_task", "list_reminders"):
             yield result
             return
         # Round-3 22:54: the narrator rewrote «الجسر مو متصل» as a Windows/Mac
