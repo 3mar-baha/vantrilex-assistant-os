@@ -91,6 +91,10 @@ _VALID_TOOLS: Final = (
     "list_reminders",
     "cancel_reminder",
     "whitelist_apps",
+    "volume",
+    "media",
+    "screen_ocr",
+    "file_fetch",
 )
 _JSON_RE: Final = re.compile(r"\{.*\}", re.DOTALL)
 
@@ -124,6 +128,44 @@ _TOOL_NET: Final[tuple[tuple[str, re.Pattern[str]], ...]] = (
             rf"(?:\s*(?:و|بعدين|بعدها|ثم|كمان)\s*)"
             rf"(?:{_MULTI_ACTION_VERBS})"
         ),
+    ),
+    # volume (M2 §3-B) — «اكتمي/ارفعي/وطي الصوت، حطي الصوت على X%»: the SOUND
+    # word with a control verb; the FULL text rides the arg (the % parser lives
+    # in the tool). BEFORE screenshot/media: الصوت/الفيديو are sibling words.
+    (
+        "volume",
+        re.compile(
+            r"(?:اكتمي?|اسكت|سكّتي?|ارفعي?|زيدي?|كبّري?|وطّي|وطي|نزلي?|خفّضي?|خفض|حطي|شغلي|فكّي|افتحي)\s+الصوت"
+            r"|الصوت\s+على\s+\d|الصوت\s+على\s+[٠-٩]"
+        ),
+    ),
+    # media (M2 §3-B) — «وقفي الفيديو/تابعي التشغيل/الأغنية التالية/المقطع
+    # السابق»: playback commands ride the media keys. BEFORE close: وقفي
+    # الفيديو is a PLAYBACK pause, not an app close.
+    (
+        "media",
+        re.compile(
+            r"(?:وقفي?|اقفي?|تابعي?|كمّلي|كملي|كمّلوا)\s+(?:الفيديو|التشغيل|الفيديو|الأغنية|الاغنية|المقطع|الموسيقى)"
+            r"|(?:الاغنية|الأغنية)\s+(?:التالي|التالية|الجاي)"
+            r"|(?:المقطع|الاغنية|الأغنية|الفيديو)\s+(?:التالي|التالية)"
+            r"|(?:المقطع|الفيديو|الأغنية|الاغنية)\s+السابق"
+        ),
+    ),
+    # screen_ocr (M2 §3-C) — «اقرأي النص اللي عالشاشة/استخرجي الكود»:
+    # a READ-the-screen ask, not a capture. BEFORE screenshot.
+    (
+        "screen_ocr",
+        re.compile(
+            r"(?:اقراي|اقري|اقرأي)\s+.*الشاشة"
+            r"|(?:استخرجي|لقطي|طلعي)\s+.*(?:الكود|النص|الخطأ).*(?:الشاشة|شاشة)"
+            r"|(?:كود|النص)\s+ال(?:خطأ|شاشة)"
+        ),
+    ),
+    # file_fetch (M2 §3-A) — «ابعثيلي ملف X من سطح المكتب/التنزيلات»: the
+    # PC->phone dispatch. BEFORE launch/other verbs.
+    (
+        "file_fetch",
+        re.compile(r"(?:ابعثي?لي|ارسلي?لي|بعتيلي|بعتولي)\s+ملف\s+(.+)"),
     ),
     # close (live 2026-09-04 §2: «سكري الآلة الحاسبة» misrouted to LAUNCH and
     # spawned duplicates) — closing verbs win over everything; the app name
@@ -308,6 +350,9 @@ def _keyword_net(text: str) -> tuple[str, str]:
                 "cancel_reminder",
                 target if target.startswith("job-") else f"job-{target}" if target else "",
             )
+        if tool == "file_fetch":
+            # M2 (§3-A): the filename + folder words ride the arg
+            return ("file_fetch", (match.group(1) or "").strip(" .!؟?،,"))
         if tool == "launch":
             raw_name = match.group(1).strip()
             arg = _LAUNCH_STRIP_RE.sub("", raw_name).strip(" .!؟?،,")

@@ -69,6 +69,7 @@ class ToolRegistry:
         youtube: Any = None,
         photo_sender: Any = None,
         orchestrator: Any = None,
+        document_sender: Any = None,  # M2: PC->phone file dispatch (send_document)
     ) -> None:
         self._inbox = inbox
         self._suite = suite
@@ -84,6 +85,7 @@ class ToolRegistry:
         self._youtube = youtube  # pass-4: YouTubeClient (quota-gated, env key)
         self._photo_sender = photo_sender  # §4: sends the captured JPEG as a real photo
         self._orchestrator = orchestrator  # §5: timed reminders fire proactively
+        self._document_sender = document_sender  # M2 (§3-A): file.download dispatch
         self._agent_manager = None  # STT-4: multi-task lines; late-bound in run_bot
         self._tz = tz or ZoneInfo("UTC")
         # Injectable clock: the frozen-date test bomb (2026-09-01 -> 2026-09-02) showed
@@ -366,10 +368,137 @@ class ToolRegistry:
             logger.exception("agent-manager run failed: {}", error)
             return NO_AGENT_MANAGER_AR
 
+    # -- M2 (master directive 2026-09-05 §3): the desktop-bridge tools -------
+
+    async def _do_volume(self, arg: str) -> str:
+        """§3-B: «اكتمي/ارفعي/وطي الصوت، حطي الصوت على X%» — VK key events
+        on the daemon. Read-only-in-effect; honest result both ways."""
+        if self._bridge is None:
+            return OFFLINE_VISION_AR
+        text = arg.strip() or ""
+        action, level = "up", None
+        if "اكتم" in text or "صفر" in text or "سكّت" in text or "اسكت" in text:
+            action = "mute"
+        elif "شغلي الصوت" in text or "فكي" in text or "افتحي الصوت" in text:
+            action = "unmute"
+        elif "نزلي" in text or "وطي" in text or "نزل" in text or "خفض" in text:
+            action = "down"
+        elif "على" in text and any(ch.isdigit() for ch in text):
+            import re as _re
+
+            digits = _re.sub(
+                r"\D", "", _re.sub(r"[٠-٩]", lambda m: str(ord(m.group()) - 1632), text)
+            )
+            if digits:
+                action, level = "set", int(digits)
+        elif "ارفعي" in text or "ارفع" in text or "زيد" in text or "كبّر" in text:
+            action = "up"
+        try:
+            payload = await self._bridge.send_cmd(
+                "exec.volume", {"action": action, "level": level}, timeout_s=10.0
+            )
+        except BridgeOffline:
+            return OFFLINE_VISION_AR
+        if payload.get("status") != "ok":
+            return TOOL_FAIL_AR
+        return f"✅ {payload.get('detail', 'تم')} 🌸"
+
+    async def _do_media(self, arg: str) -> str:
+        """§3-B: «وقفي الفيديو/تابعي التشغيل/الأغنية التالية/المقطع السابق»."""
+        if self._bridge is None:
+            return OFFLINE_VISION_AR
+        text = arg.strip() or ""
+        command = "play_pause"
+        if "تالي" in text or "التالية" in text or "بعدي" in text or "بعدي" in text:
+            command = "next"
+        elif "السابق" in text or "قبل" in text or "ارجعي" in text:
+            command = "prev"
+        try:
+            payload = await self._bridge.send_cmd(
+                "exec.media_control", {"command": command}, timeout_s=10.0
+            )
+        except BridgeOffline:
+            return OFFLINE_VISION_AR
+        if payload.get("status") != "ok":
+            return TOOL_FAIL_AR
+        return "✅ تم 🌸"
+
+    async def _do_screen_ocr(self, arg: str) -> str:
+        """§3-C: «اقرأي النص اللي عالشاشة/استخرجي الكود» — the daemon captures,
+        the vision lane extracts verbatim; the code IS the answer (no re-narration)."""
+        if self._bridge is None:
+            return OFFLINE_VISION_AR
+        try:
+            payload = await self._bridge.send_cmd("exec.screen_ocr", {}, timeout_s=30.0)
+        except BridgeOffline:
+            return OFFLINE_VISION_AR
+        if payload.get("status") != "ok" or not payload.get("detail"):
+            return TOOL_FAIL_AR
+        return str(payload["detail"])
+
+    async def _do_file_save(self, arg: str, *, file_bytes: bytes | None = None) -> str:
+        """§3-A (phone -> PC): «احفظي بالجهاز/نزلي الملف» — the attached file's
+        bytes ride the tunnel into Downloads. file_bytes arrives from the
+        message handler (the Telegram file itself), never from text."""
+        if self._bridge is None:
+            return OFFLINE_VISION_AR
+        if not file_bytes:
+            return "بعتلي الملف مع الرسالة وبحفظوله فوراً 🌸"
+        name = (arg or "").strip() or "file.bin"
+        import base64 as _b64
+
+        try:
+            payload = await self._bridge.send_cmd(
+                "file.upload",
+                {"data": _b64.b64encode(file_bytes).decode(), "filename": name},
+                timeout_s=30.0,
+            )
+        except BridgeOffline:
+            return OFFLINE_VISION_AR
+        if payload.get("status") != "ok":
+            return TOOL_FAIL_AR
+        return f"✅ {payload.get('detail', 'تم حفظ الملف')} 🌸"
+
+    async def _do_file_fetch(self, arg: str) -> str | None:
+        """§3-A (PC -> phone): «ابعثيلي ملف X من سطح المكتب/التنزيلات» — the
+        whitelisted-roots read dispatches as a REAL Telegram document; the
+        coordinator-style contract: the sender notifies, this returns None."""
+        if self._bridge is None:
+            return OFFLINE_VISION_AR
+        path = arg.strip()
+        if not path:
+            return "شو الملف اللي بدك؟ قولي اسمه ووين موجود (سطح المكتب أو التنزيلات)."
+        # the net arg carries the name + optional folder words — the FILE token
+        # is the one shaped like «X.pdf»; folder words never reach the wire
+        import re as _re
+
+        name_match = _re.search(r"[\w\-. ]+\.[A-Za-z0-9]{1,8}", path)
+        clean_name = (name_match.group() if name_match else path.split()[0]).strip()
+        try:
+            payload = await self._bridge.send_cmd(
+                "file.download", {"path": clean_name}, timeout_s=30.0
+            )
+        except BridgeOffline:
+            return OFFLINE_VISION_AR
+        if payload.get("status") != "ok":
+            detail = payload.get("detail", "")
+            if "outside_allowed_roots" in detail:
+                return "الملف خارج المجلدات المسموحة (سطح المكتب والتنزيلات بس) 🌸"
+            if "sensitive" in detail:
+                return "هالنوع من الملفات حساس وما بقدر أبعثه 🌸"
+            return TOOL_FAIL_AR
+        if self._document_sender is not None:
+            import base64 as _b64
+
+            data = _b64.b64decode(payload["detail"])
+            try:
+                await self._document_sender(data, clean_name)
+                return None  # the document IS the delivery
+            except Exception as error:  # noqa: BLE001 — the read result still lands
+                logger.warning("document dispatch failed: {}", error)
+        return f"قرأت الملف {clean_name} — بس ما قدرت أبعته هون، جرب بعد شوي 🌸"
+
     async def _do_knowledge_graph(self, arg: str) -> str:
-        """Pass-2 (v2.0 §3-و): the wikilink web over the vault — backlinks,
-        neighbors, orphans for the note named in arg (or a graph overview with
-        no arg). Pure local index, zero LLM: the DATA block is the answer."""
         if self._vault is None:
             return NO_GRAPH_AR
         from src.skills.knowledge_graph import build_graph

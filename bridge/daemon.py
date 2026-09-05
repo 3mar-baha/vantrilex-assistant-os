@@ -222,6 +222,38 @@ class BridgeDaemon:
                 from bridge.app_sessions import running_apps_report
 
                 return "ok", running_apps_report("config/whitelist.json")
+            elif frame.cmd == "file.upload":
+                # M2 (§3-A): phone -> PC drop — bytes + sanitized name; the
+                # executor's roots wall decides where it lives
+                import base64 as _b64
+
+                result = await self._executor.file_upload(
+                    _b64.b64decode(frame.args.get("data", "")),
+                    str(frame.args.get("filename", "")),
+                )
+            elif frame.cmd == "file.download":
+                # M2 (§3-A): PC -> phone read — whitelisted roots only
+                result = await self._executor.file_download(str(frame.args.get("path", "")))
+            elif frame.cmd == "exec.volume":
+                # M2 (§3-B): the volume master — read-only-in-effect key events
+                level = frame.args.get("level")
+                result = await self._executor.volume(
+                    str(frame.args.get("action", "")),
+                    int(level) if level is not None else None,
+                )
+            elif frame.cmd == "exec.media_control":
+                # M2 (§3-B): play/pause/next/prev media keys
+                result = await self._executor.media(str(frame.args.get("command", "")))
+            elif frame.cmd == "exec.screen_ocr":
+                # M2 (§3-C): instant screen OCR — the core's vision lane rides
+                # as an injected extractor; the daemon captures, the lane reads
+                extractor = getattr(self, "_screen_vision", None)
+                if extractor is None:
+                    return "error", {
+                        "detail": "screen OCR vision lane not configured",
+                        "audit_code": mint_audit_code(),
+                    }
+                result = await self._executor.screen_ocr(extractor)
             else:
                 result = ExecResult(
                     status="error",

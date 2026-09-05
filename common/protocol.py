@@ -24,12 +24,19 @@ BACKOFF_CAP_S = 30.0
 # app close), +telemetry.app_sessions (minute-level usage report)
 # STT-2 (owner 2026-09-04 7:07pm): +exec.list_apps — read-only running-process
 # report (same class as telemetry.state: no confirmation gate)
+# M2 (master directive 2026-09-05 §3): +exec.volume, +exec.media_control,
+# +exec.screen_ocr, +file.upload, +file.download — the desktop-bridge tools
 CmdName = Literal[
     "exec.launch",
     "exec.open",
     "exec.close",
     "exec.screenshot",
     "exec.list_apps",
+    "exec.volume",
+    "exec.media_control",
+    "exec.screen_ocr",
+    "file.upload",
+    "file.download",
     "power",
     "wol",
     "telemetry.state",

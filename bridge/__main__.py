@@ -41,7 +41,16 @@ async def main() -> int:
     daemon = BridgeDaemon(
         settings.bridge_server_url,
         settings.bridge_token.get_secret_value(),
-        Executor(Guard("config/whitelist.json")),
+        # M2 (§3-A): the file-drop wall — Downloads is the landing root; the
+        # project inbox rides second (uploads land in the FIRST root only).
+        Executor(
+            Guard("config/whitelist.json"),
+            file_roots=(
+                Path.home() / "Downloads",
+                Path("data/inbox"),
+            ),
+            blocked_suffixes=(".key", ".pem", ".env", ".p12", ".kdbx"),
+        ),
         sessions=sessions,
     )
     runner = asyncio.create_task(daemon.run(stop))
