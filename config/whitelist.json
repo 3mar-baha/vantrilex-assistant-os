@@ -933,6 +933,18 @@
       "executable": "D:\\wwm\\Win32\\deploy\\launcher.exe",
       "auto_approve": true,
       "category": "Productivity"
+    },
+    {
+      "name": "Vantrilex Station",
+      "executable": "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
+      "auto_approve": true,
+      "category": "Productivity",
+      "args": [
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "scripts/start_station.ps1"
+      ]
     }
   ],
   "restricted_actions": [

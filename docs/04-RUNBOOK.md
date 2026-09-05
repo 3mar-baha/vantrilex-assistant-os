@@ -308,6 +308,17 @@ remotely, audit line lands in `pc-ledger.md`.
 > before the owner confirms. Sleep and shutdown both require explicit confirmation
 > (`docs/01-ARCHITECTURE.md` §5).
 
+**Step 4 — `/start_station` (M3, master directive 2026-09-05)**: the full chain is now
+one deterministic Telegram command (zero LLM). Set `PC_MAC_ADDRESS` in `.env` (the
+adapter's hardware address), then send `/start_station` to Sara from anywhere: she
+instantly acknowledges («🚀 جاري إيقاظ...»), fires the magic packet (UDP:9) at the MAC,
+waits up to 45s for the bridge handshake — the chain above (boot → auto-logon →
+`VantrilexBridge` ONLOGON task → daemon dials out) completing naturally — then
+launches the whitelisted `scripts/start_station.ps1` entry through the SAME
+coordinator path as any launch (guard + audit code + ledger, never a raw shell): OmniRoute
+gateway, the Sara runner (`sara.ps1`), VS Code at the project root, and Obsidian at the
+vault. If the PC never handshakes in 45s she says so honestly and launches nothing.
+
 ## 6. Credential Acquisition Walkthroughs
 
 See `.env.example` comments — each variable names its source: @BotFather (bot token),

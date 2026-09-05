@@ -184,6 +184,7 @@ def build_dispatcher(
     initial_prompt_terms=None,
     affect=None,
     edge_lane=None,  # P0-A: the local Edge-TTS failover for DEMANDED notes
+    bridge_tunnel=None,  # M3: the bridge server (start_station handshake probe)
 ) -> Dispatcher:
     """gateway: the OmniRouteClient; wrapped here in the ADR-18 front door.
     transcriber: injectable for tests; production builds the local Whisper one.
@@ -238,6 +239,27 @@ def build_dispatcher(
     async def on_enroll_voice(message: Message) -> None:
         _ENROLL_PENDING.add(message.chat.id)
         await message.answer(ENROLL_PROMPT_AR)
+
+    @dp.message(Command("start_station"))
+    async def on_start_station(message: Message, bot: Bot) -> None:
+        """M3 (master directive 2026-09-05 §2-B): deterministic station boot —
+        strictly out-of-band (zero LLM). The OwnerOnly middleware already
+        guarantees this fires for the owner alone."""
+        mac = settings.pc_mac_address or ""
+        if not mac:
+            await message.answer(
+                "⚠️ ما ضبطت MAC جهازك بالاعدادات (PC_MAC_ADDRESS) — ضبطها وبشتغل فوراً 🌸"
+            )
+            return
+
+        handler = make_start_station_handler(
+            bot=bot,
+            chat_id=message.chat.id,
+            mac=mac,
+            wait_online=_bridge_handshake_probe(bridge_tunnel),
+            launch_station=_station_launcher(coordinator),
+        )
+        asyncio.create_task(handler())
 
     @dp.message(F.voice)
     async def on_voice(message: Message, bot: Bot) -> None:
@@ -734,6 +756,111 @@ async def _speak_demanded(voice, edge, text: str, *, bot=None, chat_id: int | No
     except Exception as error:  # noqa: BLE001 — both lanes dead: the honest line
         logger.error("Edge failover failed too — demanded note could not speak: {}", error)
     return False
+
+
+def _bridge_handshake_probe(bridge_tunnel):
+    """M3: poll the live bridge session up to the handler's timeout — the
+    natural completion of the wake chain (boot -> auto-logon -> ONLOGON
+    daemon -> dial-out). Probe failures keep polling, never abort early."""
+
+    async def _wait_online(timeout_s: float) -> bool:
+        import asyncio as _aio
+
+        deadline = _aio.get_running_loop().time() + timeout_s
+        while _aio.get_running_loop().time() < deadline:
+            try:
+                if bridge_tunnel is not None and bridge_tunnel.online():
+                    return True
+            except Exception:  # noqa: BLE001 — probe failures keep polling
+                logger.debug("start_station handshake probe tick failed (polling on)")
+            await _aio.sleep(1.5)
+        return False
+
+    return _wait_online
+
+
+def _station_launcher(coordinator):
+    """M3: launch scripts/start_station.ps1 through the SAME coordinator path
+    as any launch (guard + audit code + ledger) — never a raw shell."""
+
+    async def _launch_station() -> None:
+        if coordinator is None:
+            raise RuntimeError("coordinator unavailable")
+        status = await coordinator.request_launch("Vantrilex Station", origin="owner_chat")
+        if status.value not in ("executed", "confirmation_required"):
+            raise RuntimeError(f"station launch refused: {status}")
+
+    return _launch_station
+
+
+def make_start_station_handler(
+    *,
+    bot,
+    chat_id: int,
+    mac: str,
+    wait_online,
+    launch_station,
+    send_wol=None,
+    wait_s: float = 0.05,
+):
+    """M3 (master directive 2026-09-05 §2-B): /start_station — the
+    DETERMINISTIC station boot. Zero LLM: the ack fires first, the WoL magic
+    packet goes to the PC's MAC, the bridge handshake waits up to 45s, and
+    the whitelisted scripts/start_station.ps1 launches only on a live
+    handshake. All edges are injected (tests); production binds the real
+    bridge-online probe + the coordinator's launch path.
+
+    LSA autologon architecture (documented in docs/04-RUNBOOK.md §5b): the
+    magic packet wakes the hardware; Windows boots straight into the
+    owner's desktop (Sysinternals Autologon, LSA-stored secret); the
+    ONLOGON-scheduled VantrilexBridge task starts the daemon inside the
+    interactive session — so the handshake THIS handler awaits is the
+    natural completion of that chain."""
+
+    from loguru import logger as _log
+
+    async def _handler() -> None:
+        async def _send(text: str) -> None:
+            try:
+                await bot.send_message(chat_id, text)
+            except Exception as error:  # noqa: BLE001 — the boot report never hangs
+                _log.warning("start_station reply failed: {}", error)
+
+        await _send("🚀 جاري إيقاظ الحاسوب وتخطي القفل وتشغيل منظومة العمل فوراً...")
+        try:
+            if send_wol is not None:
+                await send_wol(mac)
+            else:  # pragma: no cover -- production default, never in tests
+                from bridge.wol import send_wol as _real_wol
+
+                await _real_wol(mac)
+        except Exception as error:  # noqa: BLE001 — a dead WoL is honest, not fatal
+            _log.warning("start_station WoL failed: {}", error)
+        online = False
+        try:
+            online = bool(await wait_online(45.0))
+        except Exception as error:  # noqa: BLE001
+            _log.warning("start_station handshake probe failed: {}", error)
+        if not online:
+            await _send(
+                "⚠️ بعتلك حزمة الإيقاظ بس الجهاز ما صحصح خلال 45 ثانية — "
+                "تأكد إنه موصل بالكهرب والشبكة، وبجرب لما تخبرني 🌸"
+            )
+            return
+        try:
+            await launch_station()
+            await _send(
+                "✅ الجهاز صحصح والمنظومة اشتغلت: الأومنيروت والسارة والجسر "
+                "وكمان فتحتلك VS Code والأوبسيديان 🌸"
+            )
+        except Exception:  # noqa: BLE001 — the station half-booted
+            _log.exception("start_station script launch failed")
+            await _send(
+                "⚠️ الجهاز صحصح بس ما قدرت أطلق سكربت التشغيل — افتحه يدوي "
+                "بـ sara.ps1 وبتعال أصلحه 🌸"
+            )
+
+    return _handler
 
 
 async def send_split(message: Message, text: str, *, max_bubbles: int = 3) -> None:

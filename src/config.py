@@ -79,6 +79,9 @@ class Settings(BaseSettings):
     telegram_user_session_string: str | None = None
     # v2.0 pass-4: YouTube Data API v3 (free 10k units/day; empty = staged off)
     youtube_api_key: str | None = None
+    # M3 (master directive 2026-09-05 §2): /start_station — the PC's MAC for
+    # the Wake-on-LAN magic packet (None/"" = the command answers honestly)
+    pc_mac_address: str | None = None
     # v2.0 pass-4: Instagram sandbox (§7 staged — live when the owner provides)
     instagram_session: str | None = None
     # v2.0 pass-4: Firecrawl (§7 staged — free tier; empty = WebIntel fallback)
