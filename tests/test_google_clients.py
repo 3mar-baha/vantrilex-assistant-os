@@ -7,6 +7,7 @@ the only boundary mocked is the Google wire (Rule 2: mock boundaries, not intern
 import asyncio
 import json
 import time
+import urllib.parse
 from pathlib import Path
 
 import httpx
@@ -60,11 +61,16 @@ def _token_path(settings) -> "Path":
 def test_consent_url_contains_scopes(client_secret):
     """AC1a: consent URL carries every scope + offline + consent + loopback
     redirect. Remediation 3.4: exactly THREE scopes — Drive/Contacts readonly
-    were never consumed by the OS, so they left the consent screen."""
+    were never consumed by the OS, so they left the consent screen.
+    Live fix 2026-09-05: the scopes ride ONE space-separated param — Google
+    rejects a repeated scope param («OAuth 2 parameters can only have a
+    single value: scope» — the live OAuth 400)."""
     _path, cfg = client_secret
     url = build_consent_url(cfg, port=8765, state="st4te")
+    # ONE scope param, all three scopes inside it, space-separated (encoded)
+    assert url.count("scope=") == 1
     for scope in AUTH_SCOPES:
-        assert f"scope={scope}" in url
+        assert urllib.parse.quote(scope, safe="") in url
     assert len(AUTH_SCOPES) == 3  # calendar + tasks + gmail.modify only
     assert "drive.readonly" not in url  # never consumed — pruned (3.4)
     assert "contacts.readonly" not in url
@@ -73,6 +79,10 @@ def test_consent_url_contains_scopes(client_secret):
     assert "prompt=consent" in url
     assert "redirect_uri=http%3A%2F%2Flocalhost%3A8765" in url
     assert "state=st4te" in url
+    # the built URL actually parses: exactly one scope value with 3 members
+    query = urllib.parse.parse_qs(urllib.parse.urlparse(url).query)
+    assert len(query["scope"]) == 1
+    assert query["scope"][0].split(" ") == list(AUTH_SCOPES)
 
 
 def test_oauth_state_verified():

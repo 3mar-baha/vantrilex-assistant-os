@@ -72,12 +72,15 @@ def load_client_secret(path: str | Path) -> dict:
 
 
 def build_consent_url(cfg: dict, port: int, state: str) -> str:
-    """Loopback consent URL: one raw scope param per scope, offline + consent + state."""
+    """Loopback consent URL: the scopes joined into ONE space-separated
+    scope param (Google rejects a repeated scope param: «OAuth 2 parameters
+    can only have a single value: scope» — live 2026-09-05), offline +
+    consent + state."""
     redirect_uri = urllib.parse.quote(f"http://localhost:{port}", safe="")
-    scopes = "&".join(f"scope={scope}" for scope in AUTH_SCOPES)
+    scopes = urllib.parse.quote(" ".join(AUTH_SCOPES), safe="")
     return (
         f"{OAUTH_AUTH_URL}?client_id={cfg['client_id']}"
-        f"&redirect_uri={redirect_uri}&response_type=code&{scopes}"
+        f"&redirect_uri={redirect_uri}&response_type=code&scope={scopes}"
         f"&access_type=offline&prompt=consent&state={state}"
     )
 
