@@ -1071,6 +1071,12 @@ async def run_bot(settings: Settings, bridge=None) -> None:
         boot_notes = []
     # 2.6: the same pairs bias Whisper's Arabic transcription from boot
     boot_terms = tuple(f"{n.term} -> {n.phonetic}" for n in boot_notes) or None
+    # M5 (§6): Sara's capabilities manifest — synced into the live vault at
+    # boot (one write; the envelope loads it from there on every turn)
+    from src.memory import sync_capabilities_manifest
+
+    if not await sync_capabilities_manifest(vault):
+        logger.warning("capabilities manifest sync skipped — the envelope degrades honestly")
     memory = ConversationMemory()
     writer = VaultMemoryWriter(vault, gateway, tz=ZoneInfo(settings.tz))
     bot = Bot(token=settings.telegram_bot_token)
