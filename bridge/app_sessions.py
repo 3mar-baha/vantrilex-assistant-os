@@ -254,20 +254,93 @@ def _running_processes() -> list[tuple[str, str | None]]:
     return out
 
 
-def running_apps_report() -> dict:
-    """STT-2: what's ACTUALLY running — deduped, system-noise excluded RAW
-    process image names (the honest contract; audit 2026-09-05 confirmed no
-    whitelist display-name mapping ships — the raw image IS the report)."""
-    seen: dict[str, str] = {}  # casefolded image -> display name
+def _whitelist_exe_map(whitelist_path: Path | str | None) -> dict[str, str]:
+    """Gap-ج: exe-basename -> the owner's display name, from the whitelist
+    (chrome.exe -> «Atheer Sovereign», calc.exe -> calculator). Empty when the
+    whitelist is missing — the raw image is the honest fallback."""
+    if whitelist_path is None:
+        return {}
+    try:
+        data = json.loads(Path(whitelist_path).read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    mapping: dict[str, str] = {}
+    for entry in data.get("allowed_apps", []):
+        exe = str(entry.get("executable") or "").rsplit("\\", 1)[-1].casefold()
+        name = str(entry.get("name") or "").strip()
+        if exe and name:
+            mapping.setdefault(exe, name)
+    return mapping
+
+
+# Gap-ج (owner 2026-09-05): the OWNER-facing section vs the Windows background.
+# Owner apps = whitelisted exes + anything that is clearly a user-launched app
+# (not in the system-noise table and not a service image). Nothing is FILTERED
+# — the background processes stay, in their own labeled section.
+_BACKGROUND_HINTS: Final[tuple[str, ...]] = (
+    *("service", "broker", "host", "daemon", "agent", "helper", "guard", "shim"),
+    "msedgewebview2",
+    "runtimebroker",
+    "useroobe",
+    "vmms",
+    "wmiregistrationservice",
+    "presentationfontcache",
+    "nvdisplay",
+    "nvcontainer",
+    "msmpeng",
+    "mpdefendercore",
+    "jhi_service",
+    "lsaiso",
+    "planetvpnservice",
+    "asuscertservice",
+    "shellhost",
+    "oneapp.igcc",
+    "googleplaygamesservices",
+    "xboxpcappft",
+)
+
+
+def _is_background(image: str, known_exe_names: set[str]) -> bool:
+    """A process is background when it is NOT a whitelisted exe and its image
+    carries a service/broker/AV hint. Whitelisted apps are NEVER background."""
+    folded = image.casefold()
+    base = folded.removesuffix(".exe")
+    if folded in known_exe_names:
+        return False
+    return any(hint in base for hint in _BACKGROUND_HINTS)
+
+
+def running_apps_report(whitelist_path: Path | str | None = None) -> dict:
+    """Gap-ج (owner's WIDER spec 2026-09-05): EVERY app BY NAME —
+    - whitelisted exes report by their DISPLAY name (chrome.exe -> «Atheer
+      Sovereign»); non-whitelisted apps keep the raw image (nothing filtered)
+    - two honest sections: owner_apps first, background (services/AV/helpers)
+      in its own labeled list — every process named, nothing hidden
+    - deduped by casefolded image; system-noise prefixes still out
+    Wire-ready dict (apps kept for legacy readers)."""
+    exe_map = _whitelist_exe_map(whitelist_path)
+    known = set(exe_map)
+    seen: set[str] = set()  # casefolded images already reported
+    owner_apps: list[dict] = []
+    background: list[dict] = []
     for image, _title in _running_processes():
         folded = image.casefold()
         if any(folded.startswith(prefix) for prefix in _SYSTEM_IMAGE_PREFIXES):
             continue
         if folded in seen:
             continue
-        seen[folded] = image
-    apps = [{"name": display} for display in seen.values()]
-    return {"apps": apps}
+        seen.add(folded)
+        if folded in exe_map:
+            owner_apps.append({"name": exe_map[folded], "whitelisted": True})
+        elif _is_background(image, known):
+            background.append({"name": image, "whitelisted": False})
+        else:
+            owner_apps.append({"name": image, "whitelisted": False})
+    return {
+        "apps": owner_apps + background,  # legacy flat union (nothing lost)
+        "owner_apps": owner_apps,
+        "background": background,
+    }
 
 
 def today_store_path(base_dir: Path | str, *, now: datetime | None = None) -> Path:

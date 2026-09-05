@@ -215,11 +215,13 @@ class BridgeDaemon:
                     "boot_log": [],
                 }
             elif frame.cmd == "exec.list_apps":
-                # STT-2 (owner 2026-09-04 7:07pm): the REAL running user-facing
-                # processes — read-only, no confirmation gate (telemetry.state class).
+                # STT-2 (owner 2026-09-04 7:07pm) + gap-ج (2026-09-05): the
+                # REAL running processes — read-only, no confirmation gate
+                # (telemetry.state class). Whitelist display names preferred;
+                # every app named, nothing filtered.
                 from bridge.app_sessions import running_apps_report
 
-                return "ok", running_apps_report()
+                return "ok", running_apps_report("config/whitelist.json")
             else:
                 result = ExecResult(
                     status="error",

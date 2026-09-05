@@ -260,26 +260,45 @@ class ToolRegistry:
             return report
 
     async def _do_running_apps(self, arg: str) -> str:
-        """STT-2 (owner 2026-09-04 7:07pm): «افحصي التطبيقات التي كانت تعمل» got
-        a generic health answer — this names what's ACTUALLY running right now.
-        Read-only wire (exec.list_apps), the honest raw list is the answer; no
-        LLM re-narration (process names are DATA, never fabricated)."""
+        """STT-2 + gap-ج (owner 2026-09-05, WIDER spec): «اريد ان يعرض اسم كل
+        تطبيق» — every app BY NAME, nothing filtered. Whitelisted exes report
+        by their display names; the Windows background (services/AV/helpers)
+        gets its own labeled section so the owner's apps lead. Read-only wire
+        (exec.list_apps); the raw list is the answer; no LLM re-narration."""
         if self._bridge is None:
             return OFFLINE_VISION_AR
         try:
             payload = await self._bridge.send_cmd("exec.list_apps", {})
         except BridgeOffline:
             return OFFLINE_VISION_AR
-        apps = payload.get("apps") if isinstance(payload, dict) else None
-        if not isinstance(apps, list):
+        if not isinstance(payload, dict):
             return TOOL_FAIL_AR
-        names = [str(entry.get("name", "")).strip() for entry in apps if isinstance(entry, dict)]
-        names = [name for name in names if name]
-        if not names:
+        owner_apps = payload.get("owner_apps")
+        background = payload.get("background")
+        if not isinstance(owner_apps, list) or not isinstance(background, list):
+            # legacy daemon payload: the flat apps list still narrates
+            flat = payload.get("apps")
+            if not isinstance(flat, list):
+                return TOOL_FAIL_AR
+            owner_apps, background = flat, []
+        owner_names = [str(e.get("name", "")).strip() for e in owner_apps if isinstance(e, dict)]
+        bg_names = [str(e.get("name", "")).strip() for e in background if isinstance(e, dict)]
+        owner_names = [n for n in owner_names if n]
+        bg_names = [n for n in bg_names if n]
+        if not owner_names and not bg_names:
             return "ما في تطبيقات مستخدم شغالة هسا حسب اللي أشوفه."
-        listed = "، ".join(names[:MAX_LINES])
-        more = f" (و{len(names) - MAX_LINES} غيرهم)" if len(names) > MAX_LINES else ""
-        return f"التطبيقات الشغالة هسا: {listed}{more}."
+        parts = []
+        if owner_names:
+            listed = "، ".join(owner_names[:MAX_LINES])
+            more = (
+                f" (و{len(owner_names) - MAX_LINES} غيرهم)" if len(owner_names) > MAX_LINES else ""
+            )
+            parts.append(f"تطبيقاتك الشغالة هسا: {listed}{more}.")
+        if bg_names:
+            listed_bg = "، ".join(bg_names[:MAX_LINES])
+            more_bg = f" (و{len(bg_names) - MAX_LINES} غيرهم)" if len(bg_names) > MAX_LINES else ""
+            parts.append(f"وبرامج النظام بالخلفية: {listed_bg}{more_bg}.")
+        return "\n".join(parts)
 
     def bind_agent_manager(self, manager: Any) -> None:
         """STT-4: the agent manager needs the registry to execute steps, and the
