@@ -453,6 +453,14 @@ class FrontDoorDispatcher:
             return
         if result is None:  # launch: the coordinator already notified the owner
             return
+        # Gap-ب (owner 2026-09-05): multi_task results stream AS-IS — the
+        # manager's report is already honest, already Sara-voiced (✅/📤/⚠️ per
+        # line). A second HEAVY narration round burns a full nemotron call per
+        # multi-task request AND risks rewriting the manager's honest markers
+        # (the same class as the launch-tool contract: the result IS the answer).
+        if tool == "multi_task":
+            yield result
+            return
         # Round-3 22:54: the narrator rewrote «الجسر مو متصل» as a Windows/Mac
         # support-desk lecture — the tool result IS the ground truth; the
         # narrator speaks it in Sara's own short warm voice, never expands it
