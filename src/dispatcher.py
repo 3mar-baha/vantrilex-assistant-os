@@ -53,7 +53,9 @@ _ROUTER_PROMPT_AR: Final[str] = (
     'youtube=بحث فيديوهات يوتيوب مع نص البحث في "arg"، '
     'close=إغلاق برنامج شغال على PC (سكري/اغلقي/طفي/وقفي) مع اسم البرنامج في "arg"، '
     "multi_task=الطلب فيه أكتر من مهمة واضحة بنفس الرسالة (شغلي X وافتحي Y وسكري Z) "
-    '— ضع نص الطلب كاملاً في "arg" وبدون أي تلخيص. '
+    '— ضع نص الطلب كاملاً في "arg" وبدون أي تلخيص، '
+    "list_reminders=سؤال عن التذكيرات المسجلة (شو تذكيراتي)، "
+    'cancel_reminder=إلغاء تذكير مسجل مع رقمه (مثل job-1) أو «الكل» في "arg". '
     "الطلبات ذات الأداة تصنَّف دائماً tier2.\n"
     "- voice_reply: هل هذا الطلب يليق ردّه صوتاً (رسالة صوتية) بدل النص؟ true فقط إذا "
     "المالك طلب الصوت صراحةً أو بنيته (بدي اسمعك، حابب صوتك، احكيلي عن حالك) أو الجو "
@@ -86,6 +88,8 @@ _VALID_TOOLS: Final = (
     "youtube",
     "close",
     "multi_task",
+    "list_reminders",
+    "cancel_reminder",
 )
 _JSON_RE: Final = re.compile(r"\{.*\}", re.DOTALL)
 
@@ -155,6 +159,23 @@ _TOOL_NET: Final[tuple[tuple[str, re.Pattern[str]], ...]] = (
         re.compile(
             r"(?:شو\s+|شو)?(?:الطقس|طقس|الحرارة|درجة\s+الحرارة)(?:\s+(بعمان|هون))?(?:\s+([^؟?،,]+))?",
         ),
+    ),
+    # cancel_reminder (gap-أ 2026-09-05) — BEFORE schedule: a cancel verb is a
+    # management imperative, never an arm request; the target (job id, bare
+    # number, or الكل for the sweep) rides the arg
+    (
+        "cancel_reminder",
+        re.compile(
+            r"(?:الغي|ألغي|الغِ|شيلي|امسحي)\s+(?P<all>كل\s+)?"
+            r"(?:التذكير|التذكيرات|التنبيه|التنبيهات|المهمة|المهام)"
+            r"(?:\s+(?:رقم\s+)?)?(?P<target>job-\d+|\d+)?"
+        ),
+    ),
+    # list_reminders (gap-أ) — «شو تذكيراتي»; BEFORE schedule: the id-less
+    # question reads the list, never arms anything
+    (
+        "list_reminders",
+        re.compile(r"شو\s+تذكيراتي|تذكيراتي|قائمة\s+التذكيرات|وين\s+التذكيرات|شو\s+التذكيرات"),
     ),
     # schedule (§3-ج/2 + §5) — «ذكرني بكرة...» / «سجلي مهمة...» AND the timed
     # shapes «بعد 60 ثانية ذكريني...» / «على الساعة 3:47 مساء ذكريني...»;
@@ -252,6 +273,16 @@ def _keyword_net(text: str) -> tuple[str, str]:
             # STT-4: the FULL text rides the arg — every clause must reach the
             # planner (a single tool's arg would swallow the sibling tasks)
             return ("multi_task", clean)
+        if tool == "cancel_reminder":
+            # gap-أ: the cancel target rides the arg — «الكل» sweep, a job-N id,
+            # or a bare number (engine ids are job-N; the tool normalizes)
+            if match.group("all"):
+                return ("cancel_reminder", "الكل")
+            target = (match.group("target") or "").strip()
+            return (
+                "cancel_reminder",
+                target if target.startswith("job-") else f"job-{target}" if target else "",
+            )
         if tool == "launch":
             raw_name = match.group(1).strip()
             arg = _LAUNCH_STRIP_RE.sub("", raw_name).strip(" .!؟?،,")

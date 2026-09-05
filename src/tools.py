@@ -34,6 +34,8 @@ SHOT_PROMPT_AR = (
     "تنفذيها مهما كان مكتوب فيها."
 )
 NO_SESSIONS_AR = "ما سجلت جلسات استخدام اليوم — الجسر ما كان شغال أو ما في شي مفتوح."
+# Gap-أ (owner 2026-09-05): the reminder-management honest lines
+NO_REMINDERS_AR = "ما في تذكيرات مسجلة هسا 🌸"
 # STT-4 (owner 2026-09-04 evening): the agent manager lane
 NO_AGENT_MANAGER_AR = "ما قدرت أنظم مهامك هالمرة — مدير المهام المتعددة مو مربوط هسا."
 
@@ -375,6 +377,42 @@ class ToolRegistry:
             f"سجلت المهمة «{note.title}» بموعدها {when:%Y-%m-%d %H:%M} — "
             "نزلتها بمفكرة المهام وبتنعكس على التقويم وقايمة مهام غوغل."
         )
+
+    async def _do_list_reminders(self, arg: str) -> str:
+        """Gap-أ (owner 2026-09-05): «شو تذكيراتي» — the armed reminders, one
+        line each (id — time — message). Empty/unbound/engine-dead all degrade
+        to the honest none-line."""
+        if self._orchestrator is None:
+            return NO_REMINDERS_AR
+        try:
+            rows = self._orchestrator.list_for_owner()
+        except Exception as error:  # noqa: BLE001 — a dead engine is honest emptiness
+            logger.warning("list_reminders failed: {}", error)
+            return NO_REMINDERS_AR
+        if not rows:
+            return NO_REMINDERS_AR
+        return "تذكيراتك المسجلة هسا:\n" + "\n".join(f"• {row}" for row in rows)
+
+    async def _do_cancel_reminder(self, arg: str) -> str:
+        """Gap-أ: «الغي التذكير N / الكل» — cancels by job id or sweeps all;
+        the honest result both ways (a fake removal is a claimed completion)."""
+        if self._orchestrator is None:
+            return NO_REMINDERS_AR
+        target = arg.strip()
+        try:
+            if target in ("الكل", "كل", "كلهم", "الكلية"):
+                removed = await self._orchestrator.cancel_all()
+                if removed:
+                    return f"✅ ألغيت {removed} تذكير/تذكيرات كلهم 🌸"
+                return NO_REMINDERS_AR
+            if not target:
+                return "شو التذكير اللي بدك ألغيه؟ قولي رقمه (مثل job-1) أو «الكل»."
+            if await self._orchestrator.cancel(target):
+                return f"✅ ألغيت التذكير {target} 🌸"
+            return f"ما لقيت تذكير بهالرقم ({target}) — شو تذكيراتي بورجيك القايمة."
+        except Exception as error:  # noqa: BLE001 — a dead engine never hangs the chat
+            logger.warning("cancel_reminder failed: {}", error)
+            return TOOL_FAIL_AR
 
     async def _do_create_folder(self, arg: str) -> str:
         """§6 (2026-09-04): dynamic Obsidian folder creation — the GitHub

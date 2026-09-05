@@ -183,6 +183,32 @@ class Orchestrator:
     def pending(self) -> list[_Job]:
         return list(self._jobs.values())
 
+    # -- management (gap-أ, owner 2026-09-05): the owner sees + cancels ---------
+
+    def list_for_owner(self) -> list[str]:
+        """The pending reminders as the owner reads them: one line per job —
+        id, local time, message — soonest first. The id is the cancel target."""
+        rows = []
+        for job in sorted(self._jobs.values(), key=lambda j: j.when):
+            local = job.when.astimezone(self._tz)
+            rows.append(f"{job.id} — {local:%H:%M} — {job.message or '(مهام مجدولة)'}")
+        return rows
+
+    async def cancel(self, job_id: str) -> bool:
+        """Remove ONE reminder now + persist. Unknown id: False (the caller
+        answers honestly; nothing fabricated, nothing harmed)."""
+        if self._jobs.pop(job_id, None) is None:
+            return False
+        await self._persist()
+        return True
+
+    async def cancel_all(self) -> int:
+        """«الغي كل التذكيرات» — the full sweep; returns the removed count."""
+        removed = len(self._jobs)
+        self._jobs.clear()
+        await self._persist()
+        return removed
+
     # -- loop ------------------------------------------------------------------
 
     async def run_forever(self, *, tick_s: float = 5.0) -> None:
