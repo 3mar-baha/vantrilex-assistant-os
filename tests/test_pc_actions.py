@@ -81,7 +81,9 @@ def test_alias_table_maps_arabic_colloquial_to_keys():
     assert resolve_app_alias("المفكرة") == "Notepad"
     # exact keys and pass-through English names resolve to themselves
     assert resolve_app_alias("calculator") == "calculator"
-    assert resolve_app_alias("Chrome") == "Chrome"
+    # live 2026-09-05 7:25am: bare «Chrome» previously passed through and the
+    # guard refused it — short latin brand names land on the whitelist entry
+    assert resolve_app_alias("Chrome") == "Google Chrome"
     # unknown stays itself (the whitelist guard gives the honest line)
     assert resolve_app_alias("برنامج مو") == "برنامج مو"
 

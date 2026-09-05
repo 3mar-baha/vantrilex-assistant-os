@@ -54,6 +54,10 @@ _APP_ALIASES: dict[str, str] = {
     # chrome / edge / firefox
     "الكروم": "Google Chrome",
     "كروم": "Google Chrome",
+    # live 2026-09-05 7:25am: short latin/exe names arrived from speech and
+    # running-app reports — they must land on the same entry as the Arabic
+    "chrome": "Google Chrome",
+    "chrome.exe": "Google Chrome",
     "الإيدج": "Microsoft Edge",
     "ايدج": "Microsoft Edge",
     "الفيرفوكس": "Firefox",
@@ -88,11 +92,22 @@ _APP_ALIASES: dict[str, str] = {
     "السيف مود": None,  # placeholder never matched — kept for table honesty
 }
 
+# case-insensitive lookup table (latin half) — built once at import
+_APP_ALIASES_BY_FOLD: dict[str, str] = {
+    key.casefold(): value for key, value in _APP_ALIASES.items() if value is not None
+}
+
 
 def resolve_app_alias(name: str) -> str:
-    """Map an Arabic colloquial app name to its whitelist key (pass-through)."""
+    """Map a colloquial/short app name to its whitelist key (pass-through).
+    Case-insensitive on the latin half — «Chrome.exe» and «chrome» reach the
+    same entry as «كروم» (live 2026-09-05: case-mismatch fell through)."""
     clean = " ".join(name.split()).strip()
-    return _APP_ALIASES.get(clean, clean)
+    hit = _APP_ALIASES.get(clean)
+    if hit is not None:
+        return hit
+    folded = _APP_ALIASES_BY_FOLD.get(clean.casefold())
+    return folded if folded is not None else clean
 
 
 class LaunchStatus(StrEnum):

@@ -49,11 +49,24 @@ class Guard:
                 reason="whitelist corrupt — confirmation required",
             )
         wanted = name.casefold()
+        wanted_base = wanted.rsplit("\\", 1)[-1].rsplit("/", 1)[-1]
+        wanted_stem = wanted_base.removesuffix(".exe")
         for entry in data.get("allowed_apps", []):
-            if wanted in (
+            # Live finding 2026-09-05 7:25am: the guard matched only the FULL
+            # executable path — an exe BASENAME («chrome», «chrome.exe», the
+            # shape every running-process report and short speech carries)
+            # fell through to "not whitelisted". Name, full path, basename,
+            # and stem (chrome == chrome.exe) all reach the same verdict
+            # (case-insensitive, exact — never substring).
+            executable = str(entry.get("executable", "")).casefold()
+            exe_base = executable.rsplit("\\", 1)[-1].rsplit("/", 1)[-1]
+            candidates = {
                 str(entry.get("name", "")).casefold(),
-                str(entry.get("executable", "")).casefold(),
-            ):
+                executable,
+                exe_base,
+                exe_base.removesuffix(".exe"),
+            }
+            if wanted in candidates or wanted_base in candidates or wanted_stem in candidates:
                 if entry.get("auto_approve"):
                     return Verdict(
                         allowed_without_confirmation=True,
