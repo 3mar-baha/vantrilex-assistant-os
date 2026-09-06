@@ -73,6 +73,7 @@ class ToolRegistry:
         orchestrator: Any = None,
         document_sender: Any = None,  # M2: PC->phone file dispatch (send_document)
         externals: Any = None,  # M4: the five free external APIs
+        cloud: Any = None,  # B1-B8 (Phase B): GoogleCloudClient
     ) -> None:
         self._inbox = inbox
         self._suite = suite
@@ -90,6 +91,7 @@ class ToolRegistry:
         self._orchestrator = orchestrator  # §5: timed reminders fire proactively
         self._document_sender = document_sender  # M2 (§3-A): file.download dispatch
         self._externals = externals  # M4 (§4): the five free APIs
+        self._cloud = cloud  # B1-B8 (Phase B): Google Cloud surface
         self._agent_manager = None  # STT-4: multi-task lines; late-bound in run_bot
         self._tz = tz or ZoneInfo("UTC")
         # Injectable clock: the frozen-date test bomb (2026-09-01 -> 2026-09-02) showed
@@ -835,6 +837,212 @@ class ToolRegistry:
         except BridgeOffline:
             return LAUNCH_OFFLINE_AR
         return None  # the coordinator notifies with the verified count
+
+
+
+
+
+
+    # -- B1-B8 (Phase B 2026-09-06): Google Cloud + Workspace surface --------
+
+    async def _do_drive(self, arg: str) -> str:
+        """B1 «ابحثي بالدرايف عن تقارير» — Drive files (name + id + link)."""
+        if self._suite is None:
+            return GOOGLE_OFFLINE_AR
+        query = (arg or "").strip() or None
+        try:
+            files = await self._suite.list_drive_files(query=query, page_size=5)
+        except Exception as error:  # noqa: BLE001 — a dead Drive is an honest line
+            logger.warning("drive list failed: {}", error)
+            return GOOGLE_OFFLINE_AR
+        if not files:
+            return "ما لقيت ملفات بالدرايف بتطابق طلبك 🌸"
+        lines = ["ملفاتك بدرايف:"]
+        for f in files[:MAX_LINES]:
+            link = f"https://drive.google.com/file/d/{f.id}/view"
+            lines.append(f"• {f.name} (ID: {f.id}) — {link}")
+        return "\n".join(lines)
+
+    async def _do_contacts(self, arg: str) -> str:
+        """B2 «مين هو أحمد بمعلوماتي» — a compact contact card."""
+        if self._suite is None:
+            return GOOGLE_OFFLINE_AR
+        query = (arg or "").strip()
+        if not query:
+            return "شو اسم الشخص اللي بدك ألقيه بجهات الاتصال؟ 🌸"
+        try:
+            contacts = await self._suite.search_contacts(query)
+        except Exception as error:  # noqa: BLE001
+            logger.warning("contacts search failed: {}", error)
+            return GOOGLE_OFFLINE_AR
+        if not contacts:
+            return f"ما لقيت «{query}» بجهات الاتصال عندك 🌸"
+        lines = ["جهات الاتصال:"]
+        for c in contacts[:MAX_LINES]:
+            card = f"• {c.display_name}"
+            phones = getattr(c, "phones", None) or []
+            if phones:
+                card += f" — {phones[0]}"
+            if c.email:
+                card += f" — {c.email}"
+            lines.append(card)
+        return "\n".join(lines)
+
+    async def _do_create_event(self, arg: str) -> str:
+        """B3 «سجلي بالتقويم موعد» — create a Google Calendar entry."""
+        if self._suite is None:
+            return GOOGLE_OFFLINE_AR
+        summary = (arg or "").strip()
+        if not summary:
+            return "شو تفاصيل الموعد؟ مثلاً «سجلي بالتقويم موعد اجتماع بكرة الساعة 11» 🌸"
+        now = self._now()
+        start = now + timedelta(minutes=60)
+        end = now + timedelta(minutes=120)
+        try:
+            await self._suite.create_event(summary, start, end)
+        except Exception as error:  # noqa: BLE001
+            logger.warning("create_event failed: {}", error)
+            return GOOGLE_OFFLINE_AR
+        local = start.astimezone(self._tz)
+        return f"✅ سجّلت الموعد بالتقويم: {summary} — {local:%m-%d %H:%M} 🌸"
+
+    async def _do_create_task(self, arg: str) -> str:
+        """B3 «ضيفي مهمة لمهامي» — insert into Google Tasks."""
+        if self._suite is None:
+            return GOOGLE_OFFLINE_AR
+        title = (arg or "").strip()
+        if not title:
+            return "شو المهمة اللي بدك تضيفها؟ 🌸"
+        try:
+            await self._suite.add_task(title)
+        except Exception as error:  # noqa: BLE001
+            logger.warning("create_task failed: {}", error)
+            return GOOGLE_OFFLINE_AR
+        return f"✅ ضفت المهمة «{title}» لمهامك 🌸"
+
+    async def _do_places(self, arg: str) -> str:
+        """B4 «وين في كافيه بعمان» — nearby venues with ratings + navigation."""
+        if self._cloud is None:
+            return NO_EXTERNALS_AR
+        try:
+            venues = await self._cloud.places((arg or "").strip())
+        except Exception as error:  # noqa: BLE001
+            logger.warning("places failed: {}", error)
+            return NO_EXTERNALS_AR
+        if not venues:
+            return NO_EXTERNALS_AR
+        lines = ["أماكن قريبة بعمان:"]
+        for v in venues[:MAX_LINES]:
+            nav = f"https://www.google.com/maps/search/?api=1&query={v.get('name', '')}"
+            rating = f" ({v.get('rating')}★)" if v.get("rating") else ""
+            lines.append(f"• {v.get('name', '')}{rating} — {v.get('address', '')} — {nav}")
+        return "\n".join(lines)
+
+    async def _do_deep_search(self, arg: str) -> str:
+        """B5 «ابحثي بجوجل عن X» — Custom Search, keyless DDG fallback."""
+        query = (arg or "").strip()
+        if not query:
+            return "شو بدك أدور عليه بجوجل؟ 🌸"
+        if self._cloud is not None:
+            try:
+                data = await self._cloud.deep_search(query)
+            except Exception as error:  # noqa: BLE001
+                logger.warning("deep_search failed: {}", error)
+                data = None
+            if data and data.get("items"):
+                lines = ["نتايج Google:"]
+                for item in data["items"][:MAX_LINES]:
+                    lines.append(f"• {item.get('title', '')} — {item.get('link', '')}")
+                return "\n".join(lines)
+        if self._web is not None:
+            try:
+                return await self._web.search_block(query)
+            except Exception as error:  # noqa: BLE001
+                logger.warning("deep_search web fallback failed: {}", error)
+        return NO_EXTERNALS_AR
+
+    async def _do_fitness(self, arg: str) -> str:
+        """B6 «كم مشيت اليوم» — steps, active minutes, calories."""
+        if self._cloud is None:
+            return NO_EXTERNALS_AR
+        try:
+            f = await self._cloud.fitness()
+        except Exception as error:  # noqa: BLE001
+            logger.warning("fitness failed: {}", error)
+            return NO_EXTERNALS_AR
+        if not f:
+            return NO_EXTERNALS_AR
+        return (
+            f"نشاطك اليوم: {f.get('steps', 0)} خطوة، {f.get('active_minutes', 0)} دقيقة"
+            f" نشاط، حوالي {f.get('calories', 0)} سعرة 🌸"
+        )
+
+    async def _do_cloud_backup(self, arg: str) -> str:
+        """B7 «احفظي نسخة احتياطية بالسحابة» — encrypted vault snapshot."""
+        if self._cloud is None or self._vault is None:
+            return NO_EXTERNALS_AR
+        try:
+            snapshot = await self._encrypted_vault_snapshot()
+        except Exception as error:  # noqa: BLE001
+            logger.warning("cloud_backup snapshot failed: {}", error)
+            return NO_EXTERNALS_AR
+        if not snapshot:
+            return NO_EXTERNALS_AR
+        try:
+            ok = await self._cloud.cloud_backup(snapshot)
+        except Exception as error:  # noqa: BLE001
+            logger.warning("cloud_backup upload failed: {}", error)
+            return NO_EXTERNALS_AR
+        return f"✅ حفظت نسخة احتياطية بالسحابة ({len(snapshot)} بايت مشفّرة) 🌸" if ok else NO_EXTERNALS_AR
+
+    async def _encrypted_vault_snapshot(self) -> bytes:
+        """Collect the vault Daily_Logs + Studies notes, Fernet-sealed."""
+        from cryptography.fernet import Fernet
+        parts: list[str] = []
+        for directory in ("Daily_Logs", "Studies"):
+            try:
+                for path in await self._vault.list_dir(directory):
+                    parts.append(f"{path}\n{await self._vault.read(path)}")
+            except Exception as error:  # noqa: BLE001 — best-effort per dir
+                logger.warning("cloud backup snapshot dir {dir} failed: {error}", dir=directory, error=error)
+        if not parts:
+            return b""
+        key = Fernet.generate_key()
+        return Fernet(key).encrypt("\n\n".join(parts).encode())
+
+    async def _do_analytics(self, arg: str) -> str:
+        """B7 «تحليل استخدام جهازي» — life analytics rows."""
+        if self._cloud is None:
+            return NO_EXTERNALS_AR
+        try:
+            data = await self._cloud.analytics((arg or "").strip())
+        except Exception as error:  # noqa: BLE001
+            logger.warning("analytics failed: {}", error)
+            return NO_EXTERNALS_AR
+        if not data or not data.get("rows"):
+            return NO_EXTERNALS_AR
+        lines = ["تحليل استخدامك:"]
+        for row in data["rows"]:
+            lines.append(f"• {row[0]}: {row[1]}")
+        return "\n".join(lines)
+
+    async def _do_quota_safety(self, arg: str) -> str:
+        """B8 «شو حصة غوغل» — free-tier headroom within $0.00."""
+        if self._cloud is None:
+            return NO_EXTERNALS_AR
+        try:
+            report = await self._cloud.quota_report()
+        except Exception as error:  # noqa: BLE001
+            logger.warning("quota_report failed: {}", error)
+            return NO_EXTERNALS_AR
+        if not report or not report.get("services"):
+            return NO_EXTERNALS_AR
+        lines = ["حصة غوغل المجانية:"]
+        for svc in report["services"]:
+            pct = svc.get("pct", 0)
+            note = "آمن" if pct < 90 else "شبه مستنفد"
+            lines.append(f"• {svc.get('name', '؟')}: {pct}% — {note}")
+        return "\n".join(lines)
 
     async def _do_brief(self, arg: str) -> str:
         if self._composer is None:

@@ -108,6 +108,12 @@ class Settings(BaseSettings):
     vault_branch: str = "main"  # VAULT_BRANCH (vault git branch)
     google_oauth_client_json: str = "./config/google_oauth_client.json"
     google_calendar_id: str = "primary"
+    # B4/B5 (Phase B 2026-09-06): the env-gated Google Cloud surfaces. Empty ->
+    # the tool degrades to the honest offline line (Places needs a key; Custom
+    # Search needs cx+key; the $0.00 invariant holds — never a paid fallback).
+    google_places_key: str | None = None  # GOOGLE_PLACES_KEY
+    custom_search_cx: str | None = None  # CUSTOM_SEARCH_CX
+    custom_search_key: str | None = None  # CUSTOM_SEARCH_KEY
     bridge_token: SecretStr  # BRIDGE_TOKEN (shared core<->bridge secret, sprint-3 3.4)
     bridge_server_url: str  # BRIDGE_SERVER_URL (core WSS endpoint the daemon dials)
     bridge_lan_port: int = 8000  # BRIDGE_LAN_PORT (daemon loopback/LAN health surface)

@@ -1097,10 +1097,17 @@ async def run_bot(settings: Settings, bridge=None) -> None:
         from src.email_triage import TriageClassifier
         from src.gmail import GmailInbox
         from src.google_auth import GoogleSession
+        from src.google_cloud_client import GoogleCloudClient
         from src.google_suite import GoogleSuite
 
         session = GoogleSession(settings)
         suite = GoogleSuite(session, settings.google_calendar_id)
+        cloud = GoogleCloudClient(
+            session=session,
+            custom_search_key=settings.custom_search_key or "",
+            custom_search_cx=settings.custom_search_cx or "",
+            places_key=settings.google_places_key or "",
+        )
         inbox = GmailInbox(session, settings)
         composer = BriefComposer(
             suite,
@@ -1112,6 +1119,8 @@ async def run_bot(settings: Settings, bridge=None) -> None:
         )
     except Exception as error:  # noqa: BLE001 — missing Google creds degrade to honest offline lines
         logger.warning("google stack unavailable; google tools degrade: {}", error)
+        suite = None
+        cloud = None
         composer = None
     telemetry = TelemetryClient(bridge, gateway) if bridge is not None else None
     # pass-4 (v2.0 §3-هـ): keyless web intelligence — DDG search + page reads.
@@ -1188,6 +1197,7 @@ async def run_bot(settings: Settings, bridge=None) -> None:
         web=web,  # pass-4: web_search -> keyless DDG search
         weather=weather_client,  # pass-4: weather -> Open-Meteo current conditions
         youtube=youtube_client,  # pass-4: youtube -> Data API v3 (env-gated)
+        cloud=cloud,  # B1-B8 (Phase B): GoogleCloudClient (places/deep/fitness/...)
         externals=ExternalAPIs(
             # B (live 2026-09-05): Aladhan answers /v1/timingsByCity with a 302
             # and _get_json treats non-200 as a miss — without follow_redirects

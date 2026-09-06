@@ -101,6 +101,17 @@ _VALID_TOOLS: Final = (
     "tech_trending",
     "network_status",
     "read_page",
+    # B1-B8 (Phase B 2026-09-06)
+    "drive",
+    "contacts",
+    "create_event",
+    "create_task",
+    "places",
+    "deep_search",
+    "fitness",
+    "cloud_backup",
+    "analytics",
+    "quota_safety",
 )
 _JSON_RE: Final = re.compile(r"\{.*\}", re.DOTALL)
 
@@ -292,7 +303,75 @@ _TOOL_NET: Final[tuple[tuple[str, re.Pattern[str]], ...]] = (
             r"سجل?ي?\s+مهمة|سجّلي|مهمة\s+جديدة|تذكير)\s*(.*)"
         ),
     ),
-    # gmail — colloquial mail words (شغّل/افتح never match mail)
+    
+    # B1-B8 (Phase B 2026-09-06). Inserted BEFORE calendar/tasks so a WRITE
+    # verb never falls to the READ tool on the shared topic word.
+    (
+        "drive",
+        re.compile(
+            r"(?:ابحثي|ابحث|دوري|دوّري|طلعيلي)\s+(?:في\s+|على\s+)?(?:ال)?درايف"
+            r"|ملفاتي\s+(?:في\s+|على\s+)?(?:ال)?درايف"
+            r"|في\s+درايف|بالدرايف"
+        ),
+    ),
+    (
+        "contacts",
+        re.compile(r"معلوماتي|جهات\s+الاتصال|بجهات\s+الاتصال|مين\s+هو|رقم\s+.*بالاتصال"),
+    ),
+    (
+        "create_event",
+        re.compile(
+            r"(?:سجلي|سجّلي|ضيفي|أضيفي|اضيفي|حطي)\s+(?:موعد|بموعد|الموعد|اجتماع)"
+            r"|(?:موعد|اجتماع)\s+(?:ب|في)?التقويم|سجلي\s+(?:ب)?التقويم\s+موعد"
+        ),
+    ),
+    (
+        "create_task",
+        re.compile(
+            r"(?:ضيفي|أضيفي|اضيفي|سجلي|سجّلي)\s+(?:مهمة)\s+(?:جديدة\s+)?(?:لمهامي|بمهامي)?"
+            r"|مهمة\s+(?:جديدة|لمهامي|بمهامي)"
+        ),
+    ),
+    (
+        "places",
+        re.compile(
+            r"(?:وين|يلا)\s+(?:في\s+)?(?:كافيه|كافية|مقهى|مطعم|مكان|دراسة)"
+            r"|اماكن\s+للدراسة|أماكن\s+للدراسة|اقترحي\s+(?:مطعم|كافيه)"
+        ),
+    ),
+    (
+        "deep_search",
+        re.compile(
+            r"(?:ابحثي|ابحث|دوري|دوّري|بحث)\s+(?:بجوجل|في\s+جوجل|على\s+جوجل|بغوغل)"
+            r"|بحث\s+متقدم"
+        ),
+    ),
+    (
+        "fitness",
+        re.compile(
+            r"كم\s+مشيت|نشاطي\s+(?:الرياضي|رياضي)|سعرات\s+اليوم|خطوات\s+اليوم|فيتنس"
+        ),
+    ),
+    (
+        "cloud_backup",
+        re.compile(
+            r"(?:احفظي|خزني|اعملي|سويني)\s+نسخة\s+احتياطية|نسخة\s+احتياطية\s+بالسحابة"
+            r"|باك\s?اب|بالسحابة"
+        ),
+    ),
+    (
+        "analytics",
+        re.compile(r"تحليل\s+استخدام|تحليل\s+الاستخدام|استخدام\s+جهازي|احصائيات"),
+    ),
+    (
+        "quota_safety",
+        re.compile(
+            r"حصة\s+غوغل|حصة\s+(?:الجوجل|جوجل)|الكوتا|طمنيني\s+عن\s+الكوتا"
+            r"|فحص\s+استهلاك|استهلاك\s+الخدمات"
+        ),
+    ),
+
+# gmail — colloquial mail words (شغّل/افتح never match mail)
     ("gmail", re.compile(r"جيميل|بريدي|ايميل|إيميل|الايميل|الإيميل|البريد|بريد")),
     # screenshot — BEFORE telemetry: a capture/delivery verb-phrase is a
     # screenshot intent even though it contains the word الشاشة (§4 2026-09-04:
@@ -423,6 +502,16 @@ def _keyword_net(text: str) -> tuple[str, str]:
             "crypto_price",
             "tech_trending",
             "network_status",
+            "drive",
+            "contacts",
+            "create_event",
+            "create_task",
+            "places",
+            "deep_search",
+            "fitness",
+            "cloud_backup",
+            "analytics",
+            "quota_safety",
         ):
             # M4: the FULL text rides the arg — the tool parsers read the
             # amounts/coins/words from the owner's own phrasing
