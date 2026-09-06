@@ -838,11 +838,6 @@ class ToolRegistry:
             return LAUNCH_OFFLINE_AR
         return None  # the coordinator notifies with the verified count
 
-
-
-
-
-
     # -- B1-B8 (Phase B 2026-09-06): Google Cloud + Workspace surface --------
 
     async def _do_drive(self, arg: str) -> str:
@@ -993,18 +988,25 @@ class ToolRegistry:
         except Exception as error:  # noqa: BLE001
             logger.warning("cloud_backup upload failed: {}", error)
             return NO_EXTERNALS_AR
-        return f"✅ حفظت نسخة احتياطية بالسحابة ({len(snapshot)} بايت مشفّرة) 🌸" if ok else NO_EXTERNALS_AR
+        return (
+            f"✅ حفظت نسخة احتياطية بالسحابة ({len(snapshot)} بايت مشفّرة) 🌸"
+            if ok
+            else NO_EXTERNALS_AR
+        )
 
     async def _encrypted_vault_snapshot(self) -> bytes:
         """Collect the vault Daily_Logs + Studies notes, Fernet-sealed."""
         from cryptography.fernet import Fernet
+
         parts: list[str] = []
         for directory in ("Daily_Logs", "Studies"):
             try:
                 for path in await self._vault.list_dir(directory):
                     parts.append(f"{path}\n{await self._vault.read(path)}")
             except Exception as error:  # noqa: BLE001 — best-effort per dir
-                logger.warning("cloud backup snapshot dir {dir} failed: {error}", dir=directory, error=error)
+                logger.warning(
+                    "cloud backup snapshot dir {dir} failed: {error}", dir=directory, error=error
+                )
         if not parts:
             return b""
         key = Fernet.generate_key()

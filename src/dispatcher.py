@@ -303,7 +303,6 @@ _TOOL_NET: Final[tuple[tuple[str, re.Pattern[str]], ...]] = (
             r"سجل?ي?\s+مهمة|سجّلي|مهمة\s+جديدة|تذكير)\s*(.*)"
         ),
     ),
-    
     # B1-B8 (Phase B 2026-09-06). Inserted BEFORE calendar/tasks so a WRITE
     # verb never falls to the READ tool on the shared topic word.
     (
@@ -348,9 +347,7 @@ _TOOL_NET: Final[tuple[tuple[str, re.Pattern[str]], ...]] = (
     ),
     (
         "fitness",
-        re.compile(
-            r"كم\s+مشيت|نشاطي\s+(?:الرياضي|رياضي)|سعرات\s+اليوم|خطوات\s+اليوم|فيتنس"
-        ),
+        re.compile(r"كم\s+مشيت|نشاطي\s+(?:الرياضي|رياضي)|سعرات\s+اليوم|خطوات\s+اليوم|فيتنس"),
     ),
     (
         "cloud_backup",
@@ -370,8 +367,7 @@ _TOOL_NET: Final[tuple[tuple[str, re.Pattern[str]], ...]] = (
             r"|فحص\s+استهلاك|استهلاك\s+الخدمات"
         ),
     ),
-
-# gmail — colloquial mail words (شغّل/افتح never match mail)
+    # gmail — colloquial mail words (شغّل/افتح never match mail)
     ("gmail", re.compile(r"جيميل|بريدي|ايميل|إيميل|الايميل|الإيميل|البريد|بريد")),
     # screenshot — BEFORE telemetry: a capture/delivery verb-phrase is a
     # screenshot intent even though it contains the word الشاشة (§4 2026-09-04:

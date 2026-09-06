@@ -155,6 +155,7 @@ class _Cloud:
             return None
         return self.quota_out or {"services": [{"name": "calendar", "pct": 12}]}
 
+
 # --------------------------------------------------------------------------- B1 drive
 
 
@@ -280,6 +281,7 @@ async def test_deep_search_honest_offline():
     from src.tools import ToolRegistry
 
     assert "ما قدرت" in await ToolRegistry().call("deep_search", "x")
+
 
 # --------------------------------------------------------------------------- B6 fitness
 

@@ -68,7 +68,10 @@ class GoogleCloudClient:
                 self._session,
                 "places:searchNearby",
                 locationRestriction={
-                    "circle": {"center": {"latitude": AMMAN_LAT, "longitude": AMMAN_LON}, "radius": 3000}
+                    "circle": {
+                        "center": {"latitude": AMMAN_LAT, "longitude": AMMAN_LON},
+                        "radius": 3000,
+                    }
                 },
                 includedTypes=["cafe", "restaurant", "library"],
                 key=self._places_key,
@@ -127,7 +130,6 @@ class GoogleCloudClient:
             self._cache.store(("fitness", "daily"), data, now=self._now())
         return data or None
 
-
     # -- B7 analytics -------------------------------------------------------
 
     async def analytics(self, query: str) -> dict | None:
@@ -152,7 +154,9 @@ class GoogleCloudClient:
         try:
             # The upstream objects.insert op needs a bucket + auth; unconfigured
             # (no private key / bucket) degrades to False honestly.
-            resp = await adapter.call(self._session, "b/state-backups/o", uploadType="media", body=payload)
+            resp = await adapter.call(
+                self._session, "b/state-backups/o", uploadType="media", body=payload
+            )
             return bool(resp and resp.get("name"))
         except Exception as error:  # noqa: BLE001
             logger.warning("cloud backup upload failed: {error}", error=error)

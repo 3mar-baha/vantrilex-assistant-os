@@ -50,7 +50,9 @@ def _cache() -> CacheEngine:
     return CacheEngine()
 
 
-def _client(session, *, cache=None, quota=None, cse_key="k", cse_cx="c", places_key="p", now_fn=None):
+def _client(
+    session, *, cache=None, quota=None, cse_key="k", cse_cx="c", places_key="p", now_fn=None
+):
     return GoogleCloudClient(
         session=session,
         cache=cache or _cache(),
@@ -102,7 +104,9 @@ async def test_deep_search_returns_items():
 
 
 async def test_deep_search_no_key_is_none():
-    client = GoogleCloudClient(session=_Session(lambda *a: _Resp({})), custom_search_key="", custom_search_cx="")
+    client = GoogleCloudClient(
+        session=_Session(lambda *a: _Resp({})), custom_search_key="", custom_search_cx=""
+    )
     assert await client.deep_search("x") is None
 
 
