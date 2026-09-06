@@ -47,8 +47,14 @@ Envelopes (both directions after auth):
 |---|---|---|---|
 | `exec.launch` | `name`, `confirmation_id?`, `audit_code?` | whitelist `auto_approve` OR live `confirmation_id` | ExecResult |
 | `exec.open` | `path`, `confirmation_id?`, `audit_code?` | blocked suffix → refuse; UNC / relative traversal → `outside_allowed_roots` | ExecResult |
-| `exec.close` | `name`, `confirmation_id?`, `audit_code?` | whitelist `auto_approve` OR live `confirmation_id` (closing is destructive on the live session — same gate as launching; v2.0 pass-1) | ExecResult; executes `taskkill /IM <image> /F` |
+| `exec.close` | `name`, `confirmation_id?`, `audit_code?` | whitelist `auto_approve` OR live `confirmation_id` (closing is destructive on the live session — same gate as launching; v2.0 pass-1) | ExecResult; `taskkill /IM <image> /F /T` over EVERY image the app runs as (`close_images` UWP alias table — CalculatorApp.exe/Calculator.exe/calc.exe, live defect A 2026-09-05) + psutil-VERIFIED `killed_processes` (poll ≤2 s) |
 | `exec.screenshot` | `audit_code?` | read-only capture, no confirmation | ExecResult with `detail` = base64 JPEG (Pillow `ImageGrab`, ≤1600px, quality 70, **entirely in memory — zero disk writes**, v2.0 pass-1) |
+| `exec.list_apps` | `audit_code?` | none — read-only running-process report (STT-2, no confirmation gate) | ExecResult; `detail` = the process list (whitelisted exes carry their owner display name, gap-ج) |
+| `exec.volume` | `action` (mute/unmute/up/down/set), `level?`, `audit_code?` | none — key-event effect (VK_VOLUME_* via ctypes user32, $0.00) | ExecResult; set-X% = X/2 VOLUME_UP presses (Windows steps 2%) |
+| `exec.media_control` | `action` (play_pause/pause/play/next/prev), `audit_code?` | none — key-event effect (VK_MEDIA_*) | ExecResult |
+| `exec.screen_ocr` | `audit_code?` | read-only capture + vision extraction | ExecResult; `detail` = verbatim code/text extraction (the OCR prompt forbids conversational filler) |
+| `file.upload` | `name`, `payload` (bytes), `audit_code?` | basename-only sanitize (`sanitize_filename`); lands in the FIRST file root (Downloads) | ExecResult; traversal/absolute names reduce to the basename — the root decides location |
+| `file.download` | `path`, `audit_code?` | `resolve_in_roots` (traversal/absolute-outside refused); sensitive suffixes blocked | ExecResult; `detail` = base64 of the file bytes |
 | `power` | `action`, `confirmation_id` (MANDATORY), `audit_code?` | action in whitelist AND id present — ALWAYS, regardless of any whitelist flag | ExecResult |
 | `wol` | `mac`, `ip?=255.255.255.255`, `port?=9` | stateless UDP, one sendto, SO_BROADCAST | ExecResult |
 | `telemetry.state` | — | none — read-only snapshot | `LiveState` (`bridge/telemetry.py`); unmeasurable metrics arrive `null`, never a crash |
@@ -101,7 +107,9 @@ Audit ledger — `04_Archives/Audit/pc-ledger.md`, one line per event, append-on
 <ISO-8601 ts> | <audit_code> | <action> | <outcome: executed|refused|error> | <reason>
 ```
 
-ExecResult (`bridge/executor.py`): `{status: ok|error, detail: str, audit_code: str}`.
+ExecResult (`bridge/executor.py`): `{status: ok|error, detail: str, audit_code: str,
+killed_processes: int}` — `killed_processes` carries the psutil-VERIFIED termination count
+of `exec.close` (0 on any other action).
 
 ## 5. LAN surface (daemon side)
 
@@ -137,7 +145,11 @@ temperature 0) and falls back to a deterministic numeric Arabic line on brain fa
 | `weather` (v2.0 pass-4) | `WeatherClient.current` — Open-Meteo (free, keyless; Google Weather API is paid → excluded by $0.00) | static Jordan coords; geocode-once cache; real numbers verbatim |
 | `youtube` (v2.0 pass-4) | `YouTubeClient.search` — Data API v3 (10k units/day free) | env-gated `YOUTUBE_API_KEY`; quota failures logged loudly, honest offline line |
 | staged §7 surfaces (pass-4) | Instagram sandbox (`InstagramSandbox`), Firecrawl REST (`FirecrawlClient`), Civ6 contract core (`civ6.py`) | live the moment the owner drops credentials in `.env`; sandbox results always labeled `sandbox=True`; Civ6 fog enforcer strips hidden state structurally |
-| `close` (2026-09-04 §2) | keyword net close-verbs -> `PCActionCoordinator.request_close` -> daemon `exec.close` | SAME whitelist gate as launch; taskkill /IM /F /T + psutil-VERIFIED count; the owner line carries the verified numbers |
+| `close` (2026-09-04 §2) | keyword net close-verbs -> `PCActionCoordinator.request_close` -> daemon `exec.close` | SAME whitelist gate as launch; taskkill /IM /F /T over EVERY UWP image (`close_images` alias table) + psutil-VERIFIED count; the owner line carries the verified numbers; killed=0 keeps its own honest line |
+| `volume`/`media`/`screen_ocr`/`file_fetch`/file upload (M2, 2026-09-05 §3) | `ToolRegistry._do_volume/_do_media/_do_screen_ocr/_do_file_fetch` -> daemon `exec.volume`/`exec.media_control`/`exec.screen_ocr`/`file.download`; attachments ride `file.upload` | key-event + read-only capture surfaces (no confirmation gate); file surfaces are root-walled (traversal dies); OCR returns verbatim extraction only |
+| external APIs (M4, 2026-09-05 §4) | `ExternalAPIs` — Aladhan `/v1/timings/{DD-MM-YYYY}` (Amman EXACT coords `31.9539,35.9106`, `Asia/Amman`, Awqaf method 23, 24h TTL) · ExchangeRate v6 pair (env key, 1h TTL) · CoinGecko simple/price (JOD, 15m TTL) · Hacker News topstories · ip-api | prayer never sends a city name; currency/crypto/network/HN all degrade to the honest offline line on timeout/HTTP-failure — never a fabricated number |
+| `read_page` (live 2026-09-05 D) | Jina Reader `https://r.jina.ai/{target}` — the net captures bare pasted URLs AND verb-led forms («اقراي https://…») | non-URL arg asks for the full link; bounded 1,200-char head; failures degrade honestly |
+| demanded voice notes (P0-A, 2026-09-05) | `bot._speak_demanded` — Fish tries once -> LOCAL Edge-TTS lane synthesizes the SAME text -> only a double failure lands the honest apology | a demanded note NEVER lands text-only; ordinary turns keep the Fish-only identity law (no foreign voice) |
 | timed reminders (2026-09-04 §5) | `task_orchestrator.Orchestrator` — parse_delay/parse_wallclock (GENERAL shapes) -> asyncio timers | state persists (State/task_reminders.json, restart re-arms); firing dispatches proactively via bot.send_message; dispatch failure retries in a minute — never silent |
 | `create_folder` (2026-09-04 §6) | `ToolRegistry._do_create_folder` — ONE `_index.md` commit (contents API creates the dir) | name sanitized by the vault's `_sanitize_component` (traversal dies); idempotent; PARA backbone additive-only |
 | Google 41-API suite (2026-09-04 §7) | `google_cloud_suite` — 41 typed adapters (Gemini EXCLUDED) behind CacheEngine + QuotaGuard | cache-first: weather 6h/4-day, places 7d, custom search 24h + HARD 80/day, fitness 08:00/22:00 + 1h, YT analytics daily; >90% free-tier = breaker open (cache-only); spent budgets = honest no-call |

@@ -940,3 +940,38 @@ Owner steps: `docs/08-OWNER-NEXT-STEPS.md`.
       green; sacred floors green (guest floor re-anchored to §1 semantics).
       Owner-pending unchanged: OmniRoute start, Google OAuth bootstrap,
       /enroll-voice ≥5s, optional YOUTUBE/INSTAGRAM/FIRECRAWL keys.
+
+      ### LIVE-DEFECT REMEDIATION + UNATTENDED DEEP AUDIT RUN (2026-09-05→06)
+      Seven production defects (A–G) from the owner live session 2026-09-05
+      were fixed in the working tree and SEALED: commit `4bb212c` «fix(live):
+      resolve defects A-G (calculator uwp, prayer times, weather, volume,
+      voice failover, oauth, dynamic folders)» — 8 files, +591/−24 — pushed
+      to origin/main. A = UWP close images (`close_images` +
+      `PROCESS_IMAGE_ALIASES`: CalculatorApp.exe/Calculator.exe/calc.exe,
+      psutil-verified count, ≤2s poll) · B = prayer by EXACT Amman coords
+      (31.9539,35.9106) + Asia/Amman + Awqaf method 23 + explicit date
+      segment · C = weather geocode empty-list guard + the loguru
+      named-placeholder KeyError ban (structural tree test; also rooted G) ·
+      D = priority-ordered keyword net (volume>close; bare URLs->Jina;
+      crypto/prayer/network to their tools) · E = `_speak_demanded` Edge
+      failover (a demanded note never lands text-only) · F = OAuth single
+      space-separated scope param · G = create_folder honest failure line.
+      Regression floor: `tests/test_live_defects_2026_09_05.py` (39 items).
+      UNATTENDED AUDIT (owner directive 2026-09-06, this run): full gate
+      GREEN — Ruff clean (204 files) · **851 passed / 1 skipped /
+      85.31% branch** · Security Gate OK (bandit + secret scan) · Docs Guard
+      OK (16 canonical) · sacred floors + defect floor 83/83 in one targeted
+      run. Exhaustive 78-feature audit artifact: `AUDIT_AND_PLAN_40_FEATURES.md`
+      (53 ✅ / 24 ⏳ scaffolded / 0 broken in code; the 6-sub-track deep
+      verification found ZERO new defects — edge cases already pinned).
+      Docs synced: CHANGELOG (defects A–G under [Unreleased]) ·
+      06-API-SPECIFICATION (the 6 missing M2/STT-2 wire cmds +
+      `killed_processes` + the M4/read_page/demanded-voice tool rows) ·
+      Sara's capabilities manifest refreshed (close UWP nuance, prayer
+      Awqaf, bare-URL reading, honest multi-task reporting). Executive
+      briefing: `EXECUTIVE_PROGRESS_REPORT_2026_09_06.md`.
+      ← **current: LIVE-DEFECT ROUND SEALED — awaiting owner live retest
+      (the 7-item list in the executive report) + the Phase-B wiring ruling.**
+      Owner-pending unchanged: OmniRoute start, Google OAuth bootstrap (now
+      UNBLOCKED by defect F), /enroll-voice ≥5s, optional
+      YOUTUBE/INSTAGRAM/FIRECRAWL/EXCHANGERATE keys.

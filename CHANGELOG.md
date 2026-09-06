@@ -8,6 +8,33 @@ product release tags start independently at v1.0.0.)
 
 ## [Unreleased]
 
+### Fixed — the 2026-09-05 live-defect round (defects A–G, commit `4bb212c`)
+Seven production defects from the owner's real Telegram session of 2026-09-05,
+each pinned by the regression floor `tests/test_live_defects_2026_09_05.py`
+(39 collected items):
+- **A — Calculator UWP close**: Windows 10/11 runs Calculator as
+  `CalculatorApp.exe` while the whitelist says `calc.exe` — close() now hunts
+  EVERY image via `close_images()` + `PROCESS_IMAGE_ALIASES` and reports the
+  psutil-verified count («ما لقيت نسخة شغالة» while windows stayed open — dead).
+- **B — Amman prayer times**: exact coordinates `31.9539, 35.9106` +
+  `timezonestring=Asia/Amman` + Awqaf method 23 + explicit date segment
+  (the date-less endpoint 302'd and the client never followed) — the Amman-vs-
+  Oman geocode drift (30–40 min) is structurally impossible now.
+- **C — Weather geocode crash**: an empty geocode `results` list raised
+  IndexError on the NORMAL path, and the except-block's loguru named-placeholder
+  raised `KeyError:'place'` masking it — honest named-place line now; a
+  tree-wide structural test bans the mixed loguru format forever (also rooted G).
+- **D — Dispatcher keyword collisions**: «اكتمي الصوت» closed an app literally
+  named «الصوت» (volume beats close now), bare pasted URLs reach Jina Reader,
+  crypto/network/prayer asks route to their real tools (priority-ordered net).
+- **E — Demanded voice note on Fish 429**: the demand NEVER lands text-only —
+  `_speak_demanded` fails over to the LOCAL Edge lane (same text), the honest
+  apology only when BOTH engines die; ordinary turns keep the Fish-only law.
+- **F — Google OAuth 400**: scopes ride ONE space-separated param
+  (`" ".join(AUTH_SCOPES)`, RFC 6749 §3.3) — the consent screen renders again.
+- **G — Vault folder crash**: `_do_create_folder` failures return the honest
+  Arabic line (the loguru `KeyError:'name'` escaping the except block is dead).
+
 ### Fixed — the live-session production round (2026-09-04, owner transcript 3:18-4:04pm)
 - **§1 Sender-ID-only voice authorization**: the owner's account NEVER falls
   to Guest Mode from any device/mic — `owner_voice_gate` replaces the old

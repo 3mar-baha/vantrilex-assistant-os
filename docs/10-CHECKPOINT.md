@@ -175,3 +175,18 @@ summary through one testable `start_background_loops` stitch). Gate at Phase-2 c
 (owner-middleware, whitelist-guardrail, guest-lockdown, consent-grammar) **43/43**.
 Records: `docs/REMEDIATION_PLAN.md` per-step ✅ blocks · `.claude/PHASE-STATE.md` ·
 `docs/PROJECT-JOURNEY.md` (audit + remediation sections).
+
+## Live-defect round — 2026-09-05→06: defects A–G sealed (commit `4bb212c`)
+
+Skill rotation: **none ingested** (owner-directed live-defect remediation + unattended
+deep audit, closed loop on `main`). The owner's 2026-09-05 Telegram session surfaced seven
+production defects; each fix carries its regression pins in the NEW floor
+`tests/test_live_defects_2026_09_05.py` (39 collected items — A: UWP close images ·
+B: prayer coords/method/tz/date · C: weather geocode + loguru mixed-format ban ·
+D: dispatcher priority net · E: demanded-voice Edge failover · F: OAuth single scope ·
+G: create_folder honest failure). Commit `4bb212c` (8 files, +591/−24) pushed to
+`origin/main`; unattended audit run 2026-09-06: full gate GREEN (Ruff clean · **851 passed /
+1 skipped / 85.31% branch** · security + docs green · sacred floors + defect floor 83/83).
+Exhaustive audit artifact `AUDIT_AND_PLAN_40_FEATURES.md` (78 features: 53 ✅ / 24 ⏳ /
+0 broken). Docs synced: CHANGELOG · 06-API-SPECIFICATION · Sara's capabilities manifest.
+Record: `EXECUTIVE_PROGRESS_REPORT_2026_09_06.md`.
