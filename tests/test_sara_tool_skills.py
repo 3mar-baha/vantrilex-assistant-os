@@ -88,6 +88,10 @@ def test_guides_cover_the_real_tool_surface():
         "create_folder",
         "knowledge_graph",
         "multi_task",
+        # skill-creator application pass (2026-09-06): the daily-surface zones
+        # that had no guide yet — the usage-report and the morning brief.
+        "app_sessions",
+        "brief",
     }
     missing = must_have - guides
     assert not missing, f"missing guides: {missing}"
