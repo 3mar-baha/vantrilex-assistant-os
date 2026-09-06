@@ -760,7 +760,11 @@ class ToolRegistry:
                 message=f"sara: create folder {name}",
             )
         except Exception as error:  # noqa: BLE001 — honest line, never «عطل بسيط» alone
-            logger.warning("create folder {name} failed: {}", name, error)
+            # G (live 2026-09-05): this line used a NAMED loguru placeholder
+            # («{name}») fed positional args — loguru raised KeyError:'name'
+            # from inside the except block, so a vault failure surfaced as a
+            # crash instead of this honest Arabic line.
+            logger.warning("create folder {} failed: {}", name, error)
             return "ما قدرت أنشئ الفولدر هالمرة — الخزينة مو متوصلة أو صار في مشكلة بالاتصال."
         return (
             f"أنشأت فولدر «{name}» ونزّلت فيه ملف الفهرس [[{name}/_index]] 🌸 "
@@ -788,6 +792,10 @@ class ToolRegistry:
             return NO_WEATHER_AR
         block = await self._weather.current(place)
         if block is None:
+            # C (live 2026-09-05): an unresolvable name is NOT an outage — say
+            # which place failed instead of the vague «جربها بعد شوي».
+            if self._weather.is_unknown_place(place):
+                return f"ما لقيت «{place}» على خريطة الطقس 🌸 تأكدلي من الاسم وجرّب مرة ثانية."
             return NO_WEATHER_AR
         return block
 

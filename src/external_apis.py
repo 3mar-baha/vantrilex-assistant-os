@@ -11,6 +11,7 @@ crypto 15m (a cache hit serves; a miss fetches).
 from __future__ import annotations
 
 import time
+from datetime import UTC, datetime, timedelta
 from typing import Any, Final
 
 from loguru import logger
@@ -20,6 +21,20 @@ CURRENCY_TTL_S: Final[int] = 3600
 CRYPTO_TTL_S: Final[int] = 15 * 60
 
 _PRAYERS: Final[tuple[str, ...]] = ("Fajr", "Dhuhr", "Asr", "Maghrib", "Isha")
+
+# Amman, Jordan — EXACT coordinates, never textual geocoding (live defect
+# 2026-09-05: a city-name lookup is ambiguous — «Amman» can resolve towards the
+# Sultanate of Oman — and Aladhan's own city tables drifted the times 30-40min).
+# Jordan is UTC+3 PERMANENT (DST abolished 2022), so the offset is a constant —
+# no tzdata dependency on the Windows bridge / slim containers.
+AMMAN_LATITUDE: Final[float] = 31.9539
+AMMAN_LONGITUDE: Final[float] = 35.9106
+AMMAN_TIMEZONE: Final[str] = "Asia/Amman"
+AMMAN_UTC_OFFSET_H: Final[int] = 3
+# Aladhan method 23 = Ministry of Awqaf, Islamic Affairs and Holy Places,
+# Jordan — Fajr 18.0° / Isha 18.0° (owner directive 2026-09-05; the previous
+# method 4 was Umm Al-Qura/Saudi, the wrong convention for Jordan).
+PRAYER_METHOD: Final[str] = "23"
 
 
 class ExternalAPIs:
@@ -83,16 +98,34 @@ class ExternalAPIs:
 
     # -- 2) Aladhan prayer times ----------------------------------------------------
 
+    def _prayer_date(self, date_str: str | None) -> str:
+        """The Aladhan date segment (DD-MM-YYYY) — ALWAYS present. The date-less
+        endpoints (/v1/timings and /v1/timingsByCity) answer 302, and the shared
+        client does not follow redirects, so the old call silently returned None
+        and Sara reported no prayer times at all. Default = today in Amman."""
+        day = (date_str or "").strip()
+        if day:
+            return day
+        return (datetime.now(UTC) + timedelta(hours=AMMAN_UTC_OFFSET_H)).strftime("%d-%m-%Y")
+
     async def get_prayer_times(self, date_str: str | None = None) -> dict[str, str] | None:
-        """Amman/Jordan, method 4 — the five prayers, TTL 24h."""
+        """Amman/Jordan by exact coordinates, Awqaf method 23 — the five
+        prayers, TTL 24h. Coordinates (not a city name) + an explicit timezone
+        pin the answer to the owner's city; a missing tz would silently shift
+        the whole day."""
         cache_key = f"prayer:{date_str or ''}"
         cached = self._cached(cache_key, PRAYER_TTL_S)
         if cached is not None:
             return cached
-        params: dict[str, str] = {"city": "Amman", "country": "Jordan", "method": "4"}
-        if date_str:
-            params["date"] = date_str
-        data = await self._get_json("https://api.aladhan.com/v1/timingsByCity", params=params)
+        params: dict[str, str] = {
+            "latitude": f"{AMMAN_LATITUDE}",
+            "longitude": f"{AMMAN_LONGITUDE}",
+            "method": PRAYER_METHOD,
+            "timezonestring": AMMAN_TIMEZONE,
+        }
+        day = self._prayer_date(date_str)
+        url = f"https://api.aladhan.com/v1/timings/{day}"
+        data = await self._get_json(url, params=params)
         if not isinstance(data, dict):
             return None
         timings = (data.get("data") or {}).get("timings") or {}

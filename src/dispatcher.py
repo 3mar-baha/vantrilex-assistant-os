@@ -187,6 +187,10 @@ _TOOL_NET: Final[tuple[tuple[str, re.Pattern[str]], ...]] = (
         re.compile(
             r"(?:اقراي|اقري|اقرأي|اقرئي|افتحي|لخصي|زاكريني)\s+(?:ها?ل?رابط|الرابط|هاد الرابط|المقال|الصفحة)\s*(\S*)"
             r"|(?:اقراي|اقري|اقرأي|اقرئي|لخصي)\s+(https?://\S+)"
+            # D (live 2026-09-05): a BARE url pasted with no verb at all
+            # («https://adamlankamer.com/ai») — the URL IS the read request;
+            # it fell through to a plain web search and never reached Jina.
+            r"|(https?://\S+)"
         ),
     ),
     (
@@ -407,9 +411,12 @@ def _keyword_net(text: str) -> tuple[str, str]:
             # M2 (§3-A): the filename + folder words ride the arg
             return ("file_fetch", (match.group(1) or "").strip(" .!؟?،,"))
         if tool == "read_page":
-            # M4: the URL rides the arg (group 1 = after هالرابط, group 2 = bare URL)
-            url = (match.group(1) or match.group(2) or "").strip()
-            return ("read_page", url)
+            # M4 + D: the URL rides the arg — group 1 = after هالرابط, group 2 =
+            # a verb-led URL, group 3 = a bare URL. Take the first group that
+            # actually captured something (the alternatives are mutually
+            # exclusive, so exactly one is ever non-empty).
+            groups = [g.strip() for g in match.groups() if g and g.strip()]
+            return ("read_page", groups[0] if groups else "")
         if tool in (
             "prayer_times",
             "convert_currency",

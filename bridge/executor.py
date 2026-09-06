@@ -12,6 +12,7 @@ import shutil
 import subprocess
 from datetime import UTC, datetime
 from pathlib import Path, PureWindowsPath
+from typing import Final
 
 from loguru import logger
 from pydantic import BaseModel
@@ -40,11 +41,50 @@ def _count_running(image: str) -> int:
 
         return sum(
             1
-            for p in psutil.process_iter(attrs=["name"])
+            for p in psutil.process_iter(attrs=["name", "pid"])
             if (p.info.get("name") or "").casefold() == image.casefold()
         )
     except Exception:  # noqa: BLE001 — verification is best-effort, never a crash
         return 0
+
+
+# UWP image aliases (live defect 2026-09-05 «سكري الآلة الحاسبة»): Windows 10/11
+# ships several whitelisted apps under a DIFFERENT process image than the
+# whitelist's executable. Calculator is the owner's case — it runs as
+# CalculatorApp.exe, while the whitelist (and every legacy shortcut, and the
+# Arabic alias table in pc_actions) still says calc.exe. Terminating only the
+# whitelist image reported «ما لقيت نسخة شغالة هسا» while the window stayed
+# open. Close must hunt EVERY image the app can actually run as.
+PROCESS_IMAGE_ALIASES: Final[dict[str, tuple[str, ...]]] = {
+    "calculator": ("CalculatorApp.exe", "Calculator.exe", "calc.exe"),
+    "calc.exe": ("CalculatorApp.exe", "Calculator.exe", "calc.exe"),
+    "chrome": ("chrome.exe",),
+    "cmd": ("cmd.exe",),
+    "obsidian": ("Obsidian.exe",),
+}
+
+
+def close_images(name: str, executable: str | None = None) -> tuple[str, ...]:
+    """Every image name close() must terminate for ONE logical app: the
+    whitelist's own executable first (its basename — taskkill /IM wants an
+    image name, never a path), then every known alias. Deduped
+    case-insensitively, order preserved. Apps with no alias entry yield
+    exactly the whitelist image (unchanged behavior)."""
+    ordered: list[str] = []
+    seen: set[str] = set()
+
+    def add(image: str) -> None:
+        key = image.casefold()
+        if image and key not in seen:
+            seen.add(key)
+            ordered.append(image)
+
+    base = PureWindowsPath(executable or name).name or (executable or name)
+    add(base)
+    for key in (name.strip().casefold(), base.casefold()):
+        for alias in PROCESS_IMAGE_ALIASES.get(key, ()):
+            add(alias)
+    return tuple(ordered)
 
 
 POWER_ARGV = {
@@ -204,21 +244,27 @@ class Executor:
         verdict = self._guard.check_app(name)
         if not verdict.allowed_without_confirmation and not (confirmation_id or "").strip():
             return ExecResult(status="error", detail=verdict.reason, audit_code=code)
-        exe = verdict.executable or name
-        image = PureWindowsPath(exe).name or exe  # taskkill /IM wants the image name
-        before = _count_running(image)
-        try:
-            await self._spawn(["taskkill", "/IM", image, "/F", "/T"])
-        except OSError as exc:
-            logger.exception("close of {name} failed", name=name)
-            return ExecResult(status="error", detail=str(exc), audit_code=code)
+        # every image the app can run as — the whitelist image alone misses the
+        # UWP rename (CalculatorApp.exe), which left the window open while the
+        # owner was told nothing was running.
+        images = close_images(name, verdict.executable)
+        before = sum(_count_running(image) for image in images)
+        for image in images:
+            try:
+                await self._spawn(["taskkill", "/IM", image, "/F", "/T"])
+            except OSError as exc:
+                # one alias failing (not installed / already gone) never aborts
+                # the sweep — the remaining images must still be terminated
+                logger.warning("taskkill of {image} failed: {error}", image=image, error=exc)
         # verification window: taskkill returns before the OS reaps the
         # processes — poll briefly, then report what actually died
+        after = before
         for _ in range(10):  # ~2s max
             await asyncio.sleep(0.2)
-            if _count_running(image) == 0:
+            after = sum(_count_running(image) for image in images)
+            if after == 0:
                 break
-        killed = before - _count_running(image)
+        killed = before - after
         detail = f"closed {killed} of {before}" if killed else "no running copies found"
         return ExecResult(status="ok", detail=detail, audit_code=code, killed_processes=killed)
 

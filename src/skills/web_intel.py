@@ -46,7 +46,7 @@ async def _get(http: Any, url: str) -> str | None:
     try:
         resp = await http.get(url, headers={"User-Agent": _USER_AGENT}, follow_redirects=True)
     except Exception as error:  # noqa: BLE001 — the web failing is a normal case
-        logger.warning("web fetch failed {url}: {}", url, error)
+        logger.warning("web fetch failed {}: {}", url, error)
         return None
     if getattr(resp, "status_code", 0) != 200:
         return None

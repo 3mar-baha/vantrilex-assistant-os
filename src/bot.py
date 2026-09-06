@@ -1189,7 +1189,11 @@ async def run_bot(settings: Settings, bridge=None) -> None:
         weather=weather_client,  # pass-4: weather -> Open-Meteo current conditions
         youtube=youtube_client,  # pass-4: youtube -> Data API v3 (env-gated)
         externals=ExternalAPIs(
-            http=httpx.AsyncClient(timeout=30.0),
+            # B (live 2026-09-05): Aladhan answers /v1/timingsByCity with a 302
+            # and _get_json treats non-200 as a miss — without follow_redirects
+            # prayer times silently returned None. Every one of the five APIs
+            # may redirect; the shared client follows them now.
+            http=httpx.AsyncClient(timeout=30.0, follow_redirects=True),
             fx_key=settings.exchangerate_api_key or "",
         ),  # M4 (§4): the five free external APIs, one shared client
         photo_sender=(

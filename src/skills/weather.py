@@ -80,6 +80,14 @@ class WeatherClient:
     def __init__(self, *, http: Any) -> None:
         self._http = http
         self._geocode_cache: dict[str, tuple[float, float] | None] = {}
+        # places the geocoder could not resolve (a typo, not a dead service) —
+        # the caller distinguishes «ما لقيت المدينة» from «الخدمة تعطّلت»
+        self.unknown: set[str] = set()
+
+    def is_unknown_place(self, place: str) -> bool:
+        """True when the last lookup found NO place on the map — a bad name,
+        never an outage. Lets the caller apologise for the right reason."""
+        return place.strip() in self.unknown
 
     async def current(self, place: str) -> str | None:
         """The weather DATA block for a place, None on any failure (honest)."""
@@ -89,6 +97,7 @@ class WeatherClient:
             self._geocode_cache[place] = coords
         if coords is None:
             return None
+        self.unknown.discard(place.strip())  # resolved now — forget an old miss
         lat, lon = coords
         try:
             resp = await self._http.get(
@@ -100,7 +109,7 @@ class WeatherClient:
                 return None
             data = json.loads(resp.text)["current"]
         except Exception as error:  # noqa: BLE001 — honest None, never a guess
-            logger.warning("weather fetch failed for {place}: {}", place, error)
+            logger.warning("weather fetch failed for {}: {}", place, error)
             return None
         code = int(data.get("weather_code", 0))
         condition = _WMO_AR.get(code, "طقس متقلب")
@@ -122,9 +131,16 @@ class WeatherClient:
             )
             if getattr(resp, "status_code", 0) != 200:
                 return None
+            # An empty list is the COMMON case for a typo («خريبة السوف»), not
+            # an exception path — indexing [0] raised IndexError and killed the
+            # turn. No match -> remember the place and answer honestly.
             results = json.loads(resp.text).get("results") or []
+            if not results:
+                self.unknown.add(place.strip())
+                logger.warning("geocode found no place named {}", place)
+                return None
             first = results[0]
             return (float(first["latitude"]), float(first["longitude"]))
         except Exception as error:  # noqa: BLE001
-            logger.warning("geocode failed for {place}: {}", place, error)
+            logger.warning("geocode failed for {}: {}", place, error)
             return None
