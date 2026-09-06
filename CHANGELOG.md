@@ -8,6 +8,30 @@ product release tags start independently at v1.0.0.)
 
 ## [Unreleased]
 
+### Added — Phase B: Tool Wiring & Operational Surface Completion (2026-09-06)
+The full B1-B8 backlog from `AUDIT_AND_PLAN_40_FEATURES.md`, all wired into
+`ToolRegistry`, routed in the keyword net, and given per-tool skill guides
+(44 new tests expand the gate ceiling):
+- **B1 `drive`** — Drive file list/search (name + id + link) via
+  `GoogleSuite.list_drive_files`.
+- **B2 `contacts`** — People directory lookup → compact card
+  (name + phone + email).
+- **B3 `create_event`/`create_task`** — Calendar/Tasks WRITE verbs via
+  `GoogleSuite.create_event`/`add_task`.
+- **B4 `places`** — Nearby Amman venues (rating + address + maps link) via a
+  Places adapter behind the 7-day CacheEngine (key-gated, $0.00).
+- **B5 `deep_search`** — Custom Search w/ a transparent keyless DDG fallback
+  past the 80/day cap.
+- **B6 `fitness`** — Daily steps + active minutes + calories (08:00/22:00 sync
+  windows + 1h cache).
+- **B7 `cloud_backup`/`analytics`** — Fernet-sealed vault snapshot to free
+  Cloud Storage; life-analytics rows over local SQLite.
+- **B8 `quota_safety`** — Free-tier headroom (QuotaGuard breaker; «آمن» under
+  90%).
+- New backend: `src/google_cloud_client.py::GoogleCloudClient` wraps the §7
+  adapters + CacheEngine + QuotaGuard. New settings: `GOOGLE_PLACES_KEY`,
+  `CUSTOM_SEARCH_CX`, `CUSTOM_SEARCH_KEY` (optional; empty = honest offline).
+
 ### Fixed — the 2026-09-05 live-defect round (defects A–G, commit `4bb212c`)
 Seven production defects from the owner's real Telegram session of 2026-09-05,
 each pinned by the regression floor `tests/test_live_defects_2026_09_05.py`

@@ -975,3 +975,21 @@ Owner steps: `docs/08-OWNER-NEXT-STEPS.md`.
       Owner-pending unchanged: OmniRoute start, Google OAuth bootstrap (now
       UNBLOCKED by defect F), /enroll-voice ≥5s, optional
       YOUTUBE/INSTAGRAM/FIRECRAWL/EXCHANGERATE keys.
+
+      ### PHASE B COMPLETE (2026-09-06, owner directive «PHASE B DIRECTIVE»)
+      The B1-B8 backlog from AUDIT_AND_PLAN_40_FEATURES.md was fully wired,
+      routed, guided, and TESTED (44 new tests; full gate GREEN). B1 drive ·
+      B2 contacts · B3 create_event/create_task (GoogleSuite write verbs) ·
+      B4 places (Places adapter + 7d cache) · B5 deep_search (Custom Search +
+      DDG fallback past 80/day) · B6 fitness (08:00/22:00 + 1h cache) ·
+      B7 cloud_backup/analytics (Fernet-sealed snapshot; local SQLite) ·
+      B8 quota_safety (QuotaGuard headroom). New backend:
+      `src/google_cloud_client.py::GoogleCloudClient` wraps §7 adapters +
+      CacheEngine + QuotaGuard; bot.py binds it; Settings gains
+      GOOGLE_PLACES_KEY / CUSTOM_SEARCH_CX / CUSTOM_SEARCH_KEY (optional,
+      empty = honest offline). 10 new skills guides in Sara_Skills; routing
+      (10 new _TOOL_NET patterns, before calendar/tasks) + _VALID_TOOLS.
+      Gate: 902 passed / 1 skipped / 85.01% branch / Security + Docs green /
+      sacred floors 44/44.
+      ← **current: PHASE B SHIPPED — awaiting owner live retest (the B1-B8
+      phrases) + the owner-side Google keys (Places/CSE) to go fully live.**

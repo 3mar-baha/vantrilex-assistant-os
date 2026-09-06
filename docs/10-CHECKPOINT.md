@@ -190,3 +190,19 @@ G: create_folder honest failure). Commit `4bb212c` (8 files, +591/−24) pushed 
 Exhaustive audit artifact `AUDIT_AND_PLAN_40_FEATURES.md` (78 features: 53 ✅ / 24 ⏳ /
 0 broken). Docs synced: CHANGELOG · 06-API-SPECIFICATION · Sara's capabilities manifest.
 Record: `EXECUTIVE_PROGRESS_REPORT_2026_09_06.md`.
+
+## Phase B — 2026-09-06: Tool Wiring & Operational Surface Completion
+
+Skill rotation: **none ingested** (owner-directed Phase B wiring, closed loop on `main`).
+The B1-B8 backlog from `AUDIT_AND_PLAN_40_FEATURES.md` was shipped end-to-end:
+B1 `drive` · B2 `contacts` · B3 `create_event`/`create_task` · B4 `places` ·
+B5 `deep_search` · B6 `fitness` · B7 `cloud_backup`/`analytics` ·
+B8 `quota_safety`. New backend `src/google_cloud_client.py::GoogleCloudClient`
+wraps the §7 adapters + CacheEngine + QuotaGuard; bound in `bot.py`; Settings
+gains `GOOGLE_PLACES_KEY`/`CUSTOM_SEARCH_CX`/`CUSTOM_SEARCH_KEY`. 10 new
+routing patterns (inserted before calendar/tasks so WRITE verbs beat READ
+tools) + `_VALID_TOOLS` entries + 10 per-tool skill guides. 44 new tests across
+`test_tools_expansion.py` + `test_google_cloud_client.py`. Gate:
+**902 passed / 1 skipped / 85.01% branch / Security + Docs green /
+sacred floors 44/44**. Record: `CHANGELOG.md` · `docs/06-API-SPECIFICATION.md`
+· `.claude/PHASE-STATE.md`.
