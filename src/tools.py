@@ -51,6 +51,36 @@ NO_WEATHER_AR = "ما قدرت جيب حالة الطقس هالمرة — جر�
 NO_YOUTUBE_AR = "ما قدرت اوصل يوتيوب هسا — المفتاح مو مفعّل أو الحصة خلصت."
 
 
+def _extract_folder_names(head: str, tail: str) -> list[str]:
+    """Parse a folder-name list out of a create_folder arg.
+
+    Returns [parent, *children] — the parent is `head`; the nested list (in
+    `tail`) may be comma-separated («أ، ب، ج») or numbered («1-أ 2-ب 3-ج»).
+    Both colon-prefixed («: أ، ب») and list-word-prefixed (…"المجلدات أ، ب»)
+    tails are handled. A single folder returns [parent].
+    """
+    import re as _re
+
+    names: list[str] = [head.strip()] if head.strip() else []
+    if not tail:
+        return names or []
+    # Drop a leading colon + any list-word ("المجلدات", "المجلد", "الملفات").
+    t = tail.strip().strip(":،,| ")
+    t = _re.sub(r"^(?:المجلدات|المجلد|الملفات|هي)\s*[:,،|]?\s*", "", t).strip()
+    if not t:
+        return names or []
+    # Numbered form: split on sequences of a digit+separator (numeric prefix).
+    # «1-يزيد 2-محمد 3-عبدالله» -> ['يزيد', 'محمد', 'عبدالله'].
+    if _re.search(r"\d+\s*[-–—]\s*", t):
+        parts = _re.split(r"\d+\s*[-–—]\s*", t)
+        names.extend(p.strip() for p in parts if p.strip())
+        return names
+    # Comma / Arabic-comma / pipe separated.
+    parts = _re.split(r"[،,|\n]+", t)
+    names.extend(p.strip() for p in parts if p.strip())
+    return names
+
+
 class ToolRegistry:
     def __init__(
         self,
@@ -736,41 +766,80 @@ class ToolRegistry:
             return TOOL_FAIL_AR
 
     async def _do_create_folder(self, arg: str) -> str:
-        """§6 (2026-09-04): dynamic Obsidian folder creation — the GitHub
-        contents API creates the directory with the first committed note, so
-        creating = committing ONE `_index.md` under the sanitized name; the
-        confirmation carries the direct wikilink. Idempotent; the PARA
-        backbone is never renamed/deleted (additive-only)."""
+        """§6 (2026-09-04) + live fix 2026-09-07: dynamic Obsidian folder creation.
+
+        Handles BOTH a single folder («انشئي فولدر RoutineTasks») and a nested
+        batch («انشئي فولدر Friends وضعي فيه المجلدات: يزيد الصرعاوي، محمد
+        حسنين، عبدالله سالم»). Each folder = ONE `_index.md` commit (the GitHub
+        Contents API creates the directory). The arg may carry a «اسمه/اسم X»
+        prefix and a comma/separation list; names are sanitized individually
+        (traversal dies), idempotent, and the PARA backbone is additive-only.
+        """
         if self._vault is None:
             return NO_GRAPH_AR  # the vault-offline line (same dependency)
         from src.vault import _sanitize_component, write_frontmatter
 
-        raw = arg.strip().strip("«»'\"")
-        try:
-            name = _sanitize_component(raw)
-        except ValueError:
-            return "الاسم اللي بعته مو صالح لمجلد — جرّب اسم أبسط 🌸"
-        if not name:
+        raw = (arg or "").strip().strip("«»'\"")
+        # Strip a leading «اسمه X» / «اسم X» prefix.
+        name_text = raw
+        import re as _re
+
+        m = _re.search(r"^(?:اسمه|اسم)\s+", raw)
+        if m:
+            name_text = raw[m.end() :].strip()
+        # Split a nested list: «فولدر X وضعي فيه المجلدات: أ، ب، ج» / «...وضع فيه
+        # 1-أ 2-ب 3-ج» / «فيه المجلدات أ | ب | ج». We only split on separators or
+        # an explicit "وضعي فيه/فيه" list marker.
+        split_text = _re.split(
+            r"(?:وضعي?\s+فيه|وضع\s+فيه|فيه\s+|بحيث\s+يحتوي)", name_text, maxsplit=1
+        )
+        head = split_text[0].strip()
+        tail = split_text[1] if len(split_text) > 1 else ""
+        names = _extract_folder_names(head, tail)
+        if not names:
             return "شو اسم الفولدر اللي بدك أنشئه؟"
-        index_path = f"{name}/_index.md"
-        meta = {"type": "vault-index", "dir": name, "created_by": "sara"}
-        body = f"# {name}\n\nمجلد جديد بالخزينة 🌸\n"
-        try:
-            await self._vault.upsert(
-                index_path,
-                write_frontmatter(meta, body),
-                message=f"sara: create folder {name}",
+        parent = names[0]
+        children = names[1:]
+        # Create the parent, then each child INSIDE it (no nested-dir on GitHub
+        # contents; each child gets its own `parent/child/_index.md`).
+        created: list[str] = []
+        # (name_to_create, display_path) — children carry the parent prefix.
+        to_create: list[tuple[str, str]] = [(parent, parent)]
+        for child in children:
+            to_create.append((child, f"{parent}/{child}"))
+        for folder, display in to_create:
+            try:
+                safe = _sanitize_component(folder)
+            except ValueError:
+                return "الاسم اللي بعته مو صالح لمجلد — جرّب اسم أبسط 🌸"
+            if "/" in display:  # child: sanitize the parent component too
+                p_safe, c_safe = (_sanitize_component(x) for x in display.split("/", 1))
+                index_path = f"{p_safe}/{c_safe}/_index.md"
+            else:
+                index_path = f"{safe}/_index.md"
+            meta = {"type": "vault-index", "dir": display, "created_by": "sara"}
+            body = f"# {safe}\n\nمجلد جديد بالخزينة 🌸\n"
+            try:
+                await self._vault.upsert(
+                    index_path,
+                    write_frontmatter(meta, body),
+                    message=f"sara: create folder {display}",
+                )
+                created.append(display)
+            except Exception as error:  # noqa: BLE001 — honest line, never «عطل بسيط» alone
+                # G (live 2026-09-05): named-placeholder-with-positional bug — use
+                # ONLY positional args here so the honest line always surfaces.
+                logger.warning("create folder {} failed: {}", display, error)
+                return "ما قدرت أنشئ الفولدر هالمرة — الخزينة مو متوصلة أو صار في مشكلة بالاتصال."
+        if len(created) == 1:
+            return (
+                f"أنشأت فولدر «{created[0]}» ونزّلت فيه ملف الفهرس [[{created[0]}/_index]] 🌸 "
+                "تقدر تحط فيه الملاحظات على طول."
             )
-        except Exception as error:  # noqa: BLE001 — honest line, never «عطل بسيط» alone
-            # G (live 2026-09-05): this line used a NAMED loguru placeholder
-            # («{name}») fed positional args — loguru raised KeyError:'name'
-            # from inside the except block, so a vault failure surfaced as a
-            # crash instead of this honest Arabic line.
-            logger.warning("create folder {} failed: {}", name, error)
-            return "ما قدرت أنشئ الفولدر هالمرة — الخزينة مو متوصلة أو صار في مشكلة بالاتصال."
+        listed = "، ".join(created)
         return (
-            f"أنشأت فولدر «{name}» ونزّلت فيه ملف الفهرس [[{name}/_index]] 🌸 "
-            "تقدر تحط فيه الملاحظات على طول."
+            f"أنشأت فولدر «{created[0]}» والمجلدات: {listed} كلٌّ بملف الفهرس 🌸 "
+            f"[[{created[0]}/_index]]"
         )
 
     async def _do_web_search(self, arg: str) -> str:

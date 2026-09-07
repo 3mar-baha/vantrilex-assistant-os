@@ -25,6 +25,20 @@ from datetime import UTC
 
 from src.dispatcher import _VALID_TOOLS, _keyword_net
 
+
+def test_keyword_net_routes_prayer_adan_variants():
+    """«شو اوقات الاذان للصلوات اليوم» — the live 2026-09-07 miss fell to plain
+    chat («ما عندي أداة لأوقات الأذان»); the net now catches اذان/أذان/صلوات."""
+    for phrase in (
+        "شو اوقات الاذان للصلوات اليوم",
+        "شو اوقات الأذان للصلوات",
+        "وقت أذان الفجر اليوم",
+        "مواقيت الصلاة اليوم",
+        "شو أوقات الآذان اليوم",
+    ):
+        tool, _ = _keyword_net(phrase)
+        assert tool == "prayer_times", phrase
+
 # --------------------------------------------------------------------------- fakes
 
 

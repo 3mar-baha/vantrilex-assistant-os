@@ -331,9 +331,9 @@ def test_ip_and_network_questions_route_to_network_status(phrase: str):
 # --------------------------------------------------------------------- E: voice
 
 
-async def test_demanded_note_falls_back_to_edge_when_fish_429s():
-    """E: Fish Audio quota exhausted (HTTP 429) must NEVER degrade a DEMANDED
-    voice note to a text bubble — the local Edge lane speaks it instead."""
+async def test_demanded_note_fish_429_lands_honest_text_no_foreign_voice():
+    """E: Fish Audio quota exhausted (HTTP 429) -> the DEMANDED note lands the
+    honest TEXT, NEVER a foreign (Microsoft/Edge) voice (owner 2026-09-07)."""
     from src.bot import _speak_demanded
     from src.fish_voice import FishVoiceError
 
@@ -359,18 +359,19 @@ async def test_demanded_note_falls_back_to_edge_when_fish_429s():
     edge, bot = Edge(), Bot()
     spoke = await _speak_demanded(FishDead(), edge, "هلا والله", bot=bot, chat_id=1)
 
-    assert spoke is True
-    assert edge.spoken == "هلا والله"  # the SAME text, not an apology
-    assert len(bot.voices) == 1  # the bubble actually dispatched
+    assert spoke is False  # identity purity — no foreign voice
+    assert edge.spoken is None  # the Edge lane never fired
+    assert not bot.voices  # no voice bubble on a foreign voice
 
 
-async def test_demanded_note_reports_failure_only_when_both_lanes_die():
-    """E: only a double failure returns False — the honest apology line."""
+async def test_demanded_note_fish_failure_is_the_single_false_line():
+    """E: a Fish failure is the SINGLE False line — the honest text; there is
+    no second (Edge) lane to rescue it anymore."""
     from src.bot import _speak_demanded
 
     class Dead:
         async def synthesize(self, text: str) -> bytes:
-            raise OSError("both engines down")
+            raise OSError("fish down")
 
     assert await _speak_demanded(Dead(), Dead(), "هلا", bot=None, chat_id=None) is False
 

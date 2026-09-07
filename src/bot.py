@@ -702,14 +702,8 @@ async def _deliver_voice_reply(
             ogg = await voice.synthesize(strip(remainder))
             await bot.send_voice(chat_id, BufferedInputFile(ogg, filename="sara.ogg"))
         except Exception as error:  # noqa: BLE001 — the text is the last resort
-            if demanded and edge is not None:
-                # P0-A: the demanded tail tries Edge before any text
-                try:
-                    ogg = await edge.synthesize(strip(remainder))
-                    await bot.send_voice(chat_id, BufferedInputFile(ogg, filename="sara.ogg"))
-                    return full_answer, spoke
-                except Exception:  # noqa: BLE001 — then text, never lost
-                    logger.warning("Edge tail failover failed too")
+            # 2026-09-07 (owner preference): a demanded tail NEVER uses a foreign
+            # (Microsoft/Edge) voice — Fish-only, then honest text. No edge param.
             logger.warning("voice tail flush failed: {}", error)
             await send_split(message, strip(remainder))
     return full_answer, spoke
@@ -738,30 +732,18 @@ async def _speak_with_retry(bot: Bot, chat_id: int, voice, text: str, *, attempt
 
 
 async def _speak_demanded(voice, edge, text: str, *, bot=None, chat_id: int | None = None) -> bool:
-    """P0-A (master directive 2026-09-05): a DEMANDED voice note NEVER lands
-    text-only. The primary lane tries once; on ANY failure the LOCAL Edge-TTS
-    lane (ar-EG-SalmaNeural) synthesizes the same text so the voice bubble
-    still dispatches. Only when BOTH engines die -> False (the honest line).
-    Identity note (owner 2026-09-03): the no-fallback law stays for ordinary
-    voice turns; a DEMAND is the exception — the directive's law is that the
-    audio bubble itself must arrive."""
+    """P0-A (master directive 2026-09-05) + owner preference 2026-09-07: a
+    DEMANDED voice note lands on Fish (Sara's ONLY voice) OR the honest line —
+    it NEVER substitutes a foreign (Microsoft/Edge) voice. The `edge` param is
+    retired; a Fish failure returns False so the caller sends the honest text
+    (identity purity beats a foreign voice per the owner)."""
     try:
         ogg = await voice.synthesize(text)
         if bot is not None and chat_id is not None:
             await bot.send_voice(chat_id, BufferedInputFile(ogg, filename="sara.ogg"))
         return True
-    except Exception as error:  # noqa: BLE001 — the demanded bubble must still land
-        logger.warning("demanded-note primary lane failed -> Edge failover: {}", error)
-    if edge is None:
-        return False
-    try:
-        ogg = await edge.synthesize(text)
-        if bot is not None and chat_id is not None:
-            await bot.send_voice(chat_id, BufferedInputFile(ogg, filename="sara.ogg"))
-        logger.info("demanded note delivered via the local Edge failover")
-        return True
-    except Exception as error:  # noqa: BLE001 — both lanes dead: the honest line
-        logger.error("Edge failover failed too — demanded note could not speak: {}", error)
+    except Exception as error:  # noqa: BLE001 — Fish dead: honest text, never a foreign voice
+        logger.error("demanded-note Fish lane failed — honest text, no foreign voice: {}", error)
     return False
 
 

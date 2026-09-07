@@ -97,3 +97,52 @@ async def test_routine_note_inside_custom_folder():
         message="sara: routine note",
     )
     assert "RoutineTasks/صباحي.md" in vault.files
+
+# -- nested folder batch (live fix 2026-09-07) --------------------------------
+
+
+def test_extract_folder_names_parses_numbered_list():
+    from src.tools import _extract_folder_names
+
+    res = _extract_folder_names("Friends", ": 1-يزيد الصرعاوي 2-محمد حسنين 3-عبدالله سالم")
+    assert res == ["Friends", "يزيد الصرعاوي", "محمد حسنين", "عبدالله سالم"]
+
+
+def test_extract_folder_names_parses_comma_list():
+    from src.tools import _extract_folder_names
+
+    res = _extract_folder_names("Friends", ": يزيد الصرعاوي، محمد حسنين، عبدالله سالم")
+    assert res == ["Friends", "يزيد الصرعاوي", "محمد حسنين", "عبدالله سالم"]
+
+
+def test_extract_folder_names_single_folder():
+    from src.tools import _extract_folder_names
+
+    assert _extract_folder_names("RoutineTasks", "") == ["RoutineTasks"]
+    assert _extract_folder_names("RoutineTasks", ":") == ["RoutineTasks"]
+
+
+async def test_create_folder_nested_creates_parent_and_children():
+    """«انشئي فولدر Friends وضعي فيه المجلدات: يزيد الصرعاوي، محمد حسنين،
+    عبدالله سالم» -> parent + 3 children each with an _index.md."""
+    vault = FakeVaultDirs()
+    tools = ToolRegistry(vault=vault)
+    answer = await tools.call(
+        "create_folder", "Friends وضعي فيه المجلدات: 1-يزيد الصرعاوي 2-محمد حسنين 3-عبدالله سالم"
+    )
+    assert "Friends/_index.md" in vault.files
+    assert "Friends/يزيد الصرعاوي/_index.md" in vault.files
+    assert "Friends/محمد حسنين/_index.md" in vault.files
+    assert "Friends/عبدالله سالم/_index.md" in vault.files
+    assert "يزيد الصرعاوي" in answer  # the correct (not halluded) name
+
+
+async def test_create_folder_strips_اسمه_prefix():
+    """«انشئي فولدر اسمه Friends» -> the folder is named Friends, not «اسمه Friends»."""
+    vault = FakeVaultDirs()
+    tools = ToolRegistry(vault=vault)
+    await tools.call("create_folder", "اسمه Friends وضعي فيه المجلدات: أ، ب")
+    assert "Friends/_index.md" in vault.files
+    assert "Friends/أ/_index.md" in vault.files
+    assert "Friends/ب/_index.md" in vault.files
+

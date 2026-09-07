@@ -1,18 +1,15 @@
-"""P0-A (master directive 2026-09-05): the STRICT VOICE DEMAND LOCK.
+"""P0-A (master directive 2026-09-05) + owner preference 2026-09-07: the STRICT
+VOICE DEMAND LOCK, Fish-ONLY.
 
 Live 7:19-7:20am class: Omar explicitly demanded a voice note and got text
-bubbles. The directive's law: a matching voice demand forces the VOICE
-surface with ZERO exception — Sara is categorically forbidden from
-delivering plain text alone when audio is demanded.
+bubbles. The directive's law: a matching voice demand forces the VOICE surface.
 
 Contract:
 - VOICE_DEMAND_RE (رسالة صوتية/ابعثي(لي) فويس/احكي بصوتك/صوتية/فويس/
   بدي اسمع صوتك) forces modality="voice" on any message that matches.
-- A DEMANDED note NEVER lands text-only:
-  * Fish dead (429/timeout/any) -> local Edge-TTS (ar-EG-SalmaNeural)
-    synthesizes the SAME text so the voice bubble still dispatches.
-  * Only when BOTH engines die does the honest apology line land (and it
-    tries voice first via Edge too).
+- A DEMANDED note lands on Fish (Sara's ONLY voice) OR the honest text line —
+  it NEVER substitutes a foreign (Microsoft/Edge) voice (owner 2026-09-07:
+  «لم يستخدم فيش اوديو بل مايكروسوف» — identity purity beats a foreign voice).
 - The explicit text request («رد نصي») still wins — it is checked FIRST.
 - The bot's real Telegram surface: answer_voice(BufferedInputFile(ogg)).
 """
@@ -105,20 +102,19 @@ class _EdgeStub:
         return b"EDGE-OGG-BYTES"
 
 
-async def test_demanded_note_fails_over_to_edge():
-    """Fish dead on a DEMANDED note -> the SAME text synthesizes locally and
-    the voice bubble dispatches. Never text-only."""
+async def test_demanded_note_fish_dead_returns_false_no_foreign_voice():
+    """Fish dead on a DEMANDED note -> False (the honest text) — it NEVER
+    synthesizes with a foreign (Microsoft/Edge) voice (owner 2026-09-07)."""
     from src.bot import _speak_demanded
 
     edge = _EdgeStub()
     spoke = await _speak_demanded(_DeadFish(), edge, "جوابي المطلوب صوتياً")
-    assert spoke is True
-    assert edge.synthesized == ["جوابي المطلوب صوتياً"]
-    # and the Edge bytes are what reached the wire (asserted by the caller)
+    assert spoke is False  # identity purity: no foreign voice fallback
+    assert edge.synthesized == []  # the Edge lane never fired
 
 
 async def test_healthy_fish_never_touches_edge():
-    """Fish alive -> the note goes out on Fish; the Edge failover stays cold."""
+    """Fish alive -> the note goes out on Fish; the Edge lane stays cold."""
     from src.bot import _speak_demanded
 
     class _Fish:
@@ -131,29 +127,26 @@ async def test_healthy_fish_never_touches_edge():
     assert edge.synthesized == []  # the failover never fired
 
 
-async def test_both_engines_dead_honest_apology():
-    """Fish dead AND Edge dead -> False (the caller's honest line lands) —
-    the deception class (fake success) never happens."""
+async def test_demanded_note_fish_failure_never_fabricates_success():
+    """Fish dead -> False (no fake success). A foreign voice is never the answer."""
     from src.bot import _speak_demanded
 
     class _DeadEdge:
         async def synthesize(self, text):
-            raise RuntimeError("edge dead too")
+            raise RuntimeError("edge is retired / dead too")
 
     spoke = await _speak_demanded(_DeadFish(), _DeadEdge(), "نص")
-    assert spoke is False
+    assert spoke is False  # honest line, no deception class
 
 
-async def test_shell_demand_fish_dead_edge_saves_the_bubble(make_shell, fake_bot):
-    """The FULL shell path, the directive's own law: «ابعثي رسالة صوتية» with a
-    DEAD Fish lane and a working Edge failover -> the SendVoice call still
-    happens; zero plain-text bubbles land alone."""
+async def test_shell_demand_fish_dead_lands_honest_text(make_shell, fake_bot):
+    """The FULL shell path with a DEAD Fish lane: the demanded bubble CANNOT be a
+    foreign voice, so the honest TEXT lands (identity purity) — zero SendVoice."""
     import json
 
     from tests.conftest import StreamProgram, drain, make_update
 
     edge = _EdgeStub()
-    # build via the real factory but with the demand decider + dead Fish + Edge
     shell = make_shell(
         router_replies=[
             json.dumps(
@@ -176,5 +169,6 @@ async def test_shell_demand_fish_dead_edge_saves_the_bubble(make_shell, fake_bot
 
     await drain(_STREAMS)
 
-    assert bot.session.sent("SendVoice"), "no voice bubble — the demand degraded"
-    assert edge.synthesized, "the Edge failover never fired on the dead Fish"
+    assert not bot.session.sent("SendVoice"), "no foreign voice — the Fish-only law"
+    assert edge.synthesized == []  # the Edge failover never fired
+    assert bot.session.sent("SendMessage"), "the honest text line must land"
