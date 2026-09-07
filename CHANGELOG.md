@@ -8,6 +8,20 @@ product release tags start independently at v1.0.0.)
 
 ## [Unreleased]
 
+### Fixed — live round 2026-09-07 (owner manual test)
+- **Prayer times routing**: «شو اوقات الاذان للصلوات اليوم» fell to plain chat
+  («ما عندي أداة لأوقات الأذان») because the net matched only «اوقات الصلاة».
+  The `prayer_times` net now catches اذان/أذان/الآذان/صلوات/مواقيت + «وقت أذان»
+  variants.
+- **Voice Fish-ONLY identity (owner)**: a DEMANDED voice note no longer falls
+  back to a foreign (Microsoft/Edge) voice when Fish fails — it lands the honest
+  TEXT (owner: «لم يستخدم فيش اوديو بل مايكروسوف الذي قلنا لن نستخدمه»).
+  `_speak_demanded` + the demanded tail dropped the Edge lane.
+- **create_folder nested batch**: «انشئي فولدر Friends وضعي فيه المجلدات: أ، ب، ج»
+  now creates the parent + each child (each an `_index.md`), strips a «اسمه»
+  prefix, and no longer hallucinates the child names. `_extract_folder_names`
+  parses comma/numbered lists per component (traversal dies).
+
 ### Added — Phase B: Tool Wiring & Operational Surface Completion (2026-09-06)
 The full B1-B8 backlog from `AUDIT_AND_PLAN_40_FEATURES.md`, all wired into
 `ToolRegistry`, routed in the keyword net, and given per-tool skill guides
