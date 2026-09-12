@@ -95,7 +95,7 @@ _CAPABILITIES: Final[dict[str, dict]] = {
     },
     "schedule": {
         "goals": "عدم نسيان التزام مستقبلي (تذكير حقيقي بوقته)",
-        "markers": ("ذكر", "نبه", "تذكير", "مهمة جديدة", "remind", "schedule"),
+        "markers": ("ذكر", "نبه", "تذكير", "مهمة جديدة", "سجلي مهمة", "remind", "schedule"),
         "reversible": True,
         "needs": "local",
         "chains_with": ("create_task", "list_reminders", "calendar"),

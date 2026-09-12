@@ -39,7 +39,7 @@ _TOOL_GOALS: Final[dict[str, tuple[str, ...]]] = {
     "screen_ocr": ("اقرأ", "استخرج", "كود", "نص الشاشة", "ocr"),
     "volume": ("صوت", "اكتم", "ارفع", "وطي", "volume"),
     "media": ("فيديو", "اغنية", "أغنية", "مقطع", "تشغيل", "media"),
-    "schedule": ("ذكر", "نبه", "تذكير", "مهمة جديدة", "remind", "schedule"),
+    "schedule": ("ذكر", "نبه", "تذكير", "مهمة جديدة", "سجلي مهمة", "remind", "schedule"),
     "list_reminders": ("تذكيراتي", "قائمة التذكيرات", "reminders"),
     "cancel_reminder": ("الغي", "امسح", "شيلي التذكير", "cancel"),
     "weather": ("طقس", "حرارة", "weather"),
@@ -85,7 +85,34 @@ _HORIZON: Final[dict[str, tuple[str, ...]]] = {
     "file_fetch": ("drive", "running_apps"),
 }
 
-_CONNECTORS: Final = re.compile(r"\s*(?:و|بعدين|بعدها|ثم|كمان)\s*")
+_ZONE_VERBS: Final[tuple[str, ...]] = (
+    "فتح",
+    "شغل",
+    "سكر",
+    "ذكر",
+    "ابحث",
+    "ارفع",
+    "صوري",
+    "ابعث",
+    "افتحي",
+    "شغلي",
+    "سكري",
+    "شوف",
+    "وقف",
+)
+# Clause splitter: explicit connectors, spaced + a + glued و ONLY before an
+# action-verb stem («وذكريني» splits; «وضع/وقت/وين» never fracture).
+_CONNECTORS: Final = re.compile(
+    r"\s*(?:بعدين|بعدها|ثم|كمان)\s*|\s+و\s+|(?<=\s)و(?="
+    + "|".join(_ZONE_VERBS)
+    + r")|^و(?="
+    + "|".join(_ZONE_VERBS)
+    + r")"
+)
+
+# A proven multi-action request beats any single tool unless the single intent
+# is decisively stronger — one tool can only ever satisfy PART of the turn.
+_MULTI_PRECEDENCE_MARGIN: Final[float] = 0.30
 _URL_RE: Final = re.compile(r"https?://\S+")
 _NEGATION_RE: Final = re.compile(r"لا\s+(?:ترسلي|تبعتي|ترسل)|بدون\s+(?:صورة|ما)|بس\s+(?:صفي|احكي)")
 
@@ -125,6 +152,113 @@ def _normalize(text: str) -> str:
     return " ".join((text or "").split()).strip()
 
 
+# Drill-hardened (Stage-2 simulation 2026-09-12): short stems anchor at a
+# token START on proclitic-stripped forms («شغ» fires on «شغلي/شغل/وافتحي»
+# but never inside «مشغول/بشغلة/الشغل»; «اقفلي» still reaches «قفل»).
+# Markers of 5+ chars stay substring matches (distinctive enough to be safe).
+_SHORT_STEM_LEN: Final[int] = 5
+
+# Conjunction/preposition/hamza proclitics plus the definite article stripped
+# for matching (remainder must stay >= 4 chars so «وقفي» never becomes «قفي»).
+# ال-derived forms carry a flag: a definite ARTICLE marks a noun («البريد»
+# names the mail), so verb-family tools may never claim through it — the
+# legacy (?<!ال) guard, principled («الشغل» = the work, never the command).
+_PROCLITICS: Final[tuple[str, ...]] = ("و", "ف", "ب", "ك", "ا", "أ")
+
+_IMPERATIVE_TOOLS: Final[tuple[str, ...]] = (
+    "schedule",
+    "close",
+    "cancel_reminder",
+    "list_reminders",
+    "launch",
+    "create_event",
+    "create_task",
+)
+
+
+def _strip_proclitics(token: str) -> list[tuple[str, bool]]:
+    """(form, via_definite_article) candidates, raw first."""
+    forms = [(token, False)]
+    while True:
+        current, definite = forms[-1]
+        if current.startswith("ال") and len(current) - 2 >= 4:
+            forms.append((current[2:], True))
+        elif len(current) > 4 and current[0] in _PROCLITICS:
+            forms.append((current[1:], definite))
+        else:
+            break
+    return forms
+
+
+# Explicit do-not-disturb: with a weak signal these defer to silent logging
+# instead of firing an action tool mid-focus.
+_BUSY_MARKERS: Final[tuple[str, ...]] = ("مشغول", "لا تزعج", "busy")
+
+# A leading action verb names the primary intent («ذكريني بشغلة» is a reminder
+# even though it mentions a thing; the legacy net ruled the same way).
+_LEAD_WINDOW: Final[int] = 12
+_LEAD_BONUS: Final[float] = 0.30
+_WEAK_SIGNAL_CAP: Final[float] = 0.50
+
+
+def _hit_spans(
+    marker: str,
+    clean: str,
+    token_offsets: list[tuple[str, int]],
+    *,
+    allow_definite: bool = True,
+) -> list[tuple[int, int]]:
+    """Character spans where `marker` fires. Short stems anchor at stripped
+    token starts; long markers match anywhere. ال-derived forms are refused
+    unless `allow_definite` (verb tools never claim through the article).
+    Empty when no evidence."""
+    if not marker:
+        return []
+    if len(marker) >= _SHORT_STEM_LEN:
+        spans, i = [], clean.find(marker)
+        while i >= 0:
+            spans.append((i, i + len(marker)))
+            i = clean.find(marker, i + 1)
+        return spans
+    spans = []
+    for token, offset in token_offsets:
+        for form, definite in _strip_proclitics(token):
+            if definite and not allow_definite:
+                continue
+            if form.startswith(marker):
+                start = offset + (len(token) - len(form))
+                spans.append((start, start + len(marker)))
+                break
+    return spans
+
+
+def _merge_spans(spans: list[tuple[int, int]]) -> int:
+    """Overlapping evidence on one span counts ONCE («شغل»+«شغ» on «شغل»)."""
+    count, end = 0, -1
+    for start, stop in sorted(spans):
+        if start >= end:
+            count += 1
+            end = stop
+        else:
+            end = max(end, stop)
+    return count
+
+
+def _lead_bonus(markers: tuple[str, ...], lead: str, lead_tokens: list[str]) -> bool:
+    """A leading action verb names the primary intent. Single-word markers
+    anchor conservatively on RAW lead tokens («بشغلة» never re-arms «شغ»);
+    multi-word markers match the lead window directly («سجلي مهمة»)."""
+    for marker in markers:
+        if not marker:
+            continue
+        if " " in marker:
+            if marker in lead:
+                return True
+        elif any(tok.startswith(marker) for tok in lead_tokens):
+            return True
+    return False
+
+
 def _goal_markers(tool: str, goals: tuple[str, ...]) -> tuple[str, ...]:
     """Union the inline goal family with the first-class capability registry
     (`src/skills/capabilities.py`) — one vocabulary, two consumers, no drift."""
@@ -141,9 +275,17 @@ def evaluate_candidates(
 ) -> list[IntentHypothesis]:
     """Score EVERY tool against the text; return ranked hypotheses (best first)."""
     clean = _normalize(text)
+    tokens = clean.split()
+    offsets: list[tuple[str, int]] = []
+    cursor = 0
+    for token in tokens:
+        cursor = clean.index(token, cursor)
+        offsets.append((token, cursor))
+        cursor += len(token)
+    lead = clean[:_LEAD_WINDOW]
     ranked: list[IntentHypothesis] = []
     for tool, goals in _TOOL_GOALS.items():
-        hits = [g for g in _goal_markers(tool, goals) if g and g in clean]
+        markers = _goal_markers(tool, goals)
         # multi_task needs 2+ distinct action zones joined by a connector;
         # score it by connector-separated action density instead of raw hits.
         if tool == "multi_task":
@@ -151,24 +293,7 @@ def evaluate_candidates(
             score = 0.0
             if len(parts) >= 2:
                 action_zones = sum(
-                    1
-                    for p in parts
-                    if any(
-                        g.strip() and g.strip() in p
-                        for g in (
-                            "فتح",
-                            "شغل",
-                            "سكر",
-                            "ذكر",
-                            "ابحث",
-                            "ارفع",
-                            "صوري",
-                            "ابعث",
-                            "افتحي",
-                            "شغلي",
-                            "سكري",
-                        )
-                    )
+                    1 for p in parts if any(g.strip() and g.strip() in p for g in _ZONE_VERBS)
                 )
                 if action_zones >= 2:
                     score = 0.55 + 0.10 * min(action_zones - 2, 3)
@@ -187,26 +312,28 @@ def evaluate_candidates(
                 )
             )
             continue
-        # Principle: an expressed goal concept IS intent evidence. Score by hit
-        # count (not normalized by family size — large families must not be
-        # punished). Imperative-action tools outrank topic mentions («ذكريني
-        # ... الجيميل» is a reminder, not a mail read).
-        if not hits:
+        # Principle: an expressed goal concept IS intent evidence. Overlapping
+        # spans merge (one stem on one token = one vote, never double counts).
+        # Imperative-action tools outrank topic mentions («ذكريني ... الجيميل»
+        # is a reminder, not a mail read).
+        allow_definite = tool not in _IMPERATIVE_TOOLS
+        spans: list[tuple[int, int]] = []
+        for marker in markers:
+            spans.extend(_hit_spans(marker, clean, offsets, allow_definite=allow_definite))
+        evidence = _merge_spans(spans)
+        hits = sorted(
+            {g for g in markers if _hit_spans(g, clean, offsets, allow_definite=allow_definite)}
+        )
+        if not evidence:
             base = 0.0
         else:
-            base = min(0.20 + 0.25 * (len(hits) - 1), 0.95)
+            base = min(0.20 + 0.25 * (evidence - 1), 0.95)
             if any(len(h) >= 4 for h in hits):
                 base += 0.10  # distinctive marker, not a coincidental substring
-            if tool in (
-                "schedule",
-                "close",
-                "cancel_reminder",
-                "list_reminders",
-                "launch",
-                "create_event",
-                "create_task",
-            ):
+            if tool in _IMPERATIVE_TOOLS:
                 base += 0.12  # action imperative beats topic noun
+                if _lead_bonus(markers, lead, lead.split()):
+                    base += _LEAD_BONUS  # leading verb names the primary intent
         if trace is not None:
             base -= trace.penalty(tool)
         ranked.append(
@@ -258,6 +385,25 @@ def deduce(text: str, *, trace: ReflectiveTrace | None = None) -> IntentHypothes
     """Top-ranked hypothesis, or a confident 'none' when nothing matches."""
     ranked = evaluate_candidates(text, trace=trace)
     best = ranked[0]
+    clean = _normalize(text)
+    if any(b in clean for b in _BUSY_MARKERS) and best.confidence < _WEAK_SIGNAL_CAP:
+        # Do-not-disturb with a weak signal: stay silent, log to the ledger.
+        return IntentHypothesis(
+            tool="none",
+            arg="",
+            confidence=1.0 - best.confidence,
+            rationale=f"user busy, weak signal (best={best.tool}@{best.confidence:.2f}) — silent ledger",
+            root_goal="do not interrupt",
+            scores={},
+        )
+    multi = next((h for h in ranked if h.tool == "multi_task"), None)
+    if (
+        multi is not None
+        and multi.confidence >= 0.55
+        and best.tool != "multi_task"
+        and best.confidence - multi.confidence < _MULTI_PRECEDENCE_MARGIN
+    ):
+        return multi
     if best.confidence < 0.12:
         return IntentHypothesis(
             tool="none",
