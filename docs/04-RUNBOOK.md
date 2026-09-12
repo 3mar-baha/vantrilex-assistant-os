@@ -68,15 +68,14 @@ Prints a JSON report (`gateway` / `telegram_token` / `ffmpeg` / `overall`) and e
 crashes the process — read the report and decide. Use it after bootstrap and whenever
 Sara seems unreachable.
 
-### Voice latency smoke
+### Voice latency smoke (Fish-only, Edge purged 2026-09-12)
 
 ```powershell
-.venv\Scripts\python -c "import asyncio; from src.voice import VoicePipeline; p=VoicePipeline(voice='ar-JO-SanaNeural', rate='+0%', pitch='+0Hz'); asyncio.run(lambda: None)()"
+.venv\Scripts\python -c "from src.voice_policy import assert_no_edge; assert_no_edge(); print('fish-only OK')"
 ```
 
-Simpler: run the transcode proof — `pytest tests/test_audio_stream_opus.py -q` asserts
-real ffmpeg emits Ogg Opus from an in-memory stream with the first encoded chunk
-surfacing before producer completion (<600 ms first-chunk budget, binding Q1).
+Simpler: run the live Fish probe — `pytest tests/suite/tier2_live_probes/test_fish.py -q`
+asserts real Fish synthesis lands in-memory Ogg Opus (>1KB, OggS header).
 
 ### Streaming first-edit smoke (task 2.2, Audio-TTFT < 250 ms)
 

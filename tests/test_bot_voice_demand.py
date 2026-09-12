@@ -78,7 +78,7 @@ def test_explicit_text_beats_voice_demand():
     assert decide_reply_modality("رد نصي مش صوتي", voice_origin=False) == "text"
 
 
-# -- the failover engine -----------------------------------------------------------
+# -- the Fish-only demanded engine (Edge purged 2026-09-12) ------------------------
 
 
 class _DeadFish:
@@ -91,62 +91,40 @@ class _DeadFish:
         pass
 
 
-class _EdgeStub:
-    """The local Edge-TTS lane (injected as the failover)."""
-
-    def __init__(self):
-        self.synthesized: list[str] = []
-
-    async def synthesize(self, text: str) -> bytes:
-        self.synthesized.append(text)
-        return b"EDGE-OGG-BYTES"
-
-
 async def test_demanded_note_fish_dead_returns_false_no_foreign_voice():
-    """Fish dead on a DEMANDED note -> False (the honest text) — it NEVER
-    synthesizes with a foreign (Microsoft/Edge) voice (owner 2026-09-07)."""
+    """Fish dead on a DEMANDED note -> False (the honest text) — no second
+    voice engine exists anymore (owner 2026-09-07 identity purity)."""
     from src.bot import _speak_demanded
 
-    edge = _EdgeStub()
-    spoke = await _speak_demanded(_DeadFish(), edge, "جوابي المطلوب صوتياً")
-    assert spoke is False  # identity purity: no foreign voice fallback
-    assert edge.synthesized == []  # the Edge lane never fired
+    spoke = await _speak_demanded(_DeadFish(), "جوابي المطلوب صوتياً")
+    assert spoke is False  # identity purity: honest text, never a foreign voice
 
 
-async def test_healthy_fish_never_touches_edge():
-    """Fish alive -> the note goes out on Fish; the Edge lane stays cold."""
+async def test_healthy_fish_speaks_demanded_note():
+    """Fish alive -> the demanded note goes out on Fish."""
     from src.bot import _speak_demanded
 
     class _Fish:
         async def synthesize(self, text):
             return b"FISH-OGG"
 
-    edge = _EdgeStub()
-    spoke = await _speak_demanded(_Fish(), edge, "نص")
-    assert spoke is True
-    assert edge.synthesized == []  # the failover never fired
+    assert await _speak_demanded(_Fish(), "نص") is True
 
 
 async def test_demanded_note_fish_failure_never_fabricates_success():
-    """Fish dead -> False (no fake success). A foreign voice is never the answer."""
+    """Fish dead -> False (no fake success). Honest text is the only fallback."""
     from src.bot import _speak_demanded
 
-    class _DeadEdge:
-        async def synthesize(self, text):
-            raise RuntimeError("edge is retired / dead too")
-
-    spoke = await _speak_demanded(_DeadFish(), _DeadEdge(), "نص")
-    assert spoke is False  # honest line, no deception class
+    assert await _speak_demanded(_DeadFish(), "نص") is False  # honest line, no deception class
 
 
 async def test_shell_demand_fish_dead_lands_honest_text(make_shell, fake_bot):
-    """The FULL shell path with a DEAD Fish lane: the demanded bubble CANNOT be a
-    foreign voice, so the honest TEXT lands (identity purity) — zero SendVoice."""
+    """The FULL shell path with a DEAD Fish lane: no second voice exists, so
+    the honest TEXT lands (identity purity) — zero SendVoice."""
     import json
 
     from tests.conftest import StreamProgram, drain, make_update
 
-    edge = _EdgeStub()
     shell = make_shell(
         router_replies=[
             json.dumps(
@@ -159,7 +137,6 @@ async def test_shell_demand_fish_dead_lands_honest_text(make_shell, fake_bot):
         decide_modality=lambda text, voice_origin: (
             "voice" if VOICE_DEMAND_RE.search(text or "") else None
         ),
-        edge_lane=edge,
     )
     shell_dp, bot = shell.dp, fake_bot()
     await shell_dp.feed_update(
@@ -169,6 +146,5 @@ async def test_shell_demand_fish_dead_lands_honest_text(make_shell, fake_bot):
 
     await drain(_STREAMS)
 
-    assert not bot.session.sent("SendVoice"), "no foreign voice — the Fish-only law"
-    assert edge.synthesized == []  # the Edge failover never fired
+    assert not bot.session.sent("SendVoice"), "no voice without Fish — the Fish-only law"
     assert bot.session.sent("SendMessage"), "the honest text line must land"

@@ -1,14 +1,13 @@
-"""Remediation 1.9 (owner directive 2026-09-03): Fish Audio voice engine via
-OpenRouter's /api/v1/audio/speech (fish-audio/s2.1-pro-free:free + the «سمسم-بوس»
-reference voice). Fish is the primary engine; Edge-TTS Salma stays the transparent
-fallback on any Fish failure — $0.00 held, the owner never left hanging."""
+"""Remediation 1.9 (owner directive 2026-09-03; Edge purged 2026-09-12): Fish
+Audio voice engine via OpenRouter's /api/v1/audio/speech
+(fish-audio/s2.1-pro-free:free + the «سمسم-بوس» reference voice). Fish is
+Sara's ONLY engine — a Fish failure lands honest TEXT, $0.00 held."""
 
 import httpx
 import pytest
 
 from src.config import Settings
 from src.fish_voice import FishFirstVoice, FishVoice, FishVoiceError
-from src.voice import VoicePipeline
 from tests.helpers_voice import CANNED_MP3, needs_ffmpeg
 
 
@@ -74,14 +73,13 @@ async def test_speech_request_shape_and_model():
     payload = req.read()
     assert b"fish-audio/s2.1-pro-free:free" in payload
     assert b"56c2f0c23924449781863ff20aceb5fa" in payload
-    assert "أهلا عمر".encode() in payload  # shaped like the Edge lane (تسكين strips the tanween)
+    assert "أهلا عمر".encode() in payload  # shaped (تسكين strips the tanween)
 
 
 async def test_speech_input_is_dialect_shaped_like_edge():
     """Owner live-retest 2026-09-03 04:16: Fish received RAW text (emoji, هههه,
-    tanween) while the Edge lane shapes — so سمسم laughed out of context and
-    mangled dialect words. The Fish lane must feed shape_for_tts output to the
-    wire, exactly like the Edge lane does."""
+    tanween) — so سمسم laughed out of context and mangled dialect words. The
+    Fish lane must feed shape_for_tts output to the wire."""
     rec = _Recorder(body=MP3)
     fish = FishVoice(model="m", voice_ref="r", api_key="k", transport=rec)
     await fish.synthesize("هسا بدي أفتح 🐱 كتير")
@@ -260,7 +258,7 @@ async def test_unconfigured_fish_raises_no_foreign_fallback():
         await pipe.synthesize("أهلاً")
 
 
-# --- run_bot wiring: fish when ready, pure edge otherwise (remediation 1.9) ------
+# --- run_bot wiring: Fish-only, always (Edge purged 2026-09-12) ------------------
 
 
 def test_build_voice_fish_first_when_configured():
@@ -269,7 +267,12 @@ def test_build_voice_fish_first_when_configured():
     assert isinstance(build_voice(_settings()), FishFirstVoice)
 
 
-def test_build_voice_pure_edge_when_unconfigured():
+async def test_build_voice_unconfigured_raises_honestly():
+    """No Fish key -> the lane exists but synthesis raises FishVoiceError so
+    the caller lands honest TEXT (there is no second voice engine)."""
     from src.bot import build_voice
 
-    assert isinstance(build_voice(_settings(openrouter_api_key=None)), VoicePipeline)
+    lane = build_voice(_settings(openrouter_api_key=None))
+    assert isinstance(lane, FishFirstVoice)
+    with pytest.raises(FishVoiceError):
+        await lane.synthesize("مرحبا")

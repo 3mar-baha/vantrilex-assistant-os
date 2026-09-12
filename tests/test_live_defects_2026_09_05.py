@@ -333,21 +333,13 @@ def test_ip_and_network_questions_route_to_network_status(phrase: str):
 
 async def test_demanded_note_fish_429_lands_honest_text_no_foreign_voice():
     """E: Fish Audio quota exhausted (HTTP 429) -> the DEMANDED note lands the
-    honest TEXT, NEVER a foreign (Microsoft/Edge) voice (owner 2026-09-07)."""
+    honest TEXT — no second voice engine exists (owner 2026-09-07)."""
     from src.bot import _speak_demanded
     from src.fish_voice import FishVoiceError
 
     class FishDead:
         async def synthesize(self, text: str) -> bytes:
             raise FishVoiceError("429 quota exhausted", retry_in_s=3600.0)
-
-    class Edge:
-        def __init__(self) -> None:
-            self.spoken: str | None = None
-
-        async def synthesize(self, text: str) -> bytes:
-            self.spoken = text
-            return b"OGGS"
 
     class Bot:
         def __init__(self) -> None:
@@ -356,24 +348,23 @@ async def test_demanded_note_fish_429_lands_honest_text_no_foreign_voice():
         async def send_voice(self, chat_id, payload):
             self.voices.append(payload)
 
-    edge, bot = Edge(), Bot()
-    spoke = await _speak_demanded(FishDead(), edge, "هلا والله", bot=bot, chat_id=1)
+    bot = Bot()
+    spoke = await _speak_demanded(FishDead(), "هلا والله", bot=bot, chat_id=1)
 
-    assert spoke is False  # identity purity — no foreign voice
-    assert edge.spoken is None  # the Edge lane never fired
-    assert not bot.voices  # no voice bubble on a foreign voice
+    assert spoke is False  # identity purity — honest text instead
+    assert not bot.voices  # no voice bubble without Fish
 
 
 async def test_demanded_note_fish_failure_is_the_single_false_line():
     """E: a Fish failure is the SINGLE False line — the honest text; there is
-    no second (Edge) lane to rescue it anymore."""
+    no second lane to rescue it."""
     from src.bot import _speak_demanded
 
     class Dead:
         async def synthesize(self, text: str) -> bytes:
             raise OSError("fish down")
 
-    assert await _speak_demanded(Dead(), Dead(), "هلا", bot=None, chat_id=None) is False
+    assert await _speak_demanded(Dead(), "هلا", bot=None, chat_id=None) is False
 
 
 # ----------------------------------------------------------------- F: OAuth URL
