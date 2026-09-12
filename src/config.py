@@ -29,12 +29,22 @@ class Settings(BaseSettings):
 
     omniroute_base_url: str  # OMNIROUTE_BASE_URL
     omniroute_api_key: str  # OMNIROUTE_API_KEY
-    fast_model: str  # FAST_MODEL (tier 1, ADR-16)
-    medium_model: str  # MEDIUM_MODEL (tier 2)
-    heavy_model: str  # HEAVY_MODEL (tier 3)
+    fast_model: str  # FAST_MODEL (tier 1: conversation + instant ACK + routing)
+    medium_model: str  # MEDIUM_MODEL (tier 2: sub-agent fleet workers)
+    heavy_model: str  # HEAVY_MODEL (tier 3 base orchestrator, <= threshold tasks)
     fast_model_fallbacks: str | None = None  # FAST_MODEL_FALLBACKS (comma-separated)
     medium_model_fallbacks: str | None = None  # MEDIUM_MODEL_FALLBACKS
     heavy_model_fallbacks: str | None = None  # HEAVY_MODEL_FALLBACKS
+    # Dynamic auto-escalation (2026-09-12 routing matrix): beyond the
+    # concurrency threshold (or a complex DAG swarm) the HEAVY lane escalates
+    # to the MoE orchestrator. Optional with safe defaults (never boot-blocking).
+    heavy_escalation_model: str = (  # HEAVY_ESCALATION_MODEL
+        "openrouter/nvidia/nemotron-3-ultra-550b-a55b:free"
+    )
+    heavy_escalation_fallbacks: str | None = (  # HEAVY_ESCALATION_FALLBACKS
+        "groq/openai/gpt-oss-120b"
+    )
+    heavy_concurrency_threshold: int = 3  # HEAVY_CONCURRENCY_THRESHOLD (> N -> escalate)
     telegram_bot_token: str  # TELEGRAM_BOT_TOKEN
     authorized_user_id: int  # AUTHORIZED_USER_ID (coerced from string)
     stream_edit_interval_ms: int = 750  # STREAM_EDIT_INTERVAL_MS (§2.2 coalesced edits)
@@ -165,6 +175,21 @@ class Settings(BaseSettings):
     @property
     def heavy_chain(self) -> list[str]:
         return [self.heavy_model, *self._split_fallbacks(self.heavy_model_fallbacks)]
+
+    @property
+    def heavy_escalated_chain(self) -> list[str]:
+        """MoE escalation chain for > threshold concurrency / DAG swarms."""
+        return [
+            self.heavy_escalation_model,
+            *self._split_fallbacks(self.heavy_escalation_fallbacks),
+        ]
+
+    def heavy_chain_for(self, n_tasks: int = 1, *, is_dag_swarm: bool = False) -> list[str]:
+        """Concurrency-aware HEAVY selector: base orchestrator at or below the
+        threshold, MoE escalation beyond it (or on explicit DAG swarms)."""
+        if is_dag_swarm or n_tasks > self.heavy_concurrency_threshold:
+            return self.heavy_escalated_chain
+        return self.heavy_chain
 
     @property
     def fish_audio_key(self) -> str | None:

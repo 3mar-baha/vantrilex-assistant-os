@@ -14,15 +14,17 @@ from src.dispatcher import DEFAULT_ACK_AR, FrontDoorDispatcher
 from src.gateway import OmniRouteClient, Tier
 from tests.test_omniroute_gateway import _chunk, _collect, _Scripted, _sse
 
-# Owner architecture update (2026-09-01): two strong models only — the conversation
-# lane (minimax, fb gpt-oss-120b) is Sara's exclusive speaker; the tool lane
-# (nemotron-3-ultra) executes every Gmail/Calendar/Tasks/bridge call.
-FAST_PIN = "openrouter/minimax/minimax-m3:free"
+# Routing matrix (2026-09-12): FAST gemma (conversation+ACK+routing), MEDIUM
+# nex-mini (sub-agent fleet), HEAVY nex-pro base (master orchestrator <=3 tasks,
+# escalates to nemotron-3-ultra MoE beyond). Test-local chains exercise the
+# dispatcher logic; the canonical pins live in .env.example (test below).
+FAST_PIN = "google/gemma-4-31b-it:free"
 FAST_FB1 = "groq/openai/gpt-oss-120b"
-MEDIUM_PIN = "groq/openai/gpt-oss-120b"
-MEDIUM_FB1 = "openrouter/minimax/minimax-m3:free"
-HEAVY_PIN = "openrouter/nvidia/nemotron-3-ultra-550b-a55b:free"
+MEDIUM_PIN = "nex-agi/nex-n2.5-mini:free"
+MEDIUM_FB1 = "groq/openai/gpt-oss-120b"
+HEAVY_PIN = "nex-agi/nex-n2.5-pro:free"
 HEAVY_FB1 = "groq/openai/gpt-oss-120b"
+HEAVY_ESC_PIN = "openrouter/nvidia/nemotron-3-ultra-550b-a55b:free"
 
 CHAINS = {
     Tier.FAST: [FAST_PIN, FAST_FB1],
@@ -68,7 +70,7 @@ def test_settings_carries_tier_pins(make_settings):
 
 
 def test_env_pins_match_adr16():
-    """AC2: template carries the exact ADR-16 IDs; the retired 2-slot pin is gone."""
+    """AC2: template carries the exact routing-matrix IDs incl. escalation."""
     template = (Path(__file__).parents[1] / ".env.example").read_text(encoding="utf-8")
     for line in (
         f"FAST_MODEL={FAST_PIN}",
@@ -77,6 +79,8 @@ def test_env_pins_match_adr16():
         f"MEDIUM_MODEL_FALLBACKS={MEDIUM_FB1}",
         f"HEAVY_MODEL={HEAVY_PIN}",
         f"HEAVY_MODEL_FALLBACKS={HEAVY_FB1}",
+        f"HEAVY_ESCALATION_MODEL={HEAVY_ESC_PIN}",
+        "HEAVY_CONCURRENCY_THRESHOLD=3",
     ):
         assert line in template
     assert "PRIMARY_MODEL" not in template
