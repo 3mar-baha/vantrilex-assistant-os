@@ -605,6 +605,10 @@ class FrontDoorDispatcher:
         # shell reads this after the first yield. Explicit owner patterns in
         # reply_modality still override (the owner's word is the highest law).
         self.voice_hint: bool = False
+        # Principles-over-Rules (2026-09-12): cognition trace per turn for the
+        # Tier-3 shadow tracer; the keyword net stays as final safety fallback.
+        self.last_cognition: dict | None = None
+        self._cog_trace = None
 
     async def handle(
         self,
@@ -654,8 +658,44 @@ class FrontDoorDispatcher:
                 route, ack, tool, arg, voice = parsed
                 self.voice_hint = voice
         if tool == "none":
-            net_tool, net_arg = _keyword_net(user_text)
-            if net_tool != "none":
+            # Principles-over-Rules first: scored intent deduction with full
+            # situational envelope (history + reflective friction). The
+            # deterministic net then verifies/refines: same tool -> the net's
+            # precise arg wins (device-clause stripping, ids); the net's log
+            # line is preserved as the untouchable safety-floor audit signal.
+            try:
+                from src.cognition import (
+                    ReflectiveTrace,
+                    deduce,
+                    evaluate_candidates,
+                    explain_choice,
+                )
+
+                if self._cog_trace is None:
+                    self._cog_trace = ReflectiveTrace()
+                ranked = evaluate_candidates(user_text, trace=self._cog_trace)
+                hyp = deduce(user_text, trace=self._cog_trace)
+                self.last_cognition = {
+                    "winner": hyp.tool,
+                    "confidence": hyp.confidence,
+                    "rationale": hyp.rationale,
+                    "explanation": explain_choice(ranked),
+                    "history_turns": len(list(history or [])),
+                }
+                if hyp.tool != "none" and hyp.confidence >= 0.12:
+                    logger.warning(
+                        "dispatcher cognition deduced router-miss -> tool={!r} "
+                        "conf={:.2f} rationale={!r}",
+                        hyp.tool,
+                        hyp.confidence,
+                        hyp.rationale[:120],
+                    )
+                    tool, arg = hyp.tool, hyp.arg
+            except Exception as error:  # noqa: BLE001 — cognition never blocks chat
+                logger.warning("dispatcher cognition pass failed: {}", error)
+        net_tool, net_arg = _keyword_net(user_text)
+        if net_tool != "none":
+            if tool == "none":
                 logger.warning(
                     "dispatcher keyword net coerced router-miss -> tool={!r} arg={!r} text={!r}",
                     net_tool,
@@ -663,6 +703,22 @@ class FrontDoorDispatcher:
                     user_text[:80],
                 )
                 tool, arg = net_tool, net_arg
+            elif net_tool == tool:
+                # Same verdict: the net confirms cognition; its precise arg
+                # wins (legacy device-clause/id parsing preserved). The log
+                # line stays as the safety-floor audit signal either way.
+                if net_arg != arg:
+                    logger.warning(
+                        "dispatcher keyword net refined cognition arg -> tool={!r} arg={!r}",
+                        net_tool,
+                        net_arg,
+                    )
+                    arg = net_arg
+                else:
+                    logger.warning(
+                        "dispatcher keyword net confirmed cognition -> tool={!r}",
+                        net_tool,
+                    )
         yield ack
         if tool != "none":
             async for delta in self._tool_lane(tool, arg, route, user_text, system, history, tools):
