@@ -1284,3 +1284,5 @@ async def run_bot(settings: Settings, bridge=None) -> None:
                 logger.warning("web client close failed: {}", error)
         await gateway.aclose()
         await vault.aclose()
+        escalated_heavy_chain=settings.heavy_escalated_chain,
+        concurrency_threshold=settings.heavy_concurrency_threshold,

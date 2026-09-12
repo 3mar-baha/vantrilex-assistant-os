@@ -43,6 +43,53 @@ class GatewayError(RuntimeError):
     pass
 
 
+# Dynamic routing matrix (2026-09-12): the HEAVY lane escalates past the
+# concurrency threshold (or on explicit DAG swarms) to the MoE orchestrator.
+HEAVY_CONCURRENCY_THRESHOLD_DEFAULT: Final[int] = 3
+
+
+def select_heavy_chain(
+    base_chain: Sequence[str],
+    escalated_chain: Sequence[str],
+    n_tasks: int = 1,
+    *,
+    is_dag_swarm: bool = False,
+    threshold: int = HEAVY_CONCURRENCY_THRESHOLD_DEFAULT,
+) -> list[str]:
+    """Pure concurrency-aware HEAVY selector (hermetic-test seam)."""
+    if is_dag_swarm or n_tasks > threshold:
+        return list(escalated_chain or base_chain)
+    return list(base_chain)
+
+
+class ConcurrencyTracker:
+    """Live gauge of concurrent HEAVY operations; escalation is advisory and
+    never blocks admission (degraded chains still serve the turn)."""
+
+    def __init__(self, threshold: int = HEAVY_CONCURRENCY_THRESHOLD_DEFAULT) -> None:
+        self.threshold = threshold
+        self._active = 0
+        self.escalations = 0
+
+    @property
+    def active(self) -> int:
+        return self._active
+
+    def acquire(self, n: int = 1) -> int:
+        self._active += max(n, 0)
+        return self._active
+
+    def release(self, n: int = 1) -> int:
+        self._active = max(0, self._active - max(n, 0))
+        return self._active
+
+    def should_escalate(self, *, is_dag_swarm: bool = False) -> bool:
+        escalate = is_dag_swarm or self._active > self.threshold
+        if escalate:
+            self.escalations += 1
+        return escalate
+
+
 class _QuotaExhausted(RuntimeError):
     pass
 
@@ -151,6 +198,8 @@ class OmniRouteClient:
         chains: Mapping[Tier, Sequence[str]],
         timeout_s: float = REQUEST_TIMEOUT_S,
         transport: httpx.AsyncBaseTransport | None = None,
+        escalated_heavy_chain: Sequence[str] | None = None,
+        concurrency_threshold: int = HEAVY_CONCURRENCY_THRESHOLD_DEFAULT,
     ) -> None:
         self._client = httpx.AsyncClient(
             base_url=base_url.rstrip("/"),
@@ -161,6 +210,37 @@ class OmniRouteClient:
         self._chains: dict[Tier, list[str]] = {
             tier: list(models) for tier, models in chains.items()
         }
+        self._escalated_heavy: list[str] = list(escalated_heavy_chain or [])
+        self.tracker = ConcurrencyTracker(threshold=concurrency_threshold)
+
+    def heavy_chain_for(self, n_tasks: int = 1, *, is_dag_swarm: bool = False) -> list[str]:
+        """Concurrency-aware HEAVY chain: base orchestrator at/below threshold,
+        MoE escalation beyond (or on DAG swarms). Falls back to base when no
+        escalation chain is configured."""
+        return select_heavy_chain(
+            self._chains.get(Tier.HEAVY, []),
+            self._escalated_heavy or self._chains.get(Tier.HEAVY, []),
+            n_tasks,
+            is_dag_swarm=is_dag_swarm,
+            threshold=self.tracker.threshold,
+        )
+
+    def stream_heavy(
+        self,
+        messages: list[dict[str, str]],
+        *,
+        n_tasks: int = 1,
+        is_dag_swarm: bool = False,
+        temperature: float = 0.7,
+        max_tokens: int = 2048,
+    ) -> AsyncIterator[str]:
+        """HEAVY streaming through the escalation-selected chain (logged)."""
+        chain = self.heavy_chain_for(n_tasks, is_dag_swarm=is_dag_swarm)
+        escalated = bool(chain and self._escalated_heavy and chain[0] == self._escalated_heavy[0])
+        logger.bind(n_tasks=n_tasks, dag=is_dag_swarm, escalated=escalated).info(
+            "gateway heavy route (escalated={})", escalated
+        )
+        return self._stream(chain, messages, temperature=temperature, max_tokens=max_tokens)
 
     async def __aenter__(self) -> Self:
         return self
