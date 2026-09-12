@@ -1,7 +1,6 @@
 # Runtime dependencies — v1.0 scope (ADR-07).
 # Grows in the same commit as the code that imports it; free/open-source only (ADR-08).
 aiogram>=3.13,<4
-edge-tts>=6.1
 httpx>=0.27
 pydantic>=2.7
 pydantic-settings>=2.3

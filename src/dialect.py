@@ -1,7 +1,7 @@
 """M1 adaptive Jordanian dialect engine.
 
-Notes-driven pronunciation normalization before Edge-TTS, an ingestion loop for
-owner corrections/slang, and the system-prompt snapshot — per
+Notes-driven pronunciation normalization before Fish Audio synthesis, an ingestion
+loop for owner corrections/slang, and the system-prompt snapshot — per
 `docs/specs/master-directive-2026-08-29.md` M1. Zero-cost, pure-python, no I/O:
 the vault client (Sprint 3.1) persists the notes file around this module.
 """

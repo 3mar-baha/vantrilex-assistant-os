@@ -1,9 +1,9 @@
-"""Voice pipeline: Edge-TTS -> ffmpeg -> Ogg Opus, fully in memory (Sprint-1 §1.3).
+"""Fish-only voice opus chain (2026-09-12 Edge purge): in-memory MP3 -> Ogg Opus.
 
-Every synthesis input passes the dialect TTS shaper first (emoji strip + pronunciation
-lexicon + تسكين الأواخر — owner directive 2026-09-02). Opus encodes at 64k in 'audio'
-application mode (24k voip choked every voice — live 2026-09-02). First encoded chunk
-is yielded the moment ffmpeg emits it; every path reaps the ffmpeg child; no orphans.
+Sara's ONLY voice is Fish Audio (`src/fish_voice.py`); this module owns the
+shared ffmpeg encode (64k mono 48kHz, audio application mode) plus the
+hallucinated-media-link sanitizer. There is no synthesis engine here and no
+fallback voice — a Fish failure lands the honest TEXT reply upstream.
 """
 
 import asyncio
@@ -12,17 +12,10 @@ from collections.abc import AsyncIterator
 from contextlib import suppress
 from typing import Final
 
-import edge_tts
 from loguru import logger
 
-from src.dialect import shape_for_tts
-
 FFMPEG_BIN: Final[str] = "ffmpeg"
-MAX_TTS_CHARS: Final[int] = 4000
 OGG_READ_CHUNK: Final[int] = 4096
-# V-1 (deferred queue): a hung engine or a stalled encode must hit this wall
-# and fail honestly — never a silent hang eating the turn.
-TOTAL_SYNTHESIS_TIMEOUT_S: Final[float] = 30.0
 
 # Directive §3 (owner 2026-09-04, live 3:42pm): the model hallucinated
 # sara-voice.s3.amazonaws.com links for her own voice — audio is synthesized
@@ -89,12 +82,12 @@ _FFMPEG_ARGS: Final[tuple[str, ...]] = (
 _STDERR_TAIL: Final[int] = 500
 
 
-class VoicePipelineError(RuntimeError):
-    pass
+class OpusTranscodeError(RuntimeError):
+    """ffmpeg MP3->Opus encode failure — the caller falls back to honest text."""
 
 
 async def _spawn_ffmpeg(ffmpeg_bin: str = FFMPEG_BIN):
-    """One spawn site for every encode path (streaming + one-shot transcode)."""
+    """One spawn site for the Fish MP3 transcode path."""
     try:
         return await asyncio.create_subprocess_exec(
             ffmpeg_bin,
@@ -104,7 +97,7 @@ async def _spawn_ffmpeg(ffmpeg_bin: str = FFMPEG_BIN):
             stderr=asyncio.subprocess.PIPE,
         )
     except FileNotFoundError as exc:
-        raise VoicePipelineError(
+        raise OpusTranscodeError(
             "ffmpeg binary not found — install it (docs/04-RUNBOOK.md)"
         ) from exc
 
@@ -118,15 +111,15 @@ async def _drain(proc, producer: asyncio.Task) -> AsyncIterator[bytes]:
                 if not chunk:
                     break
                 yield chunk
-            await producer  # surface synthesis failure (network etc.)
+            await producer  # surface transcode failure
             code = await proc.wait()
             if code != 0:
                 tail = (await proc.stderr.read())[-_STDERR_TAIL:]
-                raise VoicePipelineError(f"ffmpeg exited {code}: {tail!r}")
-        except (VoicePipelineError, asyncio.CancelledError):
+                raise OpusTranscodeError(f"ffmpeg exited {code}: {tail!r}")
+        except (OpusTranscodeError, asyncio.CancelledError):
             raise
         except Exception as exc:
-            raise VoicePipelineError(f"voice synthesis failed: {exc}") from exc
+            raise OpusTranscodeError(f"opus transcode failed: {exc}") from exc
     finally:
         # Reap on EVERY path — no orphan ffmpeg, no lingering producer task.
         producer.cancel()
@@ -142,9 +135,10 @@ async def _drain(proc, producer: asyncio.Task) -> AsyncIterator[bytes]:
 
 
 async def _transcode_bytes(mp3: bytes) -> bytes:
-    """Encode a COMPLETE in-memory MP3 (e.g. Fish Audio's reply) through the same
-    64k/audio-mode chain; one-shot producer, shared consume/reap contract."""
+    """Encode a COMPLETE in-memory MP3 (Fish Audio's reply) through the 64k
+    audio-mode chain; one-shot producer, shared consume/reap contract."""
     proc = await _spawn_ffmpeg()
+    logger.debug("fish opus transcode spawned ffmpeg pid={}", proc.pid)
 
     async def produce() -> None:
         try:
@@ -165,70 +159,6 @@ async def _transcode_bytes(mp3: bytes) -> bytes:
 
 async def transcode_mp3_to_opus(mp3: bytes) -> bytes:
     """Public one-shot MP3 -> Ogg Opus 64k (Fish Audio replies land here)."""
+    if not mp3:
+        raise ValueError("blank audio — nothing to transcode")
     return await _transcode_bytes(mp3)
-
-
-class VoicePipeline:
-    def __init__(
-        self,
-        *,
-        voice: str,
-        rate: str,
-        pitch: str,
-        ffmpeg_bin: str = FFMPEG_BIN,
-        notes: list | None = None,
-    ) -> None:
-        self._voice = voice
-        self._rate = rate
-        self._pitch = pitch
-        self._ffmpeg_bin = ffmpeg_bin
-        self._notes = notes  # 2.5: learned pronunciation pairs — update_notes() refreshes live
-
-    def update_notes(self, notes: list) -> None:
-        """2.5: «تعلمي:» refreshes the live lexicon without a reboot."""
-        self._notes = notes
-
-    def synthesize_stream(self, text: str) -> AsyncIterator[bytes]:
-        shaped = shape_for_tts(text, notes=self._notes)
-        if not shaped.strip():
-            raise ValueError("text is blank — nothing to synthesize")
-        if len(shaped) > MAX_TTS_CHARS:
-            raise ValueError(f"text exceeds MAX_TTS_CHARS ({len(shaped)} > {MAX_TTS_CHARS})")
-        return self._stream(shaped)
-
-    async def synthesize(self, text: str, *, timeout_s: float | None = None) -> bytes:
-        # V-1: the TOTAL wall — a hung engine dies here honestly instead of
-        # eating the turn forever. timeout_s injectable for the wall test.
-        wall = timeout_s if timeout_s is not None else TOTAL_SYNTHESIS_TIMEOUT_S
-        try:
-            return await asyncio.wait_for(self._synthesize_inner(text), wall)
-        except TimeoutError as exc:  # py>=3.11: wait_for raises TimeoutError
-            raise VoicePipelineError(f"voice synthesis timed out after {wall:.0f}s") from exc
-
-    async def _synthesize_inner(self, text: str) -> bytes:
-        return b"".join([chunk async for chunk in self.synthesize_stream(text)])
-
-    async def _stream(self, text: str) -> AsyncIterator[bytes]:
-        proc = await _spawn_ffmpeg(self._ffmpeg_bin)
-        logger.debug("voice pipeline spawned ffmpeg pid={}", proc.pid)
-
-        async def produce() -> None:
-            try:
-                com = edge_tts.Communicate(text, self._voice, rate=self._rate, pitch=self._pitch)
-                async for event in com.stream():
-                    if event.get("type") != "audio":
-                        continue  # WordBoundary metadata never forwarded
-                    data = event.get("data")
-                    if data:
-                        proc.stdin.write(data)
-                        await proc.stdin.drain()
-            finally:
-                # Half-close stdin on completion AND on failure — closing is what
-                # unblocks ffmpeg's stdout so the consumer can never deadlock.
-                with suppress(Exception):
-                    proc.stdin.close()
-                with suppress(Exception):
-                    await proc.stdin.wait_closed()
-
-        async for chunk in _drain(proc, asyncio.create_task(produce(), name="voice-producer")):
-            yield chunk

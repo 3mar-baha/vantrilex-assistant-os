@@ -1,8 +1,8 @@
-"""Fish Audio voice engine (remediation 1.9, owner directive 2026-09-03): Fish
-`s2.1-pro-free` with the «سمسم-بوس» reference voice via OpenRouter's
-`/api/v1/audio/speech` is Sara's PRIMARY voice; Edge-TTS (Salma) stays the
-transparent fallback on any Fish failure — $0.00 held (free pool, same
-OPENROUTER_API_KEY), the owner never left hanging.
+"""Fish Audio voice engine (remediation 1.9, owner directive 2026-09-03; Edge
+purged 2026-09-12): Fish `s2.1-pro-free` with the «سمسم-بوس» reference voice
+via OpenRouter's `/api/v1/audio/speech` is Sara's ONLY voice — $0.00 held
+(free pool, same OPENROUTER_API_KEY). A Fish failure lands the caller's
+honest TEXT fallback; the owner is never left hanging.
 
 Wire note: the bot calls OpenRouter directly because OmniRoute's speech lane
 does not proxy `openrouter/*` slugs (its /v1/audio/speech validates against a
@@ -20,7 +20,7 @@ _TIMEOUT = httpx.Timeout(connect=5.0, read=60.0, write=10.0, pool=5.0)
 
 
 class FishVoiceError(RuntimeError):
-    """Fish/OpenRouter speech failure — the caller falls back to Edge-TTS."""
+    """Fish/OpenRouter speech failure — the caller lands honest TEXT (no fallback voice)."""
 
     def __init__(self, message: str, *, retry_in_s: float | None = None) -> None:
         super().__init__(message)
@@ -118,10 +118,11 @@ class FishVoice:
 
 
 class FishFirstVoice:
-    """Sara's ONLY voice lane (owner directive 2026-09-03 07:03): Fish via
-    OpenRouter, MP3 -> the ffmpeg 64k opus chain. NO Microsoft-Edge fallback —
-    a foreign voice broke identity live («الرد عاد لمايكروسوفت»); a Fish
-    failure re-raises so the caller's honest TEXT fallback lands instead."""
+    """Sara's ONLY voice lane (owner directive 2026-09-03 07:03, Edge purged
+    2026-09-12): Fish via OpenRouter, MP3 -> the ffmpeg 64k opus chain. No
+    second voice engine exists — a foreign voice broke identity live
+    («الرد عاد لمايكروسوفت»); a Fish failure re-raises so the caller's honest
+    TEXT fallback lands instead."""
 
     def __init__(self, *, fish: FishVoice | None) -> None:
         self._fish = fish
@@ -133,6 +134,6 @@ class FishFirstVoice:
 
     async def synthesize(self, text: str) -> bytes:
         if self._fish is None or not self._fish.available:
-            raise FishVoiceError("fish voice unconfigured — no synthesis, no foreign fallback")
+            raise FishVoiceError("fish voice unconfigured — no synthesis, honest text instead")
         mp3 = await self._fish.synthesize(text)
         return await transcode_mp3_to_opus(mp3)
