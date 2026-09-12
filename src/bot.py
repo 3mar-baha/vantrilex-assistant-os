@@ -50,7 +50,6 @@ from src.skills.voice_to_vault_transcriber import _DEFAULT_PROMPT_TERMS, VoiceTo
 from src.telemetry import TelemetryClient
 from src.tools import ToolRegistry
 from src.vault import VaultClient
-from src.voice import VoicePipeline
 
 SYSTEM_PROMPT_AR: Final[str] = (
     "أنت سارة — المساعدة التنفيذية الشخصية لعمر الفياض، صانعك ومهندسك الوحيد. "
@@ -185,7 +184,6 @@ def build_dispatcher(
     decide_modality=None,
     initial_prompt_terms=None,
     affect=None,
-    edge_lane=None,  # P0-A: the local Edge-TTS failover for DEMANDED notes
     bridge_tunnel=None,  # M3: the bridge server (start_station handshake probe)
 ) -> Dispatcher:
     """gateway: the OmniRouteClient; wrapped here in the ADR-18 front door.
@@ -411,7 +409,6 @@ def build_dispatcher(
                 transcriber=transcriber,
                 affect=affect,
                 acoustic=acoustic,
-                edge_lane=edge_lane,
             )
         )
         _STREAMS[message.chat.id] = (task, cancel)
@@ -470,7 +467,6 @@ async def _stream_answer(
     transcriber=None,
     affect=None,
     acoustic: str = "",
-    edge_lane=None,  # P0-A: the local Edge-TTS failover for DEMANDED notes
 ) -> None:
     chat_id = message.chat.id
     streamer = ChatStreamer(bot, chat_id, edit_interval_ms=settings.stream_edit_interval_ms)
@@ -546,7 +542,6 @@ async def _stream_answer(
                 ack=ack,
                 strip=_strip_links_for_voice(),
                 demanded=demanded,
-                edge=edge_lane,
             )
             # text fallback (if needed) already landed inside the delivery
         else:
@@ -622,19 +617,19 @@ async def _deliver_voice_reply(
     ack: str,
     strip,
     demanded: bool = False,  # P0-A: the strict surface — never text-only
-    edge=None,  # P0-A: the local Edge-TTS failover lane
 ) -> tuple[str, bool]:
     """Streaming voice delivery (speed pass 2026-09-04): sentence-complete
     segments synthesize + dispatch WHILE the brain still streams. Returns
-    (full_answer, spoke_any).
+    (full_answer, spoke_any). Fish-only: any synthesis death lands honest
+    text — there is no second voice engine.
 
     - First segment carries the STT-3 window-aware retry (voice-vs-text verdict)
     - Short answers (<120 chars) stay ONE note with today's exact retry loop
     - Voice dead from the start -> FULL text as chat bubbles
     - Voice dead mid-stream -> the UNSENT remainder as text (nothing lost)
     - P0-A (demanded): the note NEVER lands text-only — the primary lane's
-      failure escalates to _speak_demanded (Edge failover), and only when BOTH
-      engines die does the honest apology land (as text, with a loud log).
+      failure escalates to _speak_demanded (Fish-only retry), and only when
+      Fish dies does the honest apology land (as text, with a loud log).
     """
     answer = ""
     spoke = False
@@ -682,16 +677,16 @@ async def _deliver_voice_reply(
         spoken_all = strip(full_answer.strip() or ack) or "هذي رسالتي الصوتية 🌸"
         if voice is not None and spoken_all and len(spoken_all) <= _SHORT_ANSWER_CHARS:
             if demanded:
-                # P0-A: a demanded note NEVER lands text-only — Edge failover
-                spoke = await _speak_demanded(voice, edge, spoken_all, bot=bot, chat_id=chat_id)
+                # P0-A: a demanded note NEVER lands text-only — Fish-only retry
+                spoke = await _speak_demanded(voice, spoken_all, bot=bot, chat_id=chat_id)
             else:
                 spoke = await _speak_with_retry(bot, chat_id, voice, spoken_all, attempts=2)
         if not spoke and spoken_all.strip():
             if demanded:
-                # both lanes dead: the honest apology (text, loud, named)
+                # Fish dead: the honest apology (text, loud, named)
                 await send_split(
                     message,
-                    "صوتي تعطل هالمرة حتى بالمسار الاحتياطي — الرد الكامل بالنص وبتعويضها "
+                    "صوتي تعطل هالمرة — الرد الكامل بالنص وبتعويضها "
                     "بأول ملاحظة صوتية لما يرجع الصوت 🌷\n\n" + spoken_all,
                 )
             else:
@@ -702,8 +697,7 @@ async def _deliver_voice_reply(
             ogg = await voice.synthesize(strip(remainder))
             await bot.send_voice(chat_id, BufferedInputFile(ogg, filename="sara.ogg"))
         except Exception as error:  # noqa: BLE001 — the text is the last resort
-            # 2026-09-07 (owner preference): a demanded tail NEVER uses a foreign
-            # (Microsoft/Edge) voice — Fish-only, then honest text. No edge param.
+            # Fish-only: a dead tail lands as text, never lost.
             logger.warning("voice tail flush failed: {}", error)
             await send_split(message, strip(remainder))
     return full_answer, spoke
@@ -731,12 +725,11 @@ async def _speak_with_retry(bot: Bot, chat_id: int, voice, text: str, *, attempt
     return False
 
 
-async def _speak_demanded(voice, edge, text: str, *, bot=None, chat_id: int | None = None) -> bool:
+async def _speak_demanded(voice, text: str, *, bot=None, chat_id: int | None = None) -> bool:
     """P0-A (master directive 2026-09-05) + owner preference 2026-09-07: a
     DEMANDED voice note lands on Fish (Sara's ONLY voice) OR the honest line —
-    it NEVER substitutes a foreign (Microsoft/Edge) voice. The `edge` param is
-    retired; a Fish failure returns False so the caller sends the honest text
-    (identity purity beats a foreign voice per the owner)."""
+    there is no second voice engine. A Fish failure returns False so the caller
+    sends the honest text (identity purity per the owner)."""
     try:
         ogg = await voice.synthesize(text)
         if bot is not None and chat_id is not None:
@@ -929,7 +922,7 @@ async def _learn_dialect(vault, text: str, voice, tz: ZoneInfo, transcriber=None
         parsed = parse_notes(updated)
         update = getattr(voice, "update_notes", None)
         if callable(update):
-            update(parsed)  # the live lexicon (Edge + Fish), no reboot
+            update(parsed)  # the live Fish lexicon, no reboot
         refresh_prompt = getattr(transcriber, "update_prompt_terms", None)
         if callable(refresh_prompt):  # 2.6: the learned pairs bias transcription too
             refresh_prompt(
@@ -954,19 +947,16 @@ class _BotNotifier:
 
 
 def build_voice(settings: Settings, notes: list | None = None):
-    """Voice lane factory (remediation 1.9, identity-purity update 2026-09-03):
-    Fish Audio is Sara's ONLY voice when configured — NO Microsoft fallback
-    (a foreign voice broke identity live); Fish failure lands the caller's
-    honest TEXT fallback. Unconfigured deployments stay pure Edge-TTS.
-    2.5: notes = the learned dialect pairs riding the Edge shaper from boot."""
-    if not settings.fish_audio_ready:
-        return VoicePipeline(
-            voice=settings.voice_name,
-            rate=settings.voice_rate,
-            pitch=settings.voice_pitch,
-            notes=notes,
-        )
-    return FishFirstVoice(fish=FishVoice.from_settings(settings))
+    """Voice lane factory (Fish-only, 2026-09-12 Edge purge): Fish Audio is
+    Sara's ONLY voice — no fallback engine exists. Unconfigured deployments
+    get a Fish lane without credentials, whose synthesis raises honestly so
+    the caller lands TEXT. Fish failure always lands the caller's honest TEXT
+    fallback. 2.5: notes refresh the live dialect lexicon from boot."""
+    fish = FishVoice.from_settings(settings) if settings.fish_audio_ready else None
+    lane = FishFirstVoice(fish=fish)
+    if notes:
+        lane.update_notes(notes)
+    return lane
 
 
 def start_background_loops(
@@ -1031,16 +1021,10 @@ async def run_bot(settings: Settings, bridge=None) -> None:
             Tier.MEDIUM: settings.medium_chain,
             Tier.HEAVY: settings.heavy_chain,
         },
+        escalated_heavy_chain=settings.heavy_escalated_chain,
+        concurrency_threshold=settings.heavy_concurrency_threshold,
     )
     voice = build_voice(settings)  # 2.5: boot notes load below, once the vault exists
-    # P0-A (2026-09-05): the local Edge-TTS lane — the failover for DEMANDED
-    # voice notes (Fish 429/timeout must never degrade a demand to text). It
-    # shares the shaper/lexicon with the primary lane.
-    edge_lane = VoicePipeline(
-        voice=settings.voice_name,
-        rate=settings.voice_rate,
-        pitch=settings.voice_pitch,
-    )
     vault = VaultClient(
         settings.vault_github_repo,
         settings.vault_github_token.get_secret_value(),
@@ -1051,8 +1035,6 @@ async def run_bot(settings: Settings, bridge=None) -> None:
 
         boot_notes = parse_notes(await vault.read(DIALECT_NOTES_PATH))
         voice.update_notes(boot_notes)
-        if edge_lane is not None:
-            edge_lane.update_notes(boot_notes)  # P0-A: the failover speaks the same lexicon
     except Exception as error:  # noqa: BLE001 — no notes = no lexicon, the bot still boots
         logger.warning("boot dialect notes load skipped: {}", error)
         boot_notes = []
@@ -1214,7 +1196,6 @@ async def run_bot(settings: Settings, bridge=None) -> None:
         affect=AffectiveStateTracker(
             brain=gateway, history=[], baseline=""
         ),  # f2: per-turn tracker reads live history
-        edge_lane=edge_lane,  # P0-A: the local Edge-TTS failover (demanded notes)
     )
     summarizer = DailySummarizer(vault, gateway, tz=ZoneInfo(settings.tz))
     # 3.1: the owner-promised loops, all through one testable stitch point —
@@ -1284,5 +1265,3 @@ async def run_bot(settings: Settings, bridge=None) -> None:
                 logger.warning("web client close failed: {}", error)
         await gateway.aclose()
         await vault.aclose()
-        escalated_heavy_chain=settings.heavy_escalated_chain,
-        concurrency_threshold=settings.heavy_concurrency_threshold,
