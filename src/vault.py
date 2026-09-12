@@ -17,6 +17,7 @@ import asyncio
 import base64
 import re
 from datetime import date
+from pathlib import Path
 from typing import Any
 
 import httpx
@@ -43,6 +44,36 @@ CONTACTS_SUBDIRS = (
     "Contacts/Unknown/",
 )
 MANDATORY_FILES = ("02_Areas/Profile/User_Info.md", "02_Areas/Profile/Dialect_Notes.md")
+
+# Local first-boot scaffold (drill finding 2026-09-12): the remote bootstrap
+# (ensure_mandatory_dirs, GitHub API) never touches the disposable local root,
+# so a fresh VAULT_LOCAL_PATH misses Contacts/Call_Transcripts/Studies (and
+# the local-only State/ dir) until something crashes on them. This set is the
+# complete local mkdir contract.
+LOCAL_SCAFFOLD_DIRS = (*MANDATORY_DIRS, *CONTACTS_SUBDIRS, "State/")
+
+
+def ensure_vault_scaffolding(root: str | Path) -> list[str]:
+    """Create every mandatory local vault dir under `root` (idempotent).
+
+    Returns the dirs actually created. Never raises: an unmakable dir degrades
+    to a loud warning while the rest still land — boot must never die on
+    scaffolding, and writers must never meet FileNotFoundError after it.
+    """
+    created: list[str] = []
+    base = Path(root)
+    for directory in LOCAL_SCAFFOLD_DIRS:
+        try:
+            path = base / directory.rstrip("/")
+            if not path.is_dir():
+                path.mkdir(parents=True, exist_ok=True)
+                created.append(directory)
+        except OSError as error:
+            logger.warning("vault scaffold skipped {}: {}", directory, error)
+    if created:
+        logger.bind(created=created).info("vault scaffold created {} dirs", len(created))
+    return created
+
 
 # Canonical paths consumed by 3.3/3.4.
 PROFILE_USER_INFO = "02_Areas/Profile/User_Info.md"
