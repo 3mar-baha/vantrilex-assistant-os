@@ -19,6 +19,8 @@ from typing import Final, Literal, Self
 import httpx
 from loguru import logger
 
+from src.gender_pipeline import normalize_masculine_address
+
 RETRY_ATTEMPTS: Final[int] = 3
 BACKOFF_BASE_S: Final[float] = 0.5
 BACKOFF_CAP_S: Final[float] = 8.0
@@ -339,7 +341,11 @@ class OmniRouteClient:
             messages, tier=tier, temperature=temperature, max_tokens=max_tokens
         ):
             parts.append(delta)
-        return "".join(parts)
+        # Gender shield (mission 2026-09-13): normalize 2nd-person address to
+        # masculine (Omar) on the aggregated reply. JSON-safe by construction:
+        # verdict keys are English and third-person nouns (أختي/أمي) match no
+        # rule — only addressee-directed feminine verb forms rewrite.
+        return normalize_masculine_address("".join(parts))
 
     async def _stream(
         self,

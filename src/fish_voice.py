@@ -13,6 +13,7 @@ already in .env — the voice lane borrows it; the brain still routes via OmniRo
 import httpx
 
 from src.dialect import shape_for_tts
+from src.gender_pipeline import normalize_masculine_address
 from src.voice import transcode_mp3_to_opus
 
 FISH_SPEECH_URL = "https://openrouter.ai/api/v1/audio/speech"
@@ -76,6 +77,10 @@ class FishVoice:
         # dialect. Shape exactly like the Edge lane; if shaping empties the
         # string (pure emoji), pass the original through — never blank.
         text = (shape_for_tts(text, notes=self._notes) or text).strip()
+        # Gender shield (mission 2026-09-13): masculine address to Omar before
+        # the wire — Sara's own feminine voice is shielded inside; no-ops when
+        # the text is already masculine.
+        text = normalize_masculine_address(text).strip()
         if not text:
             raise ValueError("blank text — nothing to synthesize")
         # Phase-4 (Leap 4): voice-surface tag sanitizer — unknown tags never
