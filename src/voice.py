@@ -38,6 +38,50 @@ def strip_external_media_links(text: str) -> str:
         return text
 
 
+_TAG_RE: Final = re.compile(r"\[([^\[\]\n]{1,60})\]|\(([^()\n]{1,60})\)")
+
+
+def strip_tags(text: str) -> str:
+    """Remove ALL inline expressive tags (text surface): chat bubbles must
+    never show literal tags. Surrounding prose survives; whitespace collapsed.
+    Pure, never raises."""
+    try:
+        cleaned = _TAG_RE.sub("", text or "")
+        return re.sub(r"[ \t]{2,}", " ", cleaned).strip()
+    except Exception:  # noqa: BLE001 — sanitation never blocks the reply
+        return text
+
+
+def sanitize_tags(text: str, *, mode: str = "routine") -> str:
+    """Voice-surface filter (Q3): keep allowlisted tags up to the scarcity cap,
+    drop hallucinated/over-cap tags silently. Modes: technical=0, routine≤1,
+    extended≤2. Unknown modes degrade to routine. Pure, never raises."""
+    from src.skills.expressive_audio import CAPS, is_supported_tag
+
+    try:
+        cap = CAPS.get((mode or "routine").strip().lower(), CAPS["routine"])
+        if cap <= 0:
+            return strip_tags(text)
+        kept = 0
+
+        def _filter(match: re.Match[str]) -> str:
+            nonlocal kept
+            bracket, paren = match.group(1), match.group(2)
+            if bracket is not None:
+                ok = is_supported_tag(bracket)
+            else:
+                ok = is_supported_tag(paren or "", parens=True)
+            if ok and kept < cap:
+                kept += 1
+                return match.group(0)
+            return ""
+
+        cleaned = _TAG_RE.sub(_filter, text or "")
+        return re.sub(r"[ \t]{2,}", " ", cleaned).strip()
+    except Exception:  # noqa: BLE001 — sanitation never blocks the reply
+        return text
+
+
 _FFMPEG_ARGS: Final[tuple[str, ...]] = (
     "-hide_banner",
     "-loglevel",
