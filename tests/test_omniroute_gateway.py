@@ -73,6 +73,44 @@ async def _collect(gen) -> list[str]:
     return out
 
 
+async def test_model_unavailable_falls_back():
+    """2026-09-13 tuning: a 404 (unknown slug on this provider) falls through
+    to the next model instead of aborting the turn."""
+    script = _Scripted(
+        httpx.Response(404, text='{"error": {"message": "No active credentials for provider: x"}}'),
+        httpx.Response(200, content=_sse(_chunk("بديل"))),
+    )
+    async with _client(script) as client:
+        deltas = await _collect(client.stream_chat([{"role": "user", "content": "hi"}]))
+    assert deltas == ["بديل"]
+    assert script.models() == [PRIMARY, FAST]
+
+
+async def test_nexagi_404_canary_regression():
+    """Live-canary shape (2026-09-13): nex-agi 404 -> nemotron escalation ->
+    groq fallback, in order, first live model serves."""
+    NEX = "nex-agi/nex-n2.5-pro:free"
+    ESC = "openrouter/nvidia/nemotron-3-ultra-550b-a55b:free"
+    FB = "groq/openai/gpt-oss-120b"
+    script = _Scripted(
+        httpx.Response(
+            404,
+            text='{"error": {"message": "No active credentials for provider: nex-agi"}}',
+        ),
+        httpx.Response(200, content=_sse(_chunk("نار"))),
+    )
+    client = OmniRouteClient(
+        "http://gw.test/v1",
+        "test-key",
+        chains={Tier.FAST: [], Tier.MEDIUM: [], Tier.HEAVY: [NEX, ESC, FB]},
+        transport=script.transport(),
+    )
+    async with client:
+        reply = await client.chat([{"role": "user", "content": "hi"}], tier=Tier.HEAVY)
+    assert reply == "نار"
+    assert script.models() == [NEX, ESC]
+
+
 @pytest.fixture
 def logs():
     records: list = []

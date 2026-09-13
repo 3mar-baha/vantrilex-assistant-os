@@ -78,11 +78,18 @@ def test_env_pins_match_adr16():
         f"MEDIUM_MODEL={MEDIUM_PIN}",
         f"MEDIUM_MODEL_FALLBACKS={MEDIUM_FB1}",
         f"HEAVY_MODEL={HEAVY_PIN}",
-        f"HEAVY_MODEL_FALLBACKS={HEAVY_FB1}",
         f"HEAVY_ESCALATION_MODEL={HEAVY_ESC_PIN}",
         "HEAVY_CONCURRENCY_THRESHOLD=3",
     ):
         assert line in template
+    # 2026-09-13 tuning: HEAVY carries TWO fallbacks (MoE escalation first,
+    # groq last) so nex-agi credential gaps never crash narration.
+    heavy_fb = next(
+        line.split("=", 1)[1]
+        for line in template.splitlines()
+        if line.startswith("HEAVY_MODEL_FALLBACKS=")
+    )
+    assert heavy_fb.split(",") == [HEAVY_ESC_PIN, HEAVY_FB1]
     assert "PRIMARY_MODEL" not in template
 
 

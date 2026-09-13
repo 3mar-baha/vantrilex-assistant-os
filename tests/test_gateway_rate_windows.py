@@ -47,11 +47,13 @@ GROQ_TPD_BODY = (
 def _clear_cooldowns():
     """The cooldown registry is process-wide by design — tests must not leak a
     hot model into each other (or into the sprint-1 gateway tests)."""
-    from src.gateway import _MODEL_COOLDOWNS
+    from src.gateway import _429_STREAK, _MODEL_COOLDOWNS
 
     _MODEL_COOLDOWNS.clear()
+    _429_STREAK.clear()
     yield
     _MODEL_COOLDOWNS.clear()
+    _429_STREAK.clear()
 
 
 def _chunk(text: str) -> str:
@@ -182,30 +184,63 @@ async def test_all_models_window_429_raises_honest_error():
             assert "17m25s" in str(exc) or "1045" in str(exc)
 
 
-async def test_no_window_429_keeps_fast_retries():
-    """A window-less 429 (burst limit) keeps the existing transient behavior —
-    fast retries are exactly right for a seconds-scale blip."""
-    import src.gateway as gw
+async def test_single_bare_429_still_retries_fast():
+    """A lone window-less 429 (seconds-scale blip) keeps one fast retry —
+    the fail-fast skip only trips on CONSECUTIVE throttling."""
+    script = _Scripted(
+        httpx.Response(429, text="too many requests"),
+        httpx.Response(200, content=_sse(_chunk("تم"))),
+    )
+    async with _client(script) as client:
+        deltas = await _collect(client.stream_chat([{"role": "user", "content": "hi"}]))
+    assert deltas == ["تم"]
+    assert script.models() == [PRIMARY, PRIMARY]
 
-    sleeps: list[float] = []
-    original = gw._sleep
 
-    async def fake_sleep(delay: float) -> None:
-        sleeps.append(delay)
-        await original(0)
+async def test_bare_429_streak_skips_after_two():
+    """2026-09-13 tuning: the 2nd consecutive unannounced 429 cools the model
+    down instead of burning a 3rd ~25s attempt — the next model serves now."""
+    from src.gateway import _MODEL_COOLDOWNS
 
-    gw._sleep = fake_sleep  # type: ignore[assignment]
-    try:
-        script = _Scripted(
-            httpx.Response(429, text="too many requests"),
-            httpx.Response(429, text="too many requests"),
-            httpx.Response(429, text="too many requests"),
-            httpx.Response(200, content=_sse(_chunk("تم"))),
-        )
-        async with _client(script) as client:
-            deltas = await _collect(client.stream_chat([{"role": "user", "content": "hi"}]))
-        assert deltas == ["تم"]
-        assert script.models() == [PRIMARY, PRIMARY, PRIMARY, SECOND]
-        assert len(sleeps) == 2  # 3 attempts, 2 sleeps between them
-    finally:
-        gw._sleep = original  # type: ignore[assignment]
+    script = _Scripted(
+        httpx.Response(429, text="Provider returned error"),
+        httpx.Response(429, text="Provider returned error"),
+        httpx.Response(200, content=_sse(_chunk("تم"))),
+    )
+    async with _client(script) as client:
+        deltas = await _collect(client.stream_chat([{"role": "user", "content": "hi"}]))
+    assert deltas == ["تم"]
+    assert script.models() == [PRIMARY, PRIMARY, SECOND]
+    assert PRIMARY in _MODEL_COOLDOWNS  # hot: later turns skip it outright
+
+
+async def test_hot_model_skipped_next_turn():
+    """Turn 2 during the streak cooldown never touches the throttled model."""
+    script = _Scripted(
+        httpx.Response(429, text="Provider returned error"),
+        httpx.Response(429, text="Provider returned error"),
+        httpx.Response(200, content=_sse(_chunk("one"))),
+        httpx.Response(200, content=_sse(_chunk("two"))),
+    )
+    async with _client(script) as client:
+        assert await _collect(client.stream_chat([{"role": "user", "content": "hi"}])) == ["one"]
+        assert await _collect(client.stream_chat([{"role": "user", "content": "hi"}])) == ["two"]
+    assert script.models() == [PRIMARY, PRIMARY, SECOND, SECOND]
+
+
+async def test_success_resets_bare_streak():
+    """A served turn clears the streak — the next 429 starts counting fresh."""
+    from src.gateway import _429_STREAK
+
+    script = _Scripted(
+        httpx.Response(429, text="too many requests"),
+        httpx.Response(200, content=_sse(_chunk("ok"))),
+        httpx.Response(429, text="too many requests"),
+        httpx.Response(200, content=_sse(_chunk("fine"))),
+    )
+    async with _client(script) as client:
+        assert await _collect(client.stream_chat([{"role": "user", "content": "hi"}])) == ["ok"]
+        assert _429_STREAK.get(PRIMARY, (0, 0.0))[0] == 0
+        # second turn: PRIMARY attempted again (not skipped), retried once
+        assert await _collect(client.stream_chat([{"role": "user", "content": "hi"}])) == ["fine"]
+    assert script.models() == [PRIMARY, PRIMARY, PRIMARY, PRIMARY]

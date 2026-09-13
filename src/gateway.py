@@ -123,6 +123,12 @@ class _TransientFailure(RuntimeError):
     pass
 
 
+class _ModelUnavailable(RuntimeError):
+    """Model-level fatal (400/404/422: unknown slug, bad params) — the NEXT
+    model may live on another provider, so fall back instead of aborting.
+    Auth failures (401/403) still abort: the whole gateway is suspect."""
+
+
 class _WindowRateLimit(RuntimeError):
     """429 whose body/header ANNOUNCES the recovery window — the model is hot
     for that window; the rest of the chain serves the turn."""
@@ -135,6 +141,15 @@ class _WindowRateLimit(RuntimeError):
 # STT-3: model -> epoch-s until it may be probed again (process-wide; the
 # live groq TPD 429 burned 3 retries x N models EVERY turn for 17 minutes).
 _MODEL_COOLDOWNS: dict[str, float] = {}
+
+# Fail-fast (2026-09-13 tuning): consecutive UNANNOUNCED 429s mark the model
+# hot without waiting for an announced window — sustained free-pool throttle
+# episodes stop burning 3 attempts every turn. Success resets the streak.
+BARE_429_SKIP_AFTER: Final[int] = 2
+BARE_429_COOLDOWN_S: Final[float] = 90.0
+# Streak entries evaporate: a 429 from long ago must not skip a healthy model.
+BARE_429_STREAK_TTL_S: Final[float] = 300.0
+_429_STREAK: dict[str, tuple[int, float]] = {}  # model -> (streak, last epoch)
 
 _RETRY_WINDOW_RE: Final = re.compile(
     r"(?:try\s+again\s+in|retry\s+in)\s+"
@@ -161,6 +176,24 @@ def parse_retry_window_s(body: str, *, retry_after: str | None = None) -> float 
     return window or None
 
 
+def _note_bare_429(model: str) -> bool:
+    """Count one unannounced 429 for the fail-fast skip. Returns True when the
+    streak trips: the model is marked hot and the caller must fall back now
+    instead of burning another ~25s attempt. Stale streaks evaporate (TTL);
+    success resets via pop at the _stream success path."""
+    now = time.time()
+    count, last = _429_STREAK.get(model, (0, 0.0))
+    if now - last > BARE_429_STREAK_TTL_S:
+        count = 0
+    count += 1
+    if count >= BARE_429_SKIP_AFTER:
+        _429_STREAK[model] = (0, now)
+        _MODEL_COOLDOWNS[model] = now + BARE_429_COOLDOWN_S
+        return True
+    _429_STREAK[model] = (count, now)
+    return False
+
+
 def _model_hot(model: str) -> float | None:
     """Remaining cooldown on a model, or None when it may be probed."""
     until = _MODEL_COOLDOWNS.get(model)
@@ -172,9 +205,11 @@ def _model_hot(model: str) -> float | None:
 
 def _classify(
     status_code: int, body_snippet: str
-) -> Literal["fatal", "quota", "transient", "window"]:
-    if status_code in (400, 401, 403, 404, 422):
-        return "fatal"
+) -> Literal["fatal", "quota", "transient", "window", "unavailable"]:
+    if status_code in (401, 403):
+        return "fatal"  # credential-level: the whole gateway is suspect, abort
+    if status_code in (400, 404, 422):
+        return "unavailable"  # model-level: next model may live elsewhere, fall back
     if status_code == 402:
         return "quota"
     if status_code == 429:
@@ -204,6 +239,8 @@ def _raise_for_gateway_error(
 ) -> None:
     if kind == "quota":
         raise _QuotaExhausted(f"{source}: {detail}")
+    if kind == "unavailable":
+        raise _ModelUnavailable(f"{source}: {detail}")
     if kind == "window":
         window = parse_retry_window_s(detail, retry_after=retry_after)
         assert window is not None, "window classification without a parseable window"
@@ -333,10 +370,19 @@ class OmniRouteClient:
                     async for content in self._attempt(model, payload):
                         deltas += 1
                         yield content
+                    _429_STREAK.pop(model, None)  # served: throttle streak resets
                     return
                 except _QuotaExhausted as exc:
                     logger.info(
                         "gateway quota | model={} attempt={} -> immediate fallback", model, attempt
+                    )
+                    last_cause = str(exc)
+                    break
+                except _ModelUnavailable as exc:
+                    # 2026-09-13 tuning: model-level fatal (unknown slug on this
+                    # provider) — the next model may live elsewhere, fall back.
+                    logger.warning(
+                        "gateway model unavailable | model={} -> immediate fallback", model
                     )
                     last_cause = str(exc)
                     break
@@ -432,6 +478,11 @@ class OmniRouteClient:
                 await response.aclose()
             snippet = response.text[:500]
             kind = _classify(response.status_code, snippet)
+            if response.status_code == 429 and kind == "transient" and _note_bare_429(model):
+                raise _WindowRateLimit(
+                    f"HTTP 429 (streak skip, {BARE_429_SKIP_AFTER} consecutive)",
+                    window_s=BARE_429_COOLDOWN_S,
+                )
             _raise_for_gateway_error(
                 model,
                 kind,
@@ -468,6 +519,11 @@ class OmniRouteClient:
                     match = _EMBEDDED_STATUS.search(message)
                     status = int(match.group(1)) if match else 0
                     kind = _classify(status, message)
+                    if status == 429 and kind == "transient" and _note_bare_429(model):
+                        raise _WindowRateLimit(
+                            f"SSE error [429] (streak skip, {BARE_429_SKIP_AFTER} consecutive)",
+                            window_s=BARE_429_COOLDOWN_S,
+                        )
                     _raise_for_gateway_error(model, kind, f"SSE error [{status}]", message[:500])
                 choices = chunk.get("choices") or [{}]
                 content = (choices[0].get("delta") or {}).get("content")

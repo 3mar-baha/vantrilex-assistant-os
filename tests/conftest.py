@@ -107,6 +107,19 @@ ENV_EXAMPLE: dict[str, str] = {
 }
 
 
+@pytest.fixture(autouse=True)
+def _clear_gateway_registries():
+    """Process-wide gateway registries (rate cooldowns, 429 streaks) must not
+    leak across tests — live tier-2 probes throttle real pins mid-suite."""
+    from src.gateway import _429_STREAK, _MODEL_COOLDOWNS
+
+    _MODEL_COOLDOWNS.clear()
+    _429_STREAK.clear()
+    yield
+    _MODEL_COOLDOWNS.clear()
+    _429_STREAK.clear()
+
+
 @pytest.fixture
 def make_settings():
     """Build a valid Settings from the .env.example mirror; override or drop fields."""
