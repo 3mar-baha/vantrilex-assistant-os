@@ -4,3 +4,4 @@ pytest-asyncio>=0.23
 pytest-cov>=5
 ruff>=0.5
 bandit>=1.7
+openpyxl>=3.1  # offline JODA corpus probing only (scripts/joda_schema_probe.py, MIT)
