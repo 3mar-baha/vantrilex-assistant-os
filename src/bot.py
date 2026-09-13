@@ -45,7 +45,8 @@ from src.memory import (
 )
 from src.middleware import OwnerOnlyMiddleware
 from src.pc_actions import PCActionCoordinator
-from src.persona import SARA_PERSONA_AR
+from src.persona import SARA_PERSONA_AR, build_persona
+from src.situational import SituationalState
 from src.skills.telegram_chat_streamer import ChatStreamer
 from src.skills.voice_biometric_auth import VoiceBiometrics, owner_voice_gate
 from src.skills.voice_to_vault_transcriber import _DEFAULT_PROMPT_TERMS, VoiceToVault
@@ -120,6 +121,7 @@ def build_dispatcher(
     initial_prompt_terms=None,
     affect=None,
     bridge_tunnel=None,  # M3: the bridge server (start_station handshake probe)
+    situational=None,  # Phase-6 (Leap 3): ambient posture state; created when None
 ) -> Dispatcher:
     """gateway: the OmniRouteClient; wrapped here in the ADR-18 front door.
     transcriber: injectable for tests; production builds the local Whisper one.
@@ -131,6 +133,16 @@ def build_dispatcher(
     dp = Dispatcher()
     dp.update.outer_middleware(OwnerOnlyMiddleware(settings.authorized_user_id))
     front = FrontDoorDispatcher(gateway, settings)
+    # Phase-6 (Leaps 2+3): ambient context residents — the RAG index (mtime
+    # cached, one per dispatcher) and the posture ring (fed by the future
+    # heartbeat transport; dp["situational"] is its public handle).
+    from src.associative import VaultIndex
+    from src.situational import SituationalState
+
+    assoc_index = VaultIndex(settings.vault_local_path)
+    if situational is None:
+        situational = SituationalState()
+    dp["situational"] = situational
     # M6 (owner's mediating-layer design, 2026-09-05): every tool turn's
     # narration carries THAT tool's skill guide — the dispatcher consults the
     # bound vault; run_bot syncs the guides at boot so they stay current.
@@ -344,6 +356,8 @@ def build_dispatcher(
                 transcriber=transcriber,
                 affect=affect,
                 acoustic=acoustic,
+                situational=situational,
+                assoc_index=assoc_index,
             )
         )
         _STREAMS[message.chat.id] = (task, cancel)
@@ -402,6 +416,8 @@ async def _stream_answer(
     transcriber=None,
     affect=None,
     acoustic: str = "",
+    situational=None,  # Phase-6 (Leap 3): posture ring; None = skip (tests)
+    assoc_index=None,  # Phase-6 (Leap 2): RAG index; None = skip (tests)
 ) -> None:
     chat_id = message.chat.id
     streamer = ChatStreamer(bot, chat_id, edit_interval_ms=settings.stream_edit_interval_ms)
@@ -414,7 +430,7 @@ async def _stream_answer(
         task.add_done_callback(_PERSIST_TASKS.discard)
     try:
         await bot.send_chat_action(chat_id, "record_voice" if voice_origin else "typing")
-        system = SYSTEM_PROMPT_AR
+        system = build_persona([])  # Phase-6: composer route; byte-identical core (lock-tested)
         if vault is not None:
             try:
                 long_term = await load_long_term(
@@ -439,6 +455,21 @@ async def _stream_answer(
                 logger.warning("affect guide failed; continuing without it")
         if acoustic:  # f3: the paralinguistic block (voice turns only)
             system = f"{system}\n\n{acoustic}"
+        # Phase-6 (Leap 2): associative RAG — local-mirror lookup, "" on miss.
+        # Index lives in the dispatcher closure (mtime-cached); never blocks.
+        if assoc_index is not None:
+            from src.associative import inject
+
+            assoc = inject(text, settings.vault_local_path, index=assoc_index)
+            if assoc:
+                system = f"{system}\n\n{assoc}"
+        # Phase-6 (Leap 3): situational posture — NORMAL returns system untouched.
+        # Live attention samples ride the future heartbeat transport; until then
+        # the state holds no samples and posture() is a proven no-op.
+        if situational is not None:
+            from src.situational import apply_posture
+
+            system = apply_posture(system, situational.posture())
         # Owner directives 2026-09-03 (round 2): the reply surface — his EXPLICIT
         # request («رد صوتي/نصي») always wins; otherwise the ROUTER's voice_reply
         # (the model picks the channel in the same FAST verdict — zero extra
@@ -801,6 +832,10 @@ async def send_split(message: Message, text: str, *, max_bubbles: int = 3) -> No
     """Round-2 (owner 2026-09-03): a long answer lands as 2-3 SHORT human
     bubbles, not one formal lecture — paragraphs split on blank lines, each a
     chat message the way friends text. Short replies send exactly one bubble."""
+    # Phase-6 (Leap 4): fallback bubbles never show expressive tags either.
+    from src.voice import strip_tags
+
+    text = strip_tags(text)
     paragraphs = [p.strip() for p in re.split(r"\n\s*\n", text) if p.strip()]
     if len(paragraphs) <= 1 or len(text) <= 160:
         await message.answer(text)
@@ -818,7 +853,11 @@ async def _split_streamed_bubble(bot: Bot, chat_id: int, streamer, reply: str) -
     paragraphs = [p.strip() for p in re.split(r"\n\s*\n", reply) if p.strip()]
     if len(paragraphs) <= 1:
         return
-    head, tail = paragraphs[0], paragraphs[1:3]
+    # Phase-6 (Leap 4): text surface never shows expressive tags (links/refs
+    # survive — strip_tags is allowlist-narrow by design).
+    from src.voice import strip_tags
+
+    head, tail = strip_tags(paragraphs[0]), [strip_tags(p) for p in paragraphs[1:3]]
     try:
         await bot.edit_message_text(head, chat_id=chat_id, message_id=streamer.message_id)
         for part in tail:
@@ -1148,6 +1187,7 @@ async def run_bot(settings: Settings, bridge=None) -> None:
         writer=writer,
         tools=tools,
         coordinator=coordinator,
+        situational=SituationalState(),  # Phase-6 (Leap 3): owned posture ring
         initial_prompt_terms=boot_terms,  # 2.6: Whisper bias seeded from boot
         affect=AffectiveStateTracker(
             brain=gateway, history=[], baseline=""

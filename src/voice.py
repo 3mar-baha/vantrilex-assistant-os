@@ -42,11 +42,25 @@ _TAG_RE: Final = re.compile(r"\[([^\[\]\n]{1,60})\]|\(([^()\n]{1,60})\)")
 
 
 def strip_tags(text: str) -> str:
-    """Remove ALL inline expressive tags (text surface): chat bubbles must
-    never show literal tags. Surrounding prose survives; whitespace collapsed.
-    Pure, never raises."""
+    """Remove KNOWN expressive tags for clean chat bubbles (text surface).
+
+    Deliberately narrow: only allowlisted bracket tags + paren cues are
+    removed, everything else ([[Note]] links, [1] refs, commands) survives
+    untouched. Unknown/hallucinated tags on the voice path are handled by
+    sanitize_tags below (speech must never read brackets aloud). Pure, never
+    raises.
+    """
+    from src.skills.expressive_audio import is_supported_tag
+
     try:
-        cleaned = _TAG_RE.sub("", text or "")
+
+        def _strip_known(match: re.Match[str]) -> str:
+            bracket, paren = match.group(1), match.group(2)
+            if bracket is not None:
+                return "" if is_supported_tag(bracket) else match.group(0)
+            return "" if is_supported_tag(paren or "", parens=True) else match.group(0)
+
+        cleaned = _TAG_RE.sub(_strip_known, text or "")
         return re.sub(r"[ \t]{2,}", " ", cleaned).strip()
     except Exception:  # noqa: BLE001 — sanitation never blocks the reply
         return text

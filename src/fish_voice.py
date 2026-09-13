@@ -70,7 +70,7 @@ class FishVoice:
             transport=transport,
         )
 
-    async def synthesize(self, text: str) -> bytes:
+    async def synthesize(self, text: str, *, tag_mode: str | None = None) -> bytes:
         # Owner live-retest 2026-09-03: the Fish lane fed RAW text to the wire —
         # «هههه» became an out-of-context laugh, emoji/tanween mangled the
         # dialect. Shape exactly like the Edge lane; if shaping empties the
@@ -78,6 +78,16 @@ class FishVoice:
         text = (shape_for_tts(text, notes=self._notes) or text).strip()
         if not text:
             raise ValueError("blank text — nothing to synthesize")
+        # Phase-4 (Leap 4): voice-surface tag sanitizer — unknown tags never
+        # reach Fish (no bracket reading aloud); known tags capped by turn
+        # length (<20 words routine, else extended) unless explicitly set.
+        from src.voice import sanitize_tags
+
+        if tag_mode is None:
+            tag_mode = "extended" if len(text.split()) >= 20 else "routine"
+        text = sanitize_tags(text, mode=tag_mode).strip()
+        if not text:
+            raise ValueError("blank text after tag sanitizing — nothing to synthesize")
         if not self.available:
             raise FishVoiceError("fish voice unconfigured (no API key)")
         payload = {
@@ -135,8 +145,8 @@ class FishFirstVoice:
         if self._fish is not None:
             self._fish.update_notes(notes)
 
-    async def synthesize(self, text: str) -> bytes:
+    async def synthesize(self, text: str, *, tag_mode: str | None = None) -> bytes:
         if self._fish is None or not self._fish.available:
             raise FishVoiceError("fish voice unconfigured — no synthesis, honest text instead")
-        mp3 = await self._fish.synthesize(text)
+        mp3 = await self._fish.synthesize(text, tag_mode=tag_mode)
         return await transcode_mp3_to_opus(mp3)

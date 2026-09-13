@@ -78,8 +78,16 @@ class ChatStreamer:
         return answer if transient_ack else pending
 
     async def _edit(self, text: str, message_id: int) -> None:
+        # Phase-6 (Leap 4): bubbles never show expressive tags. Partial tags
+        # split across deltas survive until the closing bracket lands (the
+        # regex needs the pair), then vanish on the next edit. Display-only:
+        # accumulators keep raw text for memory/ledger/voice paths.
+        from src.voice import strip_tags
+
         try:
-            await self._bot.edit_message_text(text, chat_id=self._chat_id, message_id=message_id)
+            await self._bot.edit_message_text(
+                strip_tags(text), chat_id=self._chat_id, message_id=message_id
+            )
         except TelegramRetryAfter as error:
             self._interval *= 2
             logger.warning("streamer rate-limited -> edit interval doubled: {}", error)
@@ -91,5 +99,7 @@ class ChatStreamer:
             parts = parts[1:]  # the ack is disposable here too
         text = "".join(parts)
         if text.strip():
-            await self._bot.send_message(self._chat_id, text)
+            from src.voice import strip_tags
+
+            await self._bot.send_message(self._chat_id, strip_tags(text))
         return text
