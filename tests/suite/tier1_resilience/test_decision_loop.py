@@ -267,3 +267,43 @@ async def test_tier_mapping_plain_paths():
         )
         await run(base_kwargs(gw, FakeTools({})))
         assert gw.stream_calls[-1]["tier"] is tier
+
+
+async def test_plan_recorded_and_flushed_without_touching_yields():
+    """Mission DAG hooks: plan_out receives plan + checked transcript while the
+    streamed deltas stay byte-identical to the unobserved run."""
+    from src.cognitive_dag import EphemeralTodo
+
+    async def _run(plan_out):
+        gw = FakeGateway(
+            chats=[router_json("calendar", "غدا", "لحظة"), thought_json(final=True)],
+            streams=[["سرد"]],
+        )
+        tools = FakeTools({"calendar": "موعد 9ص"})
+        kw = base_kwargs(gw, tools, user_text="شو عندي مواعيد بكرا؟")
+        if plan_out is not None:
+            kw["plan_out"] = plan_out
+        return await run(kw), tools
+
+    plain_deltas, _ = await _run(None)
+    holder: dict = {}
+    obs_deltas, tools = await _run(holder)
+    assert obs_deltas == plain_deltas  # yields untouched by observation
+    assert holder["plan"].weight == 2
+    assert isinstance(holder["todo"], EphemeralTodo)
+    assert "[x] calendar" in holder["transcript"]
+    assert "[x] synthesis" in holder["transcript"]
+    assert tools.calls == [("calendar", "غدا")]
+
+
+async def test_plan_flushes_on_park():
+    holder: dict = {}
+    gw = FakeGateway(chats=[router_json("close", "notepad", "لحظة")])
+    tools = FakeTools({"close": "SHOULD-NOT-RUN"})
+    kw = base_kwargs(gw, tools, coordinator=FakeCoordinator(), plan_out=holder)
+    kw["user_text"] = "شو عندي مواعيد بكرا؟"  # plan names calendar; router parks close
+    deltas = await run(kw)
+    assert deltas == ["لحظة", PARK_LINE_AR]
+    assert "[ ] calendar" in holder["transcript"]  # planned, never executed
+    assert "[ ] synthesis" in holder["transcript"]
+    assert holder["todo"].items == []  # memory freed

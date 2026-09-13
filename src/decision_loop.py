@@ -24,6 +24,7 @@ from typing import Any, Final
 
 from loguru import logger
 
+from src.cognitive_dag import EphemeralTodo, TodoItem, classify_weight
 from src.dispatcher import (
     _ROUTER_PROMPT_AR,
     _VALID_TOOLS,
@@ -157,6 +158,7 @@ async def run_decision_loop(
     pulse_cb: Callable[[], Any] | None = None,
     budget: LoopBudget | None = None,
     now_fn: Callable[[], float] | None = None,
+    plan_out: dict | None = None,
 ) -> AsyncIterator[str]:
     """Skeleton ReAct turn. Yields ack first (bot.py first-delta protocol),
     then streams the FINAL narration only — thoughts stay silent.
@@ -165,6 +167,8 @@ async def run_decision_loop(
     binds the real PCActionCoordinator). front: optional dispatcher whose
     voice_hint mirrors the router verdict (same contract as handle()).
     pulse_cb: awaitable sending sendChatAction (production binds the bot).
+    plan_out: optional dict receiving {"plan", "todo", "transcript"} — the
+    ephemeral plan metadata. Yields are untouched by it.
     """
     budget = budget or LoopBudget()
     now = now_fn or time.monotonic
@@ -206,6 +210,20 @@ async def run_decision_loop(
         front.voice_hint = voice
     yield ack
 
+    # Mission DAG: weight + ephemeral todo, recorded only — yields untouched.
+    _plan = classify_weight(user_text)
+    _todo = EphemeralTodo.from_plan(_plan, arg if tool != "none" else "")
+    if plan_out is not None:
+        plan_out["plan"] = _plan
+        plan_out["todo"] = _todo
+
+    def _close(synthesized: bool) -> None:
+        if synthesized:
+            _todo.check("synthesis")
+        transcript = _todo.flush()  # memory freed even when nobody watches
+        if plan_out is not None:
+            plan_out["transcript"] = transcript
+
     async def plain_chat(tier: Tier) -> AsyncIterator[str]:
         messages = (
             ([{"role": "system", "content": system}] if system else [])
@@ -221,6 +239,7 @@ async def run_decision_loop(
         )
         async for delta in plain_chat(tier):
             yield delta
+        _close(True)
         return
 
     pending: tuple[str, str] | None = (tool, arg)
@@ -263,6 +282,7 @@ async def run_decision_loop(
             coordinator is None or not coordinator.has_confirmation(tool, arg)
         ):
             yield PARK_LINE_AR  # parked: honest ask, zero execution
+            _close(False)
             return
         await pulse()
         try:
@@ -272,6 +292,10 @@ async def run_decision_loop(
             result = TOOL_FAIL_AR
         await pulse()
         tool_calls += 1
+        if not _todo.check(tool):
+            # Executed but unplanned (router/Thought diverged from the plan):
+            # record the actual, checked — the transcript is the truth.
+            _todo.items.append(TodoItem(label=f"{tool}:{arg}" if arg else tool, done=True))
         ok = not _is_empty_observation(result)
         pad.add(tool, arg, result or "", ok=ok)
         if not ok and not pivoted and tool in INFORMATION_TOOLS:
@@ -288,6 +312,7 @@ async def run_decision_loop(
         for o in pad.observations:
             lines.append(f"- {o.tool}: {o.result}" if o.ok else f"- {o.tool}: تعذّر")
         yield "\n".join(lines)
+        _close(True)
         return
 
     # FINAL narration (Phase-2 upgrades to the M6 skill-guide envelope).
@@ -304,3 +329,4 @@ async def run_decision_loop(
     )
     async for delta in gateway.stream_chat(messages, tier=Tier.HEAVY):
         yield delta
+    _close(True)
