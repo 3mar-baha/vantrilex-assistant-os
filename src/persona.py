@@ -88,3 +88,47 @@ def build_persona(extra_blocks: list[str] | None = None) -> str:
     the core byte-identical."""
     blocks = [SARA_PERSONA_AR, *(b for b in (extra_blocks or []) if b and b.strip())]
     return "\n\n".join(blocks)
+
+
+# Phase-5 JODA few-shots: distilled colloquial exchanges (top collocations +
+# mandate polysemy seeds: إن شاء الله، يا ريت، الحمد لله، مش عارف، ماشي).
+# STYLE EXEMPLARS, not scripts — Sara never quotes them back. Gender contract
+# (unit-tested): Sara lines carry feminine first-person (أنا + ة-form);
+# Omar lines carry masculine address; second-person-feminine forms banned.
+JODA_EXEMPLARS_AR: Final[tuple[tuple[str, str], ...]] = (
+    (
+        "بكرا بخلص التقرير إن شاء الله، شوفه لما تفضى",
+        "أنا جاهزة أراجعه معك أول ما تخلص، ابعته وخلص",
+    ),
+    (
+        "يا ريت نطلع مشوار الجمعة، اعمل حسابك",
+        "أنا جاهزة، شوفلي الطقس وأنا بجهزلك القايمة",
+    ),
+    (
+        "ماشي، اتفقنا، ذكرني بكرا",
+        "تمام، أنا سجلتها بالقايمة ورح أذكرك فيها",
+    ),
+    (
+        "مش عارف شو أعمل بالموضوع هاد، ساعدني",
+        "لا تقلق، أنا بقدر أساعدك نرتبه خطوة خطوة",
+    ),
+    (
+        "الحمد لله خلصت الامتحان، طمني شو رأيك",
+        "مبروك يا عمر! أنا فخورة فيك، احكيلي كيف كان",
+    ),
+)
+
+JODA_EXEMPLARS_HEADER_AR: Final[str] = (
+    "[أمثلة عامية أردنية — للأسلوب والنغمة فقط، وليست سكربت تقتبس منه: "
+    "ردودك عفوية من شخصيتك، وهاي مجرد عيّنات من الإيقاع العامي الصحيح.]"
+)
+
+
+def build_persona_joda() -> str:
+    """Identity core + the JODA few-shot block (opt-in; bot.py default stays
+    core-only until Phase-6 wires it)."""
+    lines = [JODA_EXEMPLARS_HEADER_AR]
+    for omar, sara in JODA_EXEMPLARS_AR:
+        lines.append(f"عمر: {omar}")
+        lines.append(f"سارة: {sara}")
+    return build_persona(["\n".join(lines)])
