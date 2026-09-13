@@ -80,3 +80,41 @@ returns HTTP 200, and re-run the live canary to 5/5 GREEN.
 2. Check OmniRoute account/credits for the chat + `nex-agi` lanes (`/models` 200 but chat 401/404).
 3. Re-run `canary_smoke.py`; expect 5/5 only after (1)+(2) resolve.
 4. Consider a `ParentProcessId`-aware guard in `sara.ps1` so stub+child pairs never read as doubled cores.
+
+## Third key rotation + canary #3 (05:56 — NO secret values recorded below)
+
+- Owner supplied a THIRD `OPENROUTER_API_KEY`. Applied to `.env` (gitignored — never staged)
+  and to `.mcp.json` `openrouter` server (`https://mcp.openrouter.ai/mcp` + `Authorization: Bearer …`
+  header; `.mcp.json` is git-TRACKED, so it is deliberately EXCLUDED from all commits here).
+  Model matrix confirmed as ordered: FAST `google/gemma-4-31b-it:free`,
+  MEDIUM `nex-agi/nex-n2.5-mini:free`, HEAVY `nex-agi/nex-n2.5-pro:free`,
+  ESCALATION `openrouter/nvidia/nemotron-3-ultra-550b-a55b:free`,
+  FISH `fish-audio/s2.1-pro-free:free`. Daemons untouched — same single core (10916→17780)
+  + single bridge (7668→21156) from the previous round, `:8443` True.
+- Correction to my own earlier claim: OpenRouter `GET /v1/models` is a PUBLIC endpoint —
+  its HTTP 200 validated NOTHING about the key. Proper check is `GET /api/v1/auth/key`:
+  → `200`, label matches the new key, `usage: 0`, `limit: None`. The key itself is VALID.
+- Yet Fish `/audio/speech` with that same valid key → `401 {"message":"User not found."}`.
+  Conclusion: the ACCOUNT behind the key cannot reach the speech lane (not a key-string problem,
+  not our code — `fish_audio_key` maps straight to `OPENROUTER_API_KEY`, fresh process per probe).
+- Brain lane also shifted: OmniRoute now answers gemma chat with
+  `HTTP 404 {"message":"No active credentials for provider: openrouter", "code":"model_not_found"}`
+  (was 401 `User not found` an hour earlier). OmniRoute server-side has no upstream credential
+  for the `openrouter` provider — independent of `.env`.
+- Canary #3: bridge ws reachable (2067.4 ms), Telegram ok (`Sara_Vantrilex_bot`),
+  vault ok (scaffold no-op + round-trip), LAN `:8000` ws `InvalidMessage` (probe artifact —
+  HTTP `200 {"status":"ok"}` proven separately), brain RED, Fish RED (direct probe, not brain-gated).
+  Verdict: 3/5 functional + 1 probe artifact; the 2 reds are BOTH upstream-account-side.
+- MCP note: credential verified via authenticated `/auth/key` (200). Any remaining
+  `openrouter Needs auth` badge in the harness UI is client-side session state — re-establish
+  the MCP session to pick up the new `.mcp.json` header.
+- This file is the ONLY staged change in the commit below (`.mcp.json`/`.env` excluded on purpose).
+- Shutdown executed as ordered: `shutdown /s /t 60` (abort with `shutdown /a` within 60 s).
+
+## Remaining owner-side actions (nothing code-side left to try tonight)
+
+1. OpenRouter dashboard: why does a valid key get `User not found` ONLY on `/audio/speech`
+   (auth/key 200, usage 0)? Account verification / payment-method / provider-routing requirement likely.
+2. OmniRoute server: provision upstream credentials for providers `openrouter` (FAST + escalation)
+   and `nex-agi` (MEDIUM/HEAVY) — both currently `No active credentials`.
+3. Then re-run `canary_smoke.py`; 5/5 is purely gated on (1)+(2).
