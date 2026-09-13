@@ -45,3 +45,50 @@ def test_skill_files_match_standard():
         for section in REQUIRED_SECTIONS:
             assert section in text, f"{path.name} missing {section}"
         assert len(text) > 800, f"{path.name} is a stub, not an exhaustive skill"
+
+
+def test_sara_tool_guides_cover_capabilities():
+    """Every first-class capability ships a per-tool guide (superset allowed —
+    cloud/Phase-B zones carry guides beyond the deduction set)."""
+    from src.skills.capabilities import TOOL_CAPABILITIES
+    from src.skills.sara_tool_skills import _SKILLS
+
+    shipped = {name.removesuffix(".md") for name, _ in _SKILLS}
+    missing = [t for t in TOOL_CAPABILITIES if t not in shipped]
+    assert not missing, f"capabilities without guides: {missing}"
+
+
+def test_sara_tool_guide_shape():
+    """House shape: tool header + usage + honest-failure line (no stubs)."""
+    from src.skills.sara_tool_skills import _SKILLS
+
+    for name, content in _SKILLS:
+        tool = name.removesuffix(".md")
+        assert content.startswith("# "), f"{name} missing header"
+        assert tool in content, f"{name} header does not name its tool"
+        assert "## الاستخدام" in content, f"{name} missing usage section"
+        assert "## الفشل الصادق" in content, f"{name} missing honest-failure line"
+
+
+def test_vault_guides_exhaustive():
+    """2026-09-13 mandate: the vault skill carries the full scaffolding doctrine
+    (dynamic nesting, IA roles, frontmatter schema, idempotency) — not stubs."""
+    from src.skills.sara_tool_skills import _SKILLS
+
+    guides = dict(_SKILLS)
+    for name in ("create_folder.md", "knowledge_graph.md"):
+        content = guides[name]
+        assert len(content) >= 1500, f"{name} too thin ({len(content)} chars)"
+    folder = guides["create_folder.md"]
+    for anchor in (
+        "date",
+        "tags",
+        "type",
+        "summary",
+        "02_Areas",
+        "03_Projects",
+        "State/",
+        "00_Inbox",
+    ):
+        assert anchor in folder, f"create_folder.md missing {anchor}"
+    assert "موجود" in folder, "create_folder.md must state the exists-check (idempotency)"

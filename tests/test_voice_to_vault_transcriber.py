@@ -53,6 +53,9 @@ async def test_transcribe_pinned_to_arabic_dialect_context(tmp_path):
     kwargs = model.kwargs[0]
     assert kwargs.get("language") == "ar"
     assert kwargs.get("beam_size") == 5
+    # 2026-09-13 audit («وطّي الصوت شوي» -> English): no cross-segment
+    # conditioning on short clips — the language lock stands alone.
+    assert kwargs.get("condition_on_previous_text") is False
     prompt = kwargs.get("initial_prompt") or ""
     assert prompt.strip(), "initial_prompt must carry the dialect context"
     # the prompt leans Jordanian colloquial + carries the owner's name

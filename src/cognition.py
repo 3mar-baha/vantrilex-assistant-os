@@ -36,11 +36,41 @@ _TOOL_GOALS: Final[dict[str, tuple[str, ...]]] = {
     "launch": ("افتح", "شغل", "شغ", "launch", "open", "start"),
     "close": ("سكر", "اغلق", "أغلق", "اطف", "وقف", "قفل", "close", "kill"),
     "screenshot": ("شاشة", "لقطة", "سكرين", "صوري", "screenshot"),
-    "screen_ocr": ("اقرأ", "استخرج", "كود", "نص الشاشة", "ocr"),
-    "volume": ("صوت", "اكتم", "ارفع", "وطي", "volume"),
-    "media": ("فيديو", "اغنية", "أغنية", "مقطع", "تشغيل", "media"),
+    "screen_ocr": (
+        "اقرأ",
+        "اقرئيلي",
+        "اقرأي",
+        "استخرج",
+        "استخرجيلي",
+        "كود",
+        "نص الشاشة",
+        "النص الظاهر",
+        "ocr",
+    ),
+    "volume": (
+        "صوت",
+        "اكتم",
+        "كتم",
+        "ارفع",
+        "وطي",
+        "علي الصوت",
+        "نصي الصوت",
+        "الصوت عالي",
+        "الصوت واطي",
+        "mute",
+        "volume",
+    ),
+    "media": ("فيديو", "اغنية", "أغنية", "شغلي", "موسيقى", "سبوتيفاي", "مقطع", "تشغيل", "media"),
     "schedule": ("ذكر", "نبه", "تذكير", "مهمة جديدة", "سجلي مهمة", "remind", "schedule"),
-    "list_reminders": ("تذكيراتي", "قائمة التذكيرات", "reminders"),
+    "list_reminders": (
+        "تذكيراتي",
+        "تذكيرات",
+        "التذكيرات",
+        "مسجلة",
+        "المسجلة",
+        "قائمة",
+        "reminders",
+    ),
     "cancel_reminder": ("الغي", "امسح", "شيلي التذكير", "cancel"),
     "weather": ("طقس", "حرارة", "weather"),
     "web_search": ("بالنت", "في النت", "ابحث", "دور", "search"),
@@ -71,6 +101,8 @@ _TOOL_GOALS: Final[dict[str, tuple[str, ...]]] = {
 _HORIZON: Final[dict[str, tuple[str, ...]]] = {
     "screenshot": ("screen_ocr", "telemetry", "running_apps"),
     "screen_ocr": ("screenshot", "telemetry"),
+    "volume": ("media", "telemetry"),
+    "media": ("volume", "web_search"),
     "launch": ("whitelist_apps", "running_apps"),
     "close": ("running_apps", "telemetry"),
     "telemetry": ("running_apps", "app_sessions", "network_status"),
@@ -149,7 +181,12 @@ class ReflectiveTrace:
 
 
 def _normalize(text: str) -> str:
-    return " ".join((text or "").split()).strip()
+    """Whitespace collapse + orthographic canon: tashkeel/shadda/tatweel carry
+    no intent («شغّلي» == «شغلي») — the net scores letterforms, never diacritics."""
+    import re as _re
+
+    bare = _re.sub(r"[\u064b-\u0652\u0640]", "", text or "")
+    return " ".join(bare.split()).strip()
 
 
 # Drill-hardened (Stage-2 simulation 2026-09-12): short stems anchor at a
@@ -159,10 +196,14 @@ def _normalize(text: str) -> str:
 _SHORT_STEM_LEN: Final[int] = 5
 
 # Conjunction/preposition/hamza proclitics plus the definite article stripped
-# for matching (remainder must stay >= 4 chars so «وقفي» never becomes «قفي»).
-# ال-derived forms carry a flag: a definite ARTICLE marks a noun («البريد»
-# names the mail), so verb-family tools may never claim through it — the
-# legacy (?<!ال) guard, principled («الشغل» = the work, never the command).
+# for matching. ال-derived forms carry a flag: a definite ARTICLE marks a noun
+# («البريد» names the mail), so verb-family tools may never claim through it —
+# the legacy (?<!ال) guard, principled («الشغل» = the work, never the command).
+# 2026-09-13 audit: the 4-char remainder floor blinded every 3-letter root with
+# ال («الصوت», «الكود» never stripped) and colloquial على→ع gluing («عالشاشة»)
+# never stripped at all — both are legitimate article forms, so ال strips at
+# remainder >= 3 and colloquial عال+ strips like ال. The floor still blocks
+# sub-3-letter ghosts («وقفي» never becomes «قفي»).
 _PROCLITICS: Final[tuple[str, ...]] = ("و", "ف", "ب", "ك", "ا", "أ")
 
 _IMPERATIVE_TOOLS: Final[tuple[str, ...]] = (
@@ -181,7 +222,9 @@ def _strip_proclitics(token: str) -> list[tuple[str, bool]]:
     forms = [(token, False)]
     while True:
         current, definite = forms[-1]
-        if current.startswith("ال") and len(current) - 2 >= 4:
+        if current.startswith("عال") and len(current) - 3 >= 4:
+            forms.append((current[3:], True))
+        elif current.startswith("ال") and len(current) - 2 >= 3:
             forms.append((current[2:], True))
         elif len(current) > 4 and current[0] in _PROCLITICS:
             forms.append((current[1:], definite))
@@ -247,14 +290,19 @@ def _merge_spans(spans: list[tuple[int, int]]) -> int:
 def _lead_bonus(markers: tuple[str, ...], lead: str, lead_tokens: list[str]) -> bool:
     """A leading action verb names the primary intent. Single-word markers
     anchor conservatively on RAW lead tokens («بشغلة» never re-arms «شغ»);
-    multi-word markers match the lead window directly («سجلي مهمة»)."""
+    multi-word markers match the lead window directly («سجلي مهمة»).
+    2026-09-13 audit: bare 2-3-letter prefixes («شغل» on «شغلي موسيقى»)
+    over-committed ambiguous verbs to launch — the bonus now needs a whole
+    token or a 4+ letter stem, so the object noun can outvote the verb."""
     for marker in markers:
         if not marker:
             continue
         if " " in marker:
             if marker in lead:
                 return True
-        elif any(tok.startswith(marker) for tok in lead_tokens):
+        elif any(
+            tok == marker or (len(marker) >= 4 and tok.startswith(marker)) for tok in lead_tokens
+        ):
             return True
     return False
 

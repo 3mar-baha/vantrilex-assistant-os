@@ -105,6 +105,20 @@ async def test_quota_on_primary_switches_to_fast_immediately():
     assert script.models() == [PRIMARY, FAST]
 
 
+async def test_empty_stream_falls_back_immediately():
+    """2026-09-13 audit (THIN_REPLY class): primary streams 200 + [DONE] with
+    zero content deltas (reasoning-only turn) -> one attempt, FAST serves, the
+    blank never surfaces."""
+    script = _Scripted(
+        httpx.Response(200, content=_sse()),
+        httpx.Response(200, content=_sse(_chunk("بديل"))),
+    )
+    async with _client(script) as client:
+        deltas = await _collect(client.stream_chat([{"role": "user", "content": "hi"}]))
+    assert deltas == ["بديل"]
+    assert script.models() == [PRIMARY, FAST]
+
+
 async def test_quota_on_streaming_error_body_falls_back():
     """Regression: non-200 body arrives as an unread stream (real-gateway shape) -> must be
     read before classification, not raise ResponseNotRead."""
@@ -162,9 +176,10 @@ async def test_both_models_exhausted_raises_gateway_error():
 
 
 async def test_sse_edge_cases_done_null_and_malformed(logs):
-    """AC6: early [DONE]; null-delta skip; malformed-line skip-with-warning."""
+    """AC6: early [DONE] falls back (2026-09-13: blank turns never surface);
+    null-delta skip; malformed-line skip-with-warning."""
     script = _Scripted(
-        httpx.Response(200, content=_sse(done=True)),  # [DONE] first -> empty stream
+        httpx.Response(200, content=_sse(done=True)),  # [DONE] first -> fallback
         httpx.Response(
             200,
             content=_sse(
@@ -177,9 +192,8 @@ async def test_sse_edge_cases_done_null_and_malformed(logs):
     )
     async with _client(script) as client:
         gen = client.stream_chat([{"role": "user", "content": "hi"}])
-        assert await _collect(gen) == []  # early [DONE] yields nothing
-        gen = client.stream_chat([{"role": "user", "content": "hi"}])
         assert await _collect(gen) == ["أهلا", "بك"]  # null/malformed skipped
+    assert script.models() == [PRIMARY, FAST]
     assert any("malformed" in str(m).lower() for m in logs)
 
 

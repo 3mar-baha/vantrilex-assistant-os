@@ -183,6 +183,9 @@ class VoiceToVault:
             audio,
             language="ar",
             beam_size=5,
+            condition_on_previous_text=False,  # 2026-09-13 audit: short clips
+            # («وطّي الصوت شوي») hallucinated English via previous-text
+            # conditioning — each segment stands alone, no cross-segment drift.
             initial_prompt=build_prompt(getattr(self, "_taught_pairs", ())),
             hotwords=" ".join(_HOTWORDS),
             vad_filter=True,

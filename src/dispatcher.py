@@ -32,8 +32,17 @@ _ACK_CLAIM_WORDS: Final[tuple[str, ...]] = ("تم فتح", "فتحت", "بعت",
 _ROUTER_PROMPT_AR: Final[str] = (
     "صنّف طلب المالك وأجب بسطر JSON واحد فقط:\n"
     '{"route": "direct"|"tier2"|"tier3", "tool": "none"|"gmail"|"calendar"|"tasks"'
-    '|"telemetry"|"launch"|"brief"|"screenshot"|"app_sessions", "arg": "...", '
+    '|"telemetry"|"launch"|"brief"|"screenshot"|"app_sessions"|"running_apps"'
+    '|"schedule"|"create_folder"|"knowledge_graph"|"web_search"|"weather"'
+    '|"youtube"|"close"|"multi_task"|"list_reminders"|"cancel_reminder"'
+    '|"whitelist_apps"|"volume"|"media"|"screen_ocr"|"file_fetch"'
+    '|"prayer_times"|"crypto_price"|"convert_currency"|"tech_trending"'
+    '|"network_status"|"read_page"|"drive"|"contacts"|"create_event"'
+    '|"create_task"|"places"|"deep_search"|"fitness", "arg": "...", '
     '"ack": "...", "voice_reply": true|false}\n'
+    "- اكتشف الأداة من القصد الظرفي والمعنى الكامل للطلب — لا تعتمد على كلمات "
+    "مفتاحية حرفية: الصياغات العامية المتنوعة لنفس القصد (ارفع/وطّي/اكتم/علي "
+    "الصوت؛ شغّلي/حطي أغنية؛ اقرئيلي/استخرج النص) تصنَّف للأداة نفسها.\n"
     '- "ack" إقرار من كلمتين إلى خمس كلمات فقط (مثل «من عيوني هسا» أو «لحظة بفحصلك») '
     "— ممنوع تجيب على السؤال داخله، الرد الكامل يُبث بعد التصنيف.\n"
     "- direct: دردشة أو سؤال بسيط.\n"
@@ -55,7 +64,29 @@ _ROUTER_PROMPT_AR: Final[str] = (
     "multi_task=الطلب فيه أكتر من مهمة واضحة بنفس الرسالة (شغلي X وافتحي Y وسكري Z) "
     '— ضع نص الطلب كاملاً في "arg" وبدون أي تلخيص، '
     "list_reminders=سؤال عن التذكيرات المسجلة (شو تذكيراتي)، "
-    'cancel_reminder=إلغاء تذكير مسجل مع رقمه (مثل job-1) أو «الكل» في "arg". '
+    'cancel_reminder=إلغاء تذكير مسجل مع رقمه (مثل job-1) أو «الكل» في "arg"، '
+    'volume=أي طلب يغيّر صوت الجهاز — تخفيض أو رفع أو كتم أو ضبط مستوى — مع التفاصيل في "arg"، '
+    'media=طلب تشغيل أغنية أو موسيقى أو فيديو — بأي صياغة — مع المطلوب تشغيله في "arg"، '
+    'screen_ocr=قراءة نص أو كود ظاهر على الشاشة (اقرأ/استخرج) مع المطلوب في "arg"، '
+    'file_fetch=طلب ملف من الجهاز لإرساله مع اسم الملف في "arg"، '
+    "running_apps=سؤال عن البرامج المفتوحة والشغالة هسا على الجهاز، "
+    "whitelist_apps=سؤال عن البرامج المعتمدة أو المسموحة بقائمة سارة، "
+    'prayer_times=مواقيت الصلاة والأذان مع اسم المدينة في "arg" (عمان افتراضياً)، '
+    'crypto_price=سعر عملة رقمية مع اسمها في "arg"، '
+    'convert_currency=تحويل مبلغ بين عملتين مع المبلغ والعملتين في "arg"، '
+    "tech_trending=أخبار التقنية والتكنولوجيا، "
+    "network_status=حالة الشبكة وعنوان IP، "
+    'read_page=قراءة أو تلخيص رابط/مقال مع الرابط في "arg"، '
+    'drive=بحث بملفات غوغل درايف مع نص البحث في "arg"، '
+    "contacts=جهات الاتصال المحفوظة، "
+    'create_event=تسجيل موعد جديد بالتقويم مع كل التفاصيل في "arg"، '
+    'create_task=تسجيل مهمة جديدة مع نصها في "arg"، '
+    'places=اقتراح أماكن (كافيه/مطعم/دراسة) مع المدينة في "arg"، '
+    'deep_search=بحث متقدم متعدد المصادر مع نص البحث في "arg"، '
+    "fitness=النشاط الرياضي (خطوات/سعرات/مشي)، "
+    "cloud_backup=طلب نسخ احتياطي سحابي للخزينة، "
+    "analytics=طلب تحليلات وإحصاءات الاستخدام، "
+    "quota_safety=سؤال عن الحصص والحدود والاستهلاك. "
     "الطلبات ذات الأداة تصنَّف دائماً tier2.\n"
     "- voice_reply: هل هذا الطلب يليق ردّه صوتاً (رسالة صوتية) بدل النص؟ true فقط إذا "
     "المالك طلب الصوت صراحةً أو بنيته (بدي اسمعك، حابب صوتك، احكيلي عن حالك) أو الجو "

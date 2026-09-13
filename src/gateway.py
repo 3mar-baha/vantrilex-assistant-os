@@ -113,6 +113,12 @@ class _QuotaExhausted(RuntimeError):
     pass
 
 
+class _EmptyReply(RuntimeError):
+    """A model streamed [DONE] with zero content deltas (reasoning-only or
+    blank turn) — serving blank would poison the reply; the next model in
+    the chain serves instead (immediate fallback, no retry burn)."""
+
+
 class _TransientFailure(RuntimeError):
     pass
 
@@ -334,6 +340,12 @@ class OmniRouteClient:
                     )
                     last_cause = str(exc)
                     break
+                except _EmptyReply as exc:
+                    # 2026-09-13 audit: blank turns never retry blindly — the
+                    # next model serves this turn immediately.
+                    logger.warning("gateway empty reply | model={} -> immediate fallback", model)
+                    last_cause = str(exc)
+                    break
                 except _WindowRateLimit as exc:
                     # STT-3: the provider announced its recovery window — retrying
                     # against a server-side wall is pure waste. Mark the model hot
@@ -430,6 +442,7 @@ class OmniRouteClient:
 
         received = 0
         done_seen = False
+        yielded = False
         try:
             async for line in response.aiter_lines():
                 line = line.strip()
@@ -459,6 +472,7 @@ class OmniRouteClient:
                 choices = chunk.get("choices") or [{}]
                 content = (choices[0].get("delta") or {}).get("content")
                 if content:
+                    yielded = True
                     yield content
         finally:
             await response.aclose()
@@ -466,3 +480,7 @@ class OmniRouteClient:
             logger.warning(
                 "gateway stream ended without [DONE] | bytes={} (deltas still delivered)", received
             )
+        elif not yielded:
+            # 2026-09-13 audit: reasoning-only/blank turns must never surface
+            # as empty replies — the chain falls through to the next model.
+            raise _EmptyReply(f"{model} streamed [DONE] with zero content deltas")
