@@ -6,7 +6,8 @@ composer purity (empty extras return the core byte-identical), and a sha256
 pin (any silent drift fails loudly — edits need owner sign-off).
 
 Re-pin history: 4485/7cf6b475 (extraction) → 4638/3c43aa04 (owner-ordered
-intuitive-expression rewrite of the emoji paragraph, 2026-09-13).
+intuitive-expression rewrite of the emoji paragraph, 2026-09-13) →
+4763/efa39690 (owner-ordered masculine-address anchor, 2026-09-13).
 """
 
 import hashlib
@@ -14,8 +15,8 @@ import hashlib
 from src.bot import SYSTEM_PROMPT_AR
 from src.persona import SARA_PERSONA_AR, build_persona
 
-CORE_SHA256 = "3c43aa042e71e6db05d38bb6c6113734db416baf5aef55bab3d7c47767af2374"
-CORE_LEN = 4638
+CORE_SHA256 = "efa39690ffdb3e54db3f94f6997788912e07dfd32ca36bf3d917b46869940a3f"
+CORE_LEN = 4763
 
 
 def test_alias_identity():

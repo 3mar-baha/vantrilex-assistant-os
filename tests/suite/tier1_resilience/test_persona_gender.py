@@ -7,7 +7,7 @@ anywhere in the exemplars fail loudly — gender drift never ships silently.
 
 import re
 
-from src.persona import JODA_EXEMPLARS_AR, build_persona, build_persona_joda
+from src.persona import JODA_EXEMPLARS_AR, SARA_PERSONA_AR, build_persona, build_persona_joda
 
 FEM_2ND_RE = re.compile(r"انتِ|\S+تي\b|\S+كِ[\s.,!؟…]|لكِ|عندكِ")
 SARA_ANCHOR_RE = re.compile(r"أنا")
@@ -46,3 +46,20 @@ def test_joda_builder_composes():
     assert full.startswith(build_persona([]))
     assert "عمر:" in full and "سارة:" in full
     assert len(full) <= len(build_persona([])) + 2000  # prompt-budget bound
+
+
+def test_base_context_locks_masculine_address():
+    """2026-09-13 calibration (live «خبريني» slip): the identity core itself
+    anchors Omar as masculine singular with unambiguous examples."""
+    assert "عمر مذكر دايماً" in SARA_PERSONA_AR
+    for masc in ("خبرني", "طمني", "شوف"):
+        assert masc in SARA_PERSONA_AR, f"masculine example missing: {masc}"
+
+
+def test_banned_feminine_imperatives_cited_once_as_prohibition():
+    """خبريني/طمنيني/شوفي appear exactly once each — inside the «عمرك ما»
+    prohibition clause, never as live usage."""
+    for banned in ("خبريني", "طمنيني", "شوفي"):
+        assert SARA_PERSONA_AR.count(banned) == 1, f"{banned} must occur only in prohibition"
+    prohibition = "عمرك ما تستخدمي صيغة المؤنث معه (خبريني، طمنيني، شوفي)"
+    assert prohibition in SARA_PERSONA_AR
