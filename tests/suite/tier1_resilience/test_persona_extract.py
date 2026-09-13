@@ -1,9 +1,12 @@
-"""Tier 1 — persona extraction lock (Phase-1 foundations).
+"""Tier 1 — persona extraction lock (Phase-1 foundations, re-pinned Phase-6).
 
 The identity core moved verbatim bot.py -> src/persona.py; this file locks
 that move three ways: alias identity (all existing importers keep working),
 composer purity (empty extras return the core byte-identical), and a sha256
 pin (any silent drift fails loudly — edits need owner sign-off).
+
+Re-pin history: 4485/7cf6b475 (extraction) → 4638/3c43aa04 (owner-ordered
+intuitive-expression rewrite of the emoji paragraph, 2026-09-13).
 """
 
 import hashlib
@@ -11,8 +14,8 @@ import hashlib
 from src.bot import SYSTEM_PROMPT_AR
 from src.persona import SARA_PERSONA_AR, build_persona
 
-CORE_SHA256 = "7cf6b4759b3031e52f74de66559e4d5073a4c0a69f279ec53e06389dec856aac"
-CORE_LEN = 4485
+CORE_SHA256 = "3c43aa042e71e6db05d38bb6c6113734db416baf5aef55bab3d7c47767af2374"
+CORE_LEN = 4638
 
 
 def test_alias_identity():
