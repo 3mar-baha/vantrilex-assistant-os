@@ -26,8 +26,9 @@ BANNED_SUBSTRINGS: tuple[str, ...] = (
 )
 
 # The persona rulebook quotes the banned phrases inside its prohibition clauses —
-# that is the enforcement mechanism (1.2), not a violation.
-EXEMPT_NAMES = {"SYSTEM_PROMPT_AR"}
+# that is the enforcement mechanism (1.2), not a violation. Phase-1 moved the
+# literal bot.py -> src/persona.py; both names stay exempt (same rulebook).
+EXEMPT_NAMES = {"SYSTEM_PROMPT_AR", "SARA_PERSONA_AR"}
 
 
 def _string_constants() -> list[tuple[str, str]]:

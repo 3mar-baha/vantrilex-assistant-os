@@ -641,6 +641,11 @@ class FrontDoorDispatcher:
         self.last_cognition: dict | None = None
         self._cog_trace = None
 
+    @property
+    def gateway(self) -> OmniRouteClient:
+        """Phase-1 ReAct seam: read-only gateway handle for the decision loop."""
+        return self._gateway
+
     async def handle(
         self,
         user_text: str,
