@@ -1,9 +1,0 @@
-{
-  "mcpServers": {
-    "context7": {
-      "command": "npx",
-      "args": ["-y", "@upstash/context7-mcp"],
-      "description": "Live library docs: aiogram 3.x, faster-whisper, speechbrain, pydantic v2, httpx"
-    }
-  }
-}
