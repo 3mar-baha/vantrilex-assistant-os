@@ -33,8 +33,8 @@ import pytest
 
 from src.gateway import OmniRouteClient, Tier
 
-PRIMARY = "primary-x"
-SECOND = "second-y"
+PRIMARY = "primary-x:free"
+SECOND = "second-y:free"
 AUTH = {"Authorization": "Bearer test-key"}
 
 GROQ_TPD_BODY = (
@@ -86,7 +86,7 @@ def _client(script: _Scripted) -> OmniRouteClient:
     return OmniRouteClient(
         "http://gw.test/v1",
         "test-key",
-        chains={Tier.FAST: [PRIMARY, SECOND], Tier.MEDIUM: ["m"], Tier.HEAVY: ["h"]},
+        chains={Tier.FAST: [PRIMARY, SECOND], Tier.MEDIUM: ["m:free"], Tier.HEAVY: ["h:free"]},
         transport=script.transport(),
     )
 

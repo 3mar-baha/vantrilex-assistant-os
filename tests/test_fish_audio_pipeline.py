@@ -180,8 +180,9 @@ async def test_bad_content_type_raises_fishvoiceerror():
 
 
 def test_disabled_when_no_api_key():
-    """No OPENROUTER_API_KEY -> available() is False and synthesize never calls the wire."""
-    settings = _settings(openrouter_api_key=None)
+    """Neither FISH_AUDIO_API_KEY nor OPENROUTER_API_KEY -> available() is False
+    and synthesize never calls the wire."""
+    settings = _settings(openrouter_api_key=None, fish_audio_api_key=None)
     assert settings.fish_audio_ready is False
     fish = FishVoice.from_settings(settings, transport=_Recorder(body=MP3))
     assert fish.available is False
@@ -272,7 +273,7 @@ async def test_build_voice_unconfigured_raises_honestly():
     the caller lands honest TEXT (there is no second voice engine)."""
     from src.bot import build_voice
 
-    lane = build_voice(_settings(openrouter_api_key=None))
+    lane = build_voice(_settings(openrouter_api_key=None, fish_audio_api_key=None))
     assert isinstance(lane, FishFirstVoice)
     with pytest.raises(FishVoiceError):
         await lane.synthesize("مرحبا")

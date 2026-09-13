@@ -16,7 +16,11 @@ def _client(script: _Scripted) -> OmniRouteClient:
     return OmniRouteClient(
         "http://gw.test/v1",
         "test-key",
-        chains={Tier.FAST: ["fast-a", "fast-b"], Tier.MEDIUM: ["med-a"], Tier.HEAVY: ["heavy-a"]},
+        chains={
+            Tier.FAST: ["fast-a:free", "fast-b:free"],
+            Tier.MEDIUM: ["med-a:free"],
+            Tier.HEAVY: ["heavy-a:free"],
+        },
         transport=script.transport(),
     )
 

@@ -39,6 +39,7 @@ def test_keyword_net_routes_prayer_adan_variants():
         tool, _ = _keyword_net(phrase)
         assert tool == "prayer_times", phrase
 
+
 # --------------------------------------------------------------------------- fakes
 
 

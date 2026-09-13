@@ -98,6 +98,7 @@ async def test_routine_note_inside_custom_folder():
     )
     assert "RoutineTasks/صباحي.md" in vault.files
 
+
 # -- nested folder batch (live fix 2026-09-07) --------------------------------
 
 
@@ -145,4 +146,3 @@ async def test_create_folder_strips_اسمه_prefix():
     assert "Friends/_index.md" in vault.files
     assert "Friends/أ/_index.md" in vault.files
     assert "Friends/ب/_index.md" in vault.files
-

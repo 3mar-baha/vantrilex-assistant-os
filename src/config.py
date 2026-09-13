@@ -104,9 +104,16 @@ class Settings(BaseSettings):
     voice_pitch: str = "+0Hz"
     # Fish Audio primary voice lane (remediation 1.9, owner directive 2026-09-03):
     # fish s2.1-pro-free + the سمسم-بوس reference voice via OpenRouter speech API.
-    # Uses the same OPENROUTER_API_KEY already in .env — the voice lane borrows it
-    # directly (OmniRoute's speech lane does not proxy openrouter/* slugs).
+    # Credential separation (2026-09-13): the lane prefers its own FISH_AUDIO_API_KEY
+    # and falls back to the shared OPENROUTER_API_KEY (OmniRoute's speech lane does
+    # not proxy openrouter/* slugs, so the voice lane always calls the speech
+    # endpoint directly). FISH_AUDIO_ENDPOINT selects the surface: OpenRouter
+    # speech (default) or the direct Fish API.
     openrouter_api_key: str | None = None  # OPENROUTER_API_KEY
+    fish_audio_api_key: str | None = None  # FISH_AUDIO_API_KEY (dedicated voice key)
+    fish_audio_endpoint: str = (  # FISH_AUDIO_ENDPOINT
+        "https://openrouter.ai/api/v1/audio/speech"
+    )
     fish_audio_model: str = "fish-audio/s2.1-pro-free:free"  # FISH_AUDIO_MODEL
     fish_audio_voice_ref: str = "56c2f0c23924449781863ff20aceb5fa"  # FISH_AUDIO_VOICE_REF (سمسم)
     # Calm-tone lever (owner 2026-09-03): the /audio/speech schema has NO
@@ -193,8 +200,9 @@ class Settings(BaseSettings):
 
     @property
     def fish_audio_key(self) -> str | None:
-        """The voice lane's bearer key: OPENROUTER_API_KEY when present, else none."""
-        return self.openrouter_api_key
+        """The voice lane's bearer key: dedicated FISH_AUDIO_API_KEY when present,
+        else the shared OPENROUTER_API_KEY pool key."""
+        return self.fish_audio_api_key or self.openrouter_api_key
 
     @property
     def fish_audio_ready(self) -> bool:

@@ -43,6 +43,25 @@ class GatewayError(RuntimeError):
     pass
 
 
+class PaidModelBlockedError(GatewayError):
+    """$0.00 hard circuit breaker: a non-free model ID reached the dispatch
+    edge. Raised BEFORE any request is built or sent — the turn stops loud
+    instead of billing the owner's account."""
+
+
+def assert_zero_paid_model(model: str) -> None:
+    """Unconditional free-tier proof for one model ID: `:free`-suffixed
+    OpenRouter slugs pass, `groq/`-prefixed IDs pass (free tier by
+    construction); everything else raises PaidModelBlockedError."""
+    candidate = (model or "").strip()
+    if candidate.startswith("groq/") or candidate.endswith(":free"):
+        return
+    raise PaidModelBlockedError(
+        f"non-free model blocked before network: {candidate!r} "
+        "(only ':free' slugs or groq/ free-tier IDs may dispatch)"
+    )
+
+
 # Dynamic routing matrix (2026-09-12): the HEAVY lane escalates past the
 # concurrency threshold (or on explicit DAG swarms) to the MoE orchestrator.
 HEAVY_CONCURRENCY_THRESHOLD_DEFAULT: Final[int] = 3
@@ -386,6 +405,7 @@ class OmniRouteClient:
         raise GatewayError(f"all models exhausted ({', '.join(chain)}); last cause: {last_cause}")
 
     async def _attempt(self, model: str, payload: dict) -> AsyncIterator[str]:
+        assert_zero_paid_model(model)  # $0.00 breaker: before build_request, before wire
         request = self._client.build_request(
             "POST", "/chat/completions", json=dict(payload, model=model)
         )

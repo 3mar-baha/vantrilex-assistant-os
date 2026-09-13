@@ -39,12 +39,14 @@ class FishVoice:
         voice_ref: str,
         api_key: str,
         speed: float | None = None,
+        endpoint: str | None = None,
         notes: list | None = None,
         transport=None,
     ) -> None:
         self.model = model
         self.voice_ref = voice_ref
         self.speed = speed
+        self.endpoint = endpoint or FISH_SPEECH_URL
         self._notes = notes  # 2.5: learned dialect pairs ride the shaper here too
         self._api_key = api_key
         self._client = httpx.AsyncClient(timeout=_TIMEOUT, transport=transport)
@@ -64,6 +66,7 @@ class FishVoice:
             voice_ref=settings.fish_audio_voice_ref,
             api_key=settings.fish_audio_key,
             speed=settings.fish_audio_speed,
+            endpoint=settings.fish_audio_endpoint,
             transport=transport,
         )
 
@@ -90,7 +93,7 @@ class FishVoice:
             payload["speed"] = self.speed
         try:
             response = await self._client.post(
-                FISH_SPEECH_URL,
+                self.endpoint,
                 headers={"Authorization": f"Bearer {self._api_key}"},
                 json=payload,
             )

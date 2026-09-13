@@ -53,8 +53,12 @@ def test_settings_accept_all_env_example_vars(make_settings):
 
 
 @pytest.mark.parametrize("field", CRITICAL_FIELDS)
-def test_settings_fail_fast_on_missing_core_vars(make_settings, field):
+def test_settings_fail_fast_on_missing_core_vars(make_settings, monkeypatch, field):
     """AC2: dropping any of the six critical fields raises ValidationError naming it."""
+    # Hermetic seal (2026-09-13): the harness exports OMNIROUTE_API_KEY into the
+    # ambient process env, which pydantic-settings would backfill past the
+    # removal — scrub it so the fail-fast contract is actually exercised.
+    monkeypatch.delenv(field.upper(), raising=False)
     with pytest.raises(ValidationError) as excinfo:
         make_settings(**{field: "__REMOVE__"})
     assert field in str(excinfo.value)

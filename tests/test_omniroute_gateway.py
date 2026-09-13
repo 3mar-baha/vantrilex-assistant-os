@@ -11,8 +11,8 @@ from loguru import logger
 
 from src.gateway import GatewayError, OmniRouteClient, Tier
 
-PRIMARY = "primary-x"
-FAST = "fast-y"
+PRIMARY = "primary-x:free"
+FAST = "fast-y:free"
 AUTH = {"Authorization": "Bearer test-key"}
 
 
@@ -57,7 +57,11 @@ def _client(script: _Scripted) -> OmniRouteClient:
     return OmniRouteClient(
         "http://gw.test/v1",
         "test-key",
-        chains={Tier.FAST: [PRIMARY, FAST], Tier.MEDIUM: ["medium-x"], Tier.HEAVY: ["heavy-x"]},
+        chains={
+            Tier.FAST: [PRIMARY, FAST],
+            Tier.MEDIUM: ["medium-x:free"],
+            Tier.HEAVY: ["heavy-x:free"],
+        },
         transport=script.transport(),
     )
 
