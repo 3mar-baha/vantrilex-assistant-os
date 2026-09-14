@@ -14,12 +14,14 @@ from src.dispatcher import DEFAULT_ACK_AR, FrontDoorDispatcher
 from src.gateway import OmniRouteClient, Tier
 from tests.test_omniroute_gateway import _chunk, _collect, _Scripted, _sse
 
-# Routing matrix (2026-09-12): FAST gemma (conversation+ACK+routing), MEDIUM
-# nex-mini (sub-agent fleet), HEAVY nex-pro base (master orchestrator <=3 tasks,
-# escalates to nemotron-3-ultra MoE beyond). Test-local chains exercise the
-# dispatcher logic; the canonical pins live in .env.example (test below).
-FAST_PIN = "google/gemma-4-31b-it:free"
-FAST_FB1 = "groq/openai/gpt-oss-120b"
+# Routing matrix (2026-09-12, FAST flipped to groq 2026-09-14): FAST groq
+# (conversation+ACK+routing, ~0.6s cold), MEDIUM nex-mini (sub-agent fleet),
+# HEAVY nex-pro base (master orchestrator <=3 tasks, escalates to
+# nemotron-3-ultra MoE beyond). Gemma stays the FAST fallback behind the 4s
+# guillotine + 15m quarantine. Test-local chains exercise the dispatcher
+# logic; the canonical pins live in .env.example (test below).
+FAST_PIN = "groq/openai/gpt-oss-120b"
+FAST_FB1 = "google/gemma-4-31b-it:free"
 MEDIUM_PIN = "nex-agi/nex-n2.5-mini:free"
 MEDIUM_FB1 = "groq/openai/gpt-oss-120b"
 HEAVY_PIN = "nex-agi/nex-n2.5-pro:free"

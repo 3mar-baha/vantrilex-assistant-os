@@ -253,3 +253,26 @@ Supersedes draft preference for Google Cloud Run deployment.
 - **Consequences**: $0.00 preserved end-to-end (no STT API ever); the module's import
   surface carries no network libraries (AST-scan tested); first-run model download is
   the documented RUNBOOK warmup, offline afterwards.
+
+## ADR-23: Groq FAST Primary + Fail-Fast Doctrine — **Accepted** (2026-09-14, owner strategic pivot)
+- **Context**: Live Telegram greeting stalled ~3 min on throttled
+  `google/gemma-4-31b-it:free`. Diagnosis (14c108e): direct-OpenRouter Gemma
+  429s land in ~300 ms, but the OmniRoute hop holds the SSE stream ~107 s
+  before surfacing the same 429 as a 200+`error` event — the stall is
+  proxy-side buffering, not reasoning-budget starvation (zero reasoning
+  deltas at every budget 16..256, both languages). No client payload shortens
+  a proxy hold; the fix is early recognition + instant cascade.
+- **Decision**: (1) `FAST_MODEL=groq/openai/gpt-oss-120b` primary, Gemma kept
+  as secondary fallback (measured Groq cold TTFT ~0.6-0.9 s at budgets >=128;
+  persona-class prompts starve below ~128 tokens — no FAST caller budgets
+  under 120). (2) Fail-fast doctrine in `src/gateway.py`: FAST-only 4 s
+  first-token guillotine (stall -> abort + quarantine + cascade, never a
+  retry); ANY 429 or empty stream quarantines the model 15 min with turn-zero
+  skip (zero network calls to hot models); the hop phrasing
+  `(reset after Xs)` parses as a rate-limit window (immediate cascade, no
+  retry burn). (3) Groq per-key TPD pressure is real (midday throttle
+  observed) — multi-key rotation belongs at the OmniRoute provider layer,
+  NOT as a client-side bypass (hard rule: all LLM calls route via OmniRoute).
+- **Consequences**: steady-state greetings ~0.6 s; cold-process floor ~4.6 s
+  while the hop holds Gemma (guillotine + Groq latency); deterministic sub-3 s
+  cold was the flip itself. Reasoning-model floor: FAST budgets stay >=120.

@@ -38,8 +38,8 @@ REMOVE = "__REMOVE__"  # sentinel: factory deletes this key instead of setting i
 ENV_EXAMPLE: dict[str, str] = {
     "OMNIROUTE_BASE_URL": "http://localhost:20128/v1",
     "OMNIROUTE_API_KEY": "sk-omniroute-local-key",
-    "FAST_MODEL": "google/gemma-4-31b-it:free",
-    "FAST_MODEL_FALLBACKS": "groq/openai/gpt-oss-120b",
+    "FAST_MODEL": "groq/openai/gpt-oss-120b",
+    "FAST_MODEL_FALLBACKS": "google/gemma-4-31b-it:free",
     "MEDIUM_MODEL": "nex-agi/nex-n2.5-mini:free",
     "MEDIUM_MODEL_FALLBACKS": "groq/openai/gpt-oss-120b",
     "HEAVY_MODEL": "nex-agi/nex-n2.5-pro:free",

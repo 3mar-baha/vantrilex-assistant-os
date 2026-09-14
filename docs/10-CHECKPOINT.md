@@ -206,3 +206,24 @@ tools) + `_VALID_TOOLS` entries + 10 per-tool skill guides. 44 new tests across
 **902 passed / 1 skipped / 85.01% branch / Security + Docs green /
 sacred floors 44/44**. Record: `CHANGELOG.md` · `docs/06-API-SPECIFICATION.md`
 · `.claude/PHASE-STATE.md`.
+
+## Phase C — 2026-09-14: Groq FAST Pivot + Fail-Fast Doctrine + Tier3 Response Coach
+
+Diagnosis first (commits `95a6f62`, `14c108e`): the ~3 min Telegram greeting
+stall was the OmniRoute hop holding Gemma's SSE stream ~107 s before
+surfacing a 429 (direct-OpenRouter same-429 lands in ~300 ms; zero reasoning
+deltas at all budgets — starvation ruled out). Shipped: FAST-only 4 s
+first-token guillotine, 15 min quarantine on ANY 429/empty/stall with
+turn-zero skip, `(reset after Xs)` window parsing. Then the strategic pivot:
+`FAST_MODEL=groq/openai/gpt-oss-120b` primary (measured cold TTFT ~0.6–0.9 s
+at budgets >=128), Gemma secondary fallback (`.env` + `.env.example` +
+contract tests flipped; live core needs a restart to bite). Tier3 gained a
+Groq response coach (`tests/suite/tier3_shadow_tracer/response_coach.py`:
+dialect/immersion/concision graders + 9 hermetic contracts + live
+`scripts/groq_persona_probe.py` calibration runner). Recorded: ADR-23,
+this entry, CLAUDE.md brain matrix, `01-ARCHITECTURE.md` Tier1 label.
+OPEN: Groq per-key TPD throttle observed midday — multi-key rotation is an
+OmniRoute provider-layer decision (no client bypass per hard rule 1);
+RESOLVED 2026-09-14: owner selected OmniRoute-side rotation (zero repo code;
+client keeps the single bearer + quarantine doctrine);
+`docs/ai/PROJECT-CONTEXT.md` referenced by tasking but absent from the tree.

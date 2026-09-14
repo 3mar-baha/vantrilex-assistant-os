@@ -9,18 +9,23 @@ strictly-zero-cost executive AI assistant named **Sara (سارة)**.
 - **Core Agent**: Sara (سارة) — Executive Chief of Staff, polymath tutor (10 languages & sciences),
   tech scout, and PC automation companion speaking in a warm, authentic Jordanian Arabic accent (`ar-JO`).
 - **Primary Transport**: Telegram (Aiogram 3.x chat + Ogg Opus voice notes; live PyTgCalls calls land in v1.1).
-- **Brain Engine (3-tier, ADR-16 amended 2026-09-01 — two strong models)**: OmniRoute
-  Gateway (`http://localhost:20128/v1`, co-located with the core) routes through three
-  tiers behind the **Fast Front-Door Dispatcher** (ADR-18). CONVERSATION LANE (Sara's
-  exclusive speaker): TIER 1 `FAST_MODEL=openrouter/minimax/minimax-m3:free`
-  (fallback `groq/openai/gpt-oss-120b`) — router, instant Jordanian ack «من عيوني هسا
-  ببدأ...», direct chat, memory narration, fact extraction; TIER 2
-  `MEDIUM_MODEL=groq/openai/gpt-oss-120b` (fallback minimax) — conversation depth /
-  tier2 chat. TOOL LANE (exclusive executor): TIER 3
-  `HEAVY_MODEL=openrouter/nvidia/nemotron-3-ultra-550b-a55b:free` (fallback
-  `groq/openai/gpt-oss-120b`) — every Gmail/Calendar/Tasks/bridge narration streams
-  here after the ToolRegistry executes the real backend; launch notifies the owner
-  directly (audit code, no narration). Dual-tier memory: 50-message rolling buffer +
+- **Brain Engine (3-tier, ADR-16 amended 2026-09-01 — two strong models, FAST pivoted
+  to Groq 2026-09-14 per ADR-23)**: OmniRoute Gateway (`http://localhost:20128/v1`,
+  co-located with the core) routes through three tiers behind the **Fast Front-Door
+  Dispatcher** (ADR-18). CONVERSATION LANE (Sara's exclusive speaker): TIER 1
+  `FAST_MODEL=groq/openai/gpt-oss-120b` (fallback `google/gemma-4-31b-it:free`) —
+  router, instant Jordanian ack «من عيوني هسا ببدأ...», direct chat, memory narration,
+  fact extraction (measured ~0.6–0.9 s cold TTFT); TIER 2
+  `MEDIUM_MODEL=nex-agi/nex-n2.5-mini:free` (fallback `groq/openai/gpt-oss-120b`) —
+  conversation depth / tier2 chat. TOOL LANE (exclusive executor): TIER 3
+  `HEAVY_MODEL=nex-agi/nex-n2.5-pro:free` (fallbacks
+  `openrouter/nvidia/nemotron-3-ultra-550b-a55b:free`, `groq/openai/gpt-oss-120b`) —
+  every Gmail/Calendar/Tasks/bridge narration streams here after the ToolRegistry
+  executes the real backend; launch notifies the owner directly (audit code, no
+  narration). **Fail-fast doctrine (ADR-23)**: FAST attempts carry a 4 s first-token
+  guillotine (stall → abort + quarantine + cascade, never a retry); any 429 or
+  empty stream parks the model 15 min (later turns skip it at turn zero with zero
+  network calls); the proxy's «reset after Xs» phrasing parses as a rate window. Dual-tier memory: 50-message rolling buffer +
   Obsidian long-term envelope; background writers persist Daily_Logs + User_Info; a
   23:50 local DailySummarizer (`src/memory.py`) appends a SEPARATE end-of-day
   conversation summary (last 150 turns + Obsidian context -> one MEDIUM call) to the
@@ -126,3 +131,63 @@ strictly-zero-cost executive AI assistant named **Sara (سارة)**.
   The `core-foundation` worktree is a reference checkout only (never commit new work on it).
 - Documentation changes in the same commit as the behavior it describes.
 - Ship the smallest abstraction that satisfies the specification — no speculative layers.
+
+## Active Components (runner=opencode model=deepseek/deepseek-v3-free effort=medium)
+
+### Agents (1)
+- Lead System Architect — Primary orchestrator for system design and planning.
+
+### Skills (4)
+- find-skills — Discover and install relevant workflow skills.
+- mattpocock-typescript — TypeScript and agent SDK skills.
+- ponytail-core — Multi-agent orchestration core skills.
+- skill-creator — Official skill authoring guide and template.
+
+### Plugins (3)
+- circuit-breaker-guard — Runaway-loop protection guards for agent sessions.
+- commit-commands — Conventional commit helpers and git workflow commands.
+- context-primer — Project context priming and bootstrap prompts.
+
+### Hooks (3)
+- dangerous-command-guard — Block destructive shell commands before execution.
+- format-on-edit — Auto-format edited files after tool use.
+- pre-compact-checkpoint — Snapshot session state before context compaction.
+
+### MCP Servers (5)
+- fetch — HTTP fetch and content extraction.
+- filesystem — Secure scoped filesystem read/write.
+- memory — Persistent knowledge-graph memory.
+- openrouter — OpenRouter remote MCP: models, chat, and credits over HTTPS.
+- sequential-thinking — Structured step-by-step reasoning server.
+
+
+## Active Components (runner=opencode model=deepseek/deepseek-v3-free effort=medium)
+
+### Agents (1)
+- architect — Software architecture specialist for system design, scalability, and technical decision-making. Use PROACTIVELY when planning new features, refactoring large systems, or making architectural decisions.
+
+### Skills (5)
+- ask-matt — Ask which skill or flow fits your situation. A router over the skills in this repo.
+- code-review — Review the changes since a fixed point (commit, branch, tag, or merge-base) along two axes: Standards (does the code follow this repo's documented coding standards?) and Spec (does the code match what the originating issue/spec asked for?)…
+- find-skills — Helps users discover and install agent skills when they ask questions like "how do I do X", "find a skill for X", "is there a skill that can...", or express interest in extending capabilities. This skill should be used when the user is loo…
+- ponytail — Lazy senior dev mode for any coding task (write, refactor, fix, review): YAGNI, stdlib first, no unrequested abstractions. Not for non-coding requests.
+- skill-creator — Create new skills, modify and improve existing skills, and measure skill performance. Use when users want to create a skill from scratch, edit, or optimize an existing skill, run evals to test a skill, benchmark skill performance with vari…
+
+### Plugins (4)
+- code-review — Code review
+- commit-commands — Git workflow
+- context7 — Live documentation lookup
+- typescript-lsp — TypeScript intelligence
+
+### Hooks (3)
+- block-dev-servers-outside-tmux-ensures-you-can-access-logs — Block dev servers outside tmux - ensures you can access logs
+- pre-compact — PreCompact Hook - Save state before context compaction
+- session-start — SessionStart Hook - Load previous context on new session
+
+### MCP Servers (5)
+- fetch — HTTP fetch and content extraction.
+- filesystem — Secure scoped filesystem read/write.
+- memory — Persistent knowledge-graph memory.
+- openrouter — OpenRouter remote MCP: models, chat, and credits over HTTPS.
+- sequential-thinking — Structured step-by-step reasoning server.
+

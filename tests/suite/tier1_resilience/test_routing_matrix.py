@@ -1,7 +1,8 @@
 """Tier 1 — routing-matrix contracts: pins, fallbacks, escalation boundaries.
 
-Hermetic: the dynamic 3-tier matrix (FAST gemma / MEDIUM nex-mini / HEAVY
-nex-pro base + nemotron MoE escalation) is verified without network.
+Hermetic: the dynamic 3-tier matrix (FAST groq / MEDIUM nex-mini / HEAVY
+nex-pro base + nemotron MoE escalation, Gemma as FAST fallback) is verified
+without network.
 """
 
 from src.gateway import (
@@ -10,7 +11,8 @@ from src.gateway import (
     select_heavy_chain,
 )
 
-FAST = "google/gemma-4-31b-it:free"
+FAST = "groq/openai/gpt-oss-120b"
+FAST_FB = "google/gemma-4-31b-it:free"
 MEDIUM = "nex-agi/nex-n2.5-mini:free"
 HEAVY = "nex-agi/nex-n2.5-pro:free"
 ESCALATED = "openrouter/nvidia/nemotron-3-ultra-550b-a55b:free"
@@ -20,7 +22,7 @@ FB = "groq/openai/gpt-oss-120b"
 def test_settings_pins_match_matrix(make_settings):
     s = make_settings()
     assert (s.fast_model, s.medium_model, s.heavy_model) == (FAST, MEDIUM, HEAVY)
-    assert s.fast_chain == [FAST, FB]
+    assert s.fast_chain == [FAST, FAST_FB]
     assert s.medium_chain == [MEDIUM, FB]
     assert s.heavy_chain == [HEAVY, FB]
     assert s.heavy_escalated_chain == [ESCALATED, FB]
