@@ -26,7 +26,10 @@ def test_intuition_doctrine_present():
     assert "مونولوجك الداخلي" in SARA_PERSONA_AR
 
 
-def test_no_numerical_emoji_caps_remain():
+def test_emoji_hygiene_cap():
+    # Owner order 2026-09-14: free choice of WHICH emoji (intuition doctrine
+    # stands), but a hard ceiling of 6 per response (calibration found pileups).
+    assert "٦ إيموجي كحد أقصى بالرد الواحد" in SARA_PERSONA_AR
     assert "واحدة أو اثنتين" not in SARA_PERSONA_AR
     assert "واحده أو تنتين" not in SARA_PERSONA_AR
 

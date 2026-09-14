@@ -63,7 +63,7 @@ MD_SCAFFOLD_MARKERS: Final[tuple[str, ...]] = ("```", "###", "| ---", "|---", "#
 
 CHAT_MAX_CHARS: Final[int] = 280
 DEPTH_MAX_CHARS: Final[int] = 900
-EMOJI_MAX: Final[int] = 4
+EMOJI_MAX: Final[int] = 6  # mirrors the persona hygiene cap (owner order 2026-09-14)
 
 
 _EMOJI_RANGES: Final[tuple[tuple[int, int], ...]] = (

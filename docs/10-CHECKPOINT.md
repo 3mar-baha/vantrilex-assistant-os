@@ -227,3 +227,14 @@ OmniRoute provider-layer decision (no client bypass per hard rule 1);
 RESOLVED 2026-09-14: owner selected OmniRoute-side rotation (zero repo code;
 client keeps the single bearer + quarantine doctrine);
 `docs/ai/PROJECT-CONTEXT.md` referenced by tasking but absent from the tree.
+
+## Phase C sign-off — 2026-09-14: transition COMPLETE
+Polish commit: excised the stray ~60-line "Active Components" harness
+appendix from CLAUDE.md (uncommitted residue of a prior session, bundled by
+accident in `eb25935`); persona carries the owner-ordered hygiene cap
+(٦ إيموجي كحد أقصى بالرد الواحد — free choice of WHICH emoji stands),
+response-coach ceiling aligned to 6, persona hash re-pinned
+4782/ec6acc69. Acceptance: MATRIX 6/6 green, FAST cold TTFT <1.2 s measured
+live, Tier3 calibrated (11/12 live checks; single emoji-pileup deviation now
+governed by the cap). Core restart still required for the `.env` flip to
+bite on the live bot.
