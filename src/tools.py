@@ -496,14 +496,16 @@ class ToolRegistry:
         return str(payload["detail"])
 
     async def _do_openclaw_inspect(self, arg: str) -> str:
-        """OpenClaw Phase 2 — read-only element-tree scan of a scope
-        (default: the desktop). Returns the handle count + names, never pixels."""
+        """OpenClaw Phase 3.1 — full diagnostic transcript (screenshot +
+        foreground + OCR) narrated as ground truth in ≤2 lines for the
+        tool-lane narrator. A bare handle list (older daemon) keeps the
+        Phase-2 count line."""
         if self._bridge is None:
             return OPENCLAW_OFFLINE_AR
         scope = (arg or "").strip() or "desktop"
         try:
             payload = await self._bridge.send_cmd(
-                "openclaw.perceive", {"scope": scope}, timeout_s=30.0
+                "openclaw.perceive", {"scope": scope, "full": True}, timeout_s=30.0
             )
         except BridgeOffline:
             return OPENCLAW_OFFLINE_AR
@@ -513,13 +515,29 @@ class ToolRegistry:
         import json as _json
 
         try:
-            handles = _json.loads(str(payload["detail"]))
+            envelope = _json.loads(str(payload["detail"]))
         except (ValueError, TypeError):
             return TOOL_FAIL_AR
-        if not isinstance(handles, list):
+        if isinstance(envelope, list):  # pre-3.1 daemon shape
+            names = [str(h.get("name", "?")) for h in envelope[:8] if isinstance(h, dict)]
+            return f"فحصت {scope}: {len(envelope)} عناصر" + (
+                f" ({'، '.join(names)})" if names else ""
+            )
+        if not isinstance(envelope, dict):
             return TOOL_FAIL_AR
-        names = [str(h.get("name", "?")) for h in handles[:8] if isinstance(h, dict)]
-        return f"فحصت {scope}: {len(handles)} عناصر" + (f" ({'، '.join(names)})" if names else "")
+        inspection = envelope.get("inspection") or {}
+        lines = []
+        foreground = inspection.get("foreground")
+        if foreground:
+            lines.append(f"قدامك نافذة {foreground}")
+        elif inspection.get("screenshot_ok"):
+            lines.append("الشاشة شغالة وما في نافذة واضحة قدامك")
+        else:
+            lines.append("ما قدرت آخذ لقطة للشاشة هسا")
+        ocr_text = (inspection.get("ocr_text") or "").strip()
+        if ocr_text:
+            lines.append(f"النص الظاهر: {ocr_text[:160]}")
+        return "\n".join(lines[:2])
 
     async def _do_openclaw_desktop(self, arg: str) -> str:
         """OpenClaw Phase 2 — desktop actuation entry. Phase-2 semantics: a

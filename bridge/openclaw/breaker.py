@@ -17,9 +17,14 @@ from typing import Final, Literal
 
 from loguru import logger
 
+from bridge.openclaw.hotkeys import SAFE_HOTKEY_SPECS
 from bridge.openclaw.protocol import Op, OpKind
 
 Reversibility = Literal["reversible", "irreversible"]
+
+# Single source: the safe set lives in bridge.openclaw.hotkeys (T0
+# doctrine table); this alias keeps the historical import path working.
+SAFE_HOTKEYS: Final[frozenset[str]] = SAFE_HOTKEY_SPECS
 
 
 class ActionForbiddenError(Exception):
@@ -30,40 +35,8 @@ class ActionForbiddenError(Exception):
 
 # Hotkeys that only move attention (T0 tier): focus, tabs, find, dismiss.
 # Everything committing (close/save/submit) is absent ON PURPOSE — an
-# unknown hotkey defaults UP to irreversible (classify() below).
-SAFE_HOTKEYS: Final[frozenset[str]] = frozenset(
-    {
-        "ctrl+l",
-        "ctrl+t",
-        "ctrl+tab",
-        "ctrl+shift+tab",
-        "ctrl+f",
-        "ctrl+r",
-        "f6",
-        "f5",
-        "alt+tab",
-        "alt+left",
-        "alt+right",
-        "escape",
-        "esc",
-        "tab",
-        "shift+tab",
-        "up",
-        "down",
-        "left",
-        "right",
-        "pageup",
-        "pagedown",
-        "home",
-        "end",
-        "ctrl+home",
-        "ctrl+end",
-        "win+d",
-        "win+e",
-        "win+v",
-        "win+shift+s",
-    }
-)
+# unknown hotkey defaults UP to irreversible (classify() below). The set
+# itself is owned by bridge.openclaw.hotkeys (imported above).
 
 # Clicks carrying one of these verify predicates commit owner-visible state.
 COMMIT_VERIFIES: Final[frozenset[str]] = frozenset(

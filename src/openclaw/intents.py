@@ -1,10 +1,13 @@
 """OpenClaw intent definitions (Phase 2): the four tool specs.
 
 Router-prompt lines, keyword-net candidate patterns, and representative
-samples live here — NOT yet wired into the dispatcher (Phase 3 insertion,
-with live collision review against the existing net). Each entry carries
-(samples) that must match and the patterns must be compilable; the
-collision test in test_openclaw_core.py guards the existing tools.
+samples live here. Phase-3.5 wiring state (src/dispatcher.py):
+- all four tools are verdict-valid + prompt-catalogued;
+- browse/desktop/inspect net entries are built FROM these regexes (single
+  source, sync-tested);
+- openclaw_fetch is inlined mid-net BEFORE read_page (positional necessity:
+  the bare-URL rule would swallow URL-carrying fetch asks) — its regex MUST
+  stay byte-equal to the entry here (sync-tested).
 
 Pattern scoping rule: OpenClaw owns EXPLICIT computer-operation phrasing
 (move/click/type in a window, drive the browser, fetch a page body).

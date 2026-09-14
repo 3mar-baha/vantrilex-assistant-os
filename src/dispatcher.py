@@ -20,7 +20,7 @@ from loguru import logger
 
 from src.config import Settings
 from src.gateway import GatewayError, OmniRouteClient, Tier
-from src.openclaw.intents import ROUTER_TOOL_LINES, VALID_OPENCLAW_TOOLS
+from src.openclaw.intents import INTENT_PATTERNS, ROUTER_TOOL_LINES, VALID_OPENCLAW_TOOLS
 
 DEFAULT_ACK_AR: Final[str] = "من عيوني هسا ببدأ..."
 MAX_ACK_CHARS: Final[int] = 30
@@ -228,6 +228,17 @@ _TOOL_NET: Final[tuple[tuple[str, re.Pattern[str]], ...]] = (
     (
         "file_fetch",
         re.compile(r"(?:ابعثي?لي|ارسلي?لي|بعتيلي|بعتولي)\s+ملف\s+(.+)"),
+    ),
+    # openclaw_fetch (Phase 3.5) — explicit automation extraction phrasing
+    # («اجلبي محتوى الصفحة»). BEFORE read_page: the bare-URL rule below
+    # would swallow any URL-carrying fetch ask; the extraction verbs here
+    # never occur in read_page's own samples (suite-guarded both ways).
+    (
+        "openclaw_fetch",
+        re.compile(
+            r"(?:اجلبي?|اجلب|استخرجي?|اسحبي?)\s+(?:محتوى|نص|متن)\s+"
+            r"(?:الصفحة|الموقع|الرابط)\s*(https?://\S+)?"
+        ),
     ),
     # M4 (master directive 2026-09-05 §4): the external-API zones. Each rides
     # before its sibling-word owners; the FULL text rides the arg where a
@@ -499,6 +510,15 @@ _TOOL_NET: Final[tuple[tuple[str, re.Pattern[str]], ...]] = (
     # stripped of trailing device clauses («على جهازي», «بجهازي», «لو سمحت»...)
     # (?<!ال) keeps the noun الشغل out — bare شغل substring-matches inside it.
     ("launch", re.compile(r"(?<!ال)(?:افتحي|افتحيلي|افتحيلي |شغّل|شغل|شغّلي|شغيلي)\s+(.+)")),
+    # OpenClaw Phase 3.5 (browse/desktop/inspect): appended LAST so every
+    # existing owner keeps priority. Regexes owned by src/openclaw/intents.py
+    # (single source — the sync test pins them equal); openclaw_fetch is
+    # inlined mid-net before read_page instead (see above).
+    *(
+        (tool, re.compile(pattern))
+        for tool, pattern, _samples in INTENT_PATTERNS
+        if tool != "openclaw_fetch"
+    ),
 )
 _LAUNCH_STRIP_RE: Final = re.compile(
     r"\s+(?:على\s+جهاز\w*|على\s+الجهاز|بجهاز\w*|على\s+الحاسوب|لو\s+سمحت|بليز|منشان\s+الله).*$"
@@ -596,6 +616,19 @@ def _keyword_net(text: str) -> tuple[str, str]:
                     city = city[len(prefix) :]
                     break
             return ("weather", city.strip())
+        if tool == "openclaw_fetch":
+            # Phase 3.5: the URL rides the arg (optional group — bare
+            # extraction phrasing without a link still reaches the tool and
+            # gets the honest refusal, never a hallucinated fetch).
+            groups = [g.strip() for g in match.groups() if g and g.strip()]
+            url = groups[0].strip(" .!؟?،,") if groups else ""
+            return ("openclaw_fetch", url)
+        if tool in ("openclaw_browse", "openclaw_desktop"):
+            # Phase 3.5: the FULL text rides the arg — the Phase-3 handlers
+            # and the future DAG builder parse the goal from the owner's
+            # own phrasing (same convention as multi_task/schedule).
+            return (tool, clean)
+        # openclaw_inspect: default desktop scope — no arg needed.
         return tool, ""
     return ("none", "")
 

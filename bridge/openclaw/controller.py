@@ -20,6 +20,7 @@ from bridge.openclaw.protocol import ActionTranscript, ElementHandle, Op
 
 STAGED_ACT = "openclaw actuator not configured (Phase 3 binds Win32/Playwright)"
 STAGED_PERCEIVE = "openclaw perception not configured (Phase 3 binds UIA/DOM)"
+STAGED_INSPECT = "openclaw inspector not configured"
 
 
 class Actuator(Protocol):
@@ -36,11 +37,13 @@ class OpenClawController:
         actuator: Actuator | None = None,
         perception: Any = None,
         fetcher: Any = None,
+        inspector: Any = None,
     ) -> None:
         self._breaker = breaker or SafetyCircuitBreaker()
         self._actuator = actuator
         self._perception = perception
         self._fetcher = fetcher
+        self._inspector = inspector
 
     async def perceive(self, scope: str = "desktop") -> ExecResult:
         code = mint_audit_code()
@@ -98,6 +101,20 @@ class OpenClawController:
             audit_codes=[code],
         )
         return ExecResult(status="ok", detail=transcript.model_dump_json(), audit_code=code)
+
+    async def inspect(self, scope: str = "desktop") -> ExecResult:
+        """Full diagnostic transcript (3.1): screenshot + foreground + OCR."""
+        code = mint_audit_code()
+        if self._inspector is None:
+            return ExecResult(status="error", detail=STAGED_INSPECT, audit_code=code)
+        try:
+            transcript = await self._inspector.inspect(scope)
+        except Exception as exc:  # noqa: BLE001 — inspect() itself never raises, belt first
+            logger.warning("openclaw inspect failed: {}", exc)
+            return ExecResult(status="error", detail=f"inspect failed: {exc}", audit_code=code)
+        return ExecResult(
+            status="ok", detail=json.dumps(transcript, ensure_ascii=False), audit_code=code
+        )
 
     async def fetch(self, url: str) -> ExecResult:
         code = mint_audit_code()

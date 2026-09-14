@@ -10,6 +10,10 @@ from loguru import logger
 from bridge.daemon import BridgeDaemon
 from bridge.executor import Executor
 from bridge.guard import Guard
+from bridge.openclaw.actuator import DesktopActuator, PyWinAutoBackend
+from bridge.openclaw.controller import OpenClawController
+from bridge.openclaw.fetch_arm import default_fetcher
+from bridge.openclaw.inspect_arm import ScreenInspector
 from bridge.server import LanServer
 from src.config import get_settings
 
@@ -38,6 +42,20 @@ async def main() -> int:
     sessions.mark_boot(now=datetime.now(UTC))
     sessions.load(now=datetime.now(UTC))
 
+    # OpenClaw Phase 3: the real controller — inspection with live
+    # screenshot/foreground backends (OCR extractor stays unbound: the
+    # transcript marks it unavailable instead of failing), desktop
+    # actuation over the lazy UIA binding (missing pywinauto wheels answer
+    # honestly at act time, never at boot), and the scrapling-first fetch
+    # chain (httpx fallback, honest error when neither exists).
+    inspector = ScreenInspector()
+    openclaw = OpenClawController(
+        inspector=inspector,
+        perception=inspector,
+        actuator=DesktopActuator(uia=PyWinAutoBackend()),
+        fetcher=default_fetcher,
+    )
+
     daemon = BridgeDaemon(
         settings.bridge_server_url,
         settings.bridge_token.get_secret_value(),
@@ -52,6 +70,7 @@ async def main() -> int:
             blocked_suffixes=(".key", ".pem", ".env", ".p12", ".kdbx"),
         ),
         sessions=sessions,
+        openclaw=openclaw,
     )
     runner = asyncio.create_task(daemon.run(stop))
     logger.info("bridge daemon dialing out; Ctrl+C to stop")

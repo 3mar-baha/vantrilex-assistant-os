@@ -58,6 +58,51 @@ def test_dispatcher_wiring_names_and_allows():
         assert tool in _ROUTER_PROMPT_AR, tool
 
 
+def test_net_patterns_match_intents_single_source():
+    """The live net IS the intents table: fetch inlined mid-net + the rest
+    appended from INTENT_PATTERNS. Any edit in one place fails here until
+    the other follows."""
+    from src.dispatcher import _TOOL_NET
+
+    by_tool = {}
+    for tool, pattern in _TOOL_NET:
+        by_tool.setdefault(tool, []).append(pattern.pattern)
+    for tool, pattern, _samples in intents.INTENT_PATTERNS:
+        assert tool in by_tool, f"{tool} missing from the live net"
+        assert pattern in by_tool[tool], f"{tool} net regex drifted from intents.py"
+
+
+def test_net_routes_openclaw_samples():
+    from src.dispatcher import _keyword_net
+
+    tool, arg = _keyword_net("حرّكي الماوس على زر الإرسال")
+    assert tool == "openclaw_browse" and arg
+    tool, arg = _keyword_net("اكتبي بالنافذة التقرير النهائي")
+    assert tool == "openclaw_desktop" and arg
+    tool, arg = _keyword_net("اجلبي محتوى الصفحة https://example.com/x")
+    assert tool == "openclaw_fetch" and arg == "https://example.com/x"
+    tool, arg = _keyword_net("افحصي عناصر النافذة")
+    assert tool == "openclaw_inspect"
+
+
+def test_net_existing_owners_keep_priority():
+    """Zero colloquial hijacking: every pre-Phase-3 owner's canonical
+    sample still resolves to its owner after the OpenClaw insertion."""
+    from src.dispatcher import _keyword_net
+
+    cases = {
+        "ارسلي لقطة الشاشة": "screenshot",
+        "سكري الآلة الحاسبة": "close",
+        "افتحي المفكرة عندي": "launch",
+        "لخصيلي محتوى هالصفحة https://example.com": "read_page",
+        "https://adamlankamer.com/ai": "read_page",
+        "وطّي الصوت شوي": "volume",
+        "استخرجي الكود من الشاشة": "screen_ocr",
+    }
+    for text, expected in cases.items():
+        assert _keyword_net(text)[0] == expected, text
+
+
 def test_build_dag_stamps_plan_and_weight():
     dag = plans.build_dag(
         goal="افتحي المفكرة",

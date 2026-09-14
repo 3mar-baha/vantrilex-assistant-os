@@ -263,12 +263,29 @@ class BridgeDaemon:
             elif frame.cmd == "openclaw.perceive":
                 # Phase 2: read-only tree/screen scan via the injected
                 # controller; unconfigured backends answer honestly.
+                # Phase 3.1: full=true serves the diagnostic transcript
+                # (screenshot + foreground + OCR) alongside the handles.
                 if self._openclaw is None:
                     return "error", {
                         "detail": "openclaw controller not configured",
                         "audit_code": mint_audit_code(),
                     }
-                result = await self._openclaw.perceive(str(args.get("scope", "desktop")))
+                if args.get("full"):
+                    result = await self._openclaw.inspect(str(args.get("scope", "desktop")))
+                    if result.status != "ok":
+                        return result.status, result.model_dump()
+                    import json as _json
+
+                    result = ExecResult(
+                        status="ok",
+                        detail=_json.dumps(
+                            {"handles": [], "inspection": _json.loads(result.detail)},
+                            ensure_ascii=False,
+                        ),
+                        audit_code=result.audit_code,
+                    )
+                else:
+                    result = await self._openclaw.perceive(str(args.get("scope", "desktop")))
             elif frame.cmd == "openclaw.act":
                 # Phase 2: ONE pre-classified op through the breaker + the
                 # injected actuator. Confirmation rides args (fail-closed).
