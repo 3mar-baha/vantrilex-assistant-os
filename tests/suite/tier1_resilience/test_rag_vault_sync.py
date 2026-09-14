@@ -99,7 +99,7 @@ def test_mirrored_kb_recall_spot_check(tmp_path):
 NEW_KBS = {
     "04_Resources/Knowledge_Bases/Personal_Context/Omar_Executive_Profile_and_Rhythms.md": [
         "بروفايل عمر",
-        "VIPLANET",
+        "صاحب الشغل",
     ],
     "04_Resources/Dialect_Encyclopedia/Ammani_Urban_Humor_and_Banter.md": [
         "نكش مخ",
