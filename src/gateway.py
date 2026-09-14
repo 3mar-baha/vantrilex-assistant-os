@@ -131,6 +131,12 @@ class _ModelUnavailable(RuntimeError):
     Auth failures (401/403) still abort: the whole gateway is suspect."""
 
 
+class _FirstTokenTimeout(RuntimeError):
+    """FAST fail-fast (live 2026-09-14): the attempt streamed zero content
+    deltas within FIRST_TOKEN_TIMEOUT_S — a throttled endpoint stalls instead
+    of answering. Abort the attempt, quarantine the stall, cascade now."""
+
+
 class _WindowRateLimit(RuntimeError):
     """429 whose body/header ANNOUNCES the recovery window — the model is hot
     for that window; the rest of the chain serves the turn."""
@@ -147,8 +153,21 @@ _MODEL_COOLDOWNS: dict[str, float] = {}
 # Fail-fast (2026-09-13 tuning): consecutive UNANNOUNCED 429s mark the model
 # hot without waiting for an announced window — sustained free-pool throttle
 # episodes stop burning 3 attempts every turn. Success resets the streak.
+# Live 2026-09-14: a throttled primary stalled a greeting ~3min. The
+# quarantine is now 15 minutes (THROTTLE_QUARANTINE_S): one throttle episode
+# parks the model for the whole episode and the stable candidate serves FAST
+# turns at turn zero with zero network calls to the hot model.
 BARE_429_SKIP_AFTER: Final[int] = 2
-BARE_429_COOLDOWN_S: Final[float] = 90.0
+THROTTLE_QUARANTINE_S: Final[float] = 15 * 60.0
+BARE_429_COOLDOWN_S: Final[float] = THROTTLE_QUARANTINE_S
+# Empty streams ([DONE] with zero content deltas) park the model just as
+# long — a blank-serving model must not eat a turn every time.
+EMPTY_REPLY_COOLDOWN_S: Final[float] = THROTTLE_QUARANTINE_S
+# FAST first-token guillotine (live 2026-09-14): a FAST attempt that streams
+# no content delta within this window is aborted and cascaded — the owner
+# never waits on a stalled endpoint. MEDIUM/HEAVY keep their patience.
+FIRST_TOKEN_TIMEOUT_S: Final[float] = 4.0
+FIRST_TOKEN_STALL_COOLDOWN_S: Final[float] = THROTTLE_QUARANTINE_S
 # Streak entries evaporate: a 429 from long ago must not skip a healthy model.
 BARE_429_STREAK_TTL_S: Final[float] = 300.0
 _429_STREAK: dict[str, tuple[int, float]] = {}  # model -> (streak, last epoch)
@@ -304,7 +323,9 @@ class OmniRouteClient:
         logger.bind(n_tasks=n_tasks, dag=is_dag_swarm, escalated=escalated).info(
             "gateway heavy route (escalated={})", escalated
         )
-        return self._stream(chain, messages, temperature=temperature, max_tokens=max_tokens)
+        return self._stream(
+            chain, messages, temperature=temperature, max_tokens=max_tokens, tier=Tier.HEAVY
+        )
 
     async def __aenter__(self) -> Self:
         return self
@@ -325,7 +346,11 @@ class OmniRouteClient:
     ) -> AsyncIterator[str]:
         """Stream through the tier's own fallback chain (ADR-16 order)."""
         return self._stream(
-            self._chains[tier], messages, temperature=temperature, max_tokens=max_tokens
+            self._chains[tier],
+            messages,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            tier=tier,
         )
 
     async def chat(
@@ -347,6 +372,29 @@ class OmniRouteClient:
         # rule — only addressee-directed feminine verb forms rewrite.
         return normalize_masculine_address("".join(parts))
 
+    @staticmethod
+    async def _first_token_guarded(
+        model: str, attempt: AsyncIterator[str], timeout_s: float
+    ) -> AsyncIterator[str]:
+        """FAST guillotine wrapper: the first content delta must arrive within
+        timeout_s or the attempt dies here (caller quarantines + cascades).
+        A generator that simply ENDS with zero deltas is an empty reply, not
+        a success — it raises _EmptyReply instead of surfacing silence."""
+        it = attempt.__aiter__()
+        try:
+            async with asyncio.timeout(timeout_s):
+                first = await it.__anext__()
+        except TimeoutError:
+            await attempt.aclose()
+            raise _FirstTokenTimeout(
+                f"{model} streamed zero deltas in {timeout_s:.0f}s — cascade"
+            ) from None
+        except StopAsyncIteration:
+            raise _EmptyReply(f"{model} closed stream with zero content deltas") from None
+        yield first
+        async for content in it:
+            yield content
+
     async def _stream(
         self,
         chain: Sequence[str],
@@ -354,6 +402,7 @@ class OmniRouteClient:
         *,
         temperature: float,
         max_tokens: int,
+        tier: Tier | None = None,
     ) -> AsyncIterator[str]:
         payload = {
             "messages": messages,
@@ -361,6 +410,8 @@ class OmniRouteClient:
             "max_tokens": max_tokens,
             "stream": True,
         }
+        # FAST-only guillotine: stalled endpoints never hold a reflex turn.
+        first_token_timeout = FIRST_TOKEN_TIMEOUT_S if tier is Tier.FAST else None
         last_cause = "unknown"
         hot_skips: list[str] = []
         for model in chain:
@@ -373,7 +424,12 @@ class OmniRouteClient:
             for attempt in range(1, RETRY_ATTEMPTS + 1):
                 deltas = 0
                 try:
-                    async for content in self._attempt(model, payload):
+                    attempt_gen = self._attempt(model, payload)
+                    if first_token_timeout is not None:
+                        attempt_gen = self._first_token_guarded(
+                            model, attempt_gen, first_token_timeout
+                        )
+                    async for content in attempt_gen:
                         deltas += 1
                         yield content
                     _429_STREAK.pop(model, None)  # served: throttle streak resets
@@ -394,8 +450,24 @@ class OmniRouteClient:
                     break
                 except _EmptyReply as exc:
                     # 2026-09-13 audit: blank turns never retry blindly — the
-                    # next model serves this turn immediately.
-                    logger.warning("gateway empty reply | model={} -> immediate fallback", model)
+                    # next model serves this turn immediately. 2026-09-14: the
+                    # blank-serving model is also parked for the quarantine —
+                    # it must not eat a turn every time.
+                    _MODEL_COOLDOWNS[model] = time.time() + EMPTY_REPLY_COOLDOWN_S
+                    logger.warning(
+                        "gateway empty reply | model={} -> quarantine + immediate fallback",
+                        model,
+                    )
+                    last_cause = str(exc)
+                    break
+                except _FirstTokenTimeout as exc:
+                    # FAST guillotine tripped: no retry against a stalled
+                    # endpoint — park it for the quarantine and cascade now.
+                    _MODEL_COOLDOWNS[model] = time.time() + FIRST_TOKEN_STALL_COOLDOWN_S
+                    logger.warning(
+                        "gateway first-token timeout | model={} -> quarantine + cascade",
+                        model,
+                    )
                     last_cause = str(exc)
                     break
                 except _WindowRateLimit as exc:

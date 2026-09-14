@@ -48,8 +48,11 @@ async def test_live_ttft_first_token():
     first_ms: float | None = None
     deltas = 0
     try:
+        # 2026-09-14: 64-token budget (not 16) — the groq fallback is a
+        # reasoning model and starves on 16 tokens (blank turn); 64 stays a
+        # tiny turn while letting the fallback actually serve.
         async for delta in client.stream_chat(
-            [{"role": "user", "content": "قل: تم"}], tier=Tier.FAST, max_tokens=16
+            [{"role": "user", "content": "قل: تم"}], tier=Tier.FAST, max_tokens=64
         ):
             if first_ms is None:
                 first_ms = (time.perf_counter() - t0) * 1000
