@@ -244,3 +244,37 @@ async def test_success_resets_bare_streak():
         # second turn: PRIMARY attempted again (not skipped), retried once
         assert await _collect(client.stream_chat([{"role": "user", "content": "hi"}])) == ["fine"]
     assert script.models() == [PRIMARY, PRIMARY, PRIMARY, PRIMARY]
+
+
+RESET_AFTER_BODY = (
+    "[openrouter/google/gemma-4-31b-it:free] [429]: Provider returned error (reset after 3s)"
+)
+
+
+def test_parse_reset_after_window():
+    """Live 2026-09-14: the proxy surfaces throttles as «(reset after 3s)» —
+    a recovery announcement like any other; the parser must read it."""
+    from src.gateway import parse_retry_window_s
+
+    assert parse_retry_window_s(RESET_AFTER_BODY) == 3.0
+    assert parse_retry_window_s("429: reset in 45s") == 45.0
+    assert parse_retry_window_s("429: reset after 2m") == 120.0
+    assert parse_retry_window_s("no window here") is None
+
+
+async def test_reset_after_429_cascades_without_retry_burn():
+    """The announced 3s reset must NOT burn 3 slow retries against the wall —
+    one primary attempt, then the next model serves immediately."""
+    from src.gateway import _model_hot
+
+    err = "data: " + json.dumps({"error": {"message": RESET_AFTER_BODY}}) + "\n\n"
+    script = _Scripted(
+        httpx.Response(200, content=_sse(err)),
+        httpx.Response(200, content=_sse(_chunk("تم"))),
+    )
+    async with _client(script) as client:
+        deltas = await _collect(client.stream_chat([{"role": "user", "content": "hi"}]))
+    assert deltas == ["تم"]
+    assert script.models() == [PRIMARY, SECOND]  # exactly one primary attempt
+    remaining = _model_hot(PRIMARY)
+    assert remaining is not None and remaining <= 5  # seconds-scale window, not a ban

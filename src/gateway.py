@@ -173,7 +173,7 @@ BARE_429_STREAK_TTL_S: Final[float] = 300.0
 _429_STREAK: dict[str, tuple[int, float]] = {}  # model -> (streak, last epoch)
 
 _RETRY_WINDOW_RE: Final = re.compile(
-    r"(?:try\s+again\s+in|retry\s+in)\s+"
+    r"(?:try\s+again\s+in|retry\s+in|reset\s+(?:after|in))\s+"
     r"(?:(\d+)\s*h)?\s*(?:(\d+)\s*m)?\s*(?:(\d+(?:\.\d+)?)\s*s)?",
     re.IGNORECASE,
 )
@@ -181,8 +181,10 @@ _RETRY_WINDOW_RE: Final = re.compile(
 
 def parse_retry_window_s(body: str, *, retry_after: str | None = None) -> float | None:
     """Seconds until the provider says it will serve again: the
-    «try again in Xh Ym Zs» body form or a numeric Retry-After header.
-    None = nothing announced (fast transient retries stay correct)."""
+    «try again in Xh Ym Zs» / «retry in Xs» body forms, a numeric Retry-After
+    header, or the proxy's «(reset after Xs)» / «reset in Xs» phrasing (live
+    2026-09-14: the hop surfaces throttles exactly that way after holding the
+    stream ~107s). None = nothing announced (fast transient retries stay)."""
     if retry_after:
         try:
             return float(retry_after)
