@@ -52,7 +52,7 @@ from src.skills.voice_biometric_auth import VoiceBiometrics, owner_voice_gate
 from src.skills.voice_to_vault_transcriber import _DEFAULT_PROMPT_TERMS, VoiceToVault
 from src.telemetry import TelemetryClient
 from src.tools import ToolRegistry
-from src.vault import VaultClient, ensure_vault_scaffolding
+from src.vault import VaultClient, ensure_resources_scaffolding, ensure_vault_scaffolding
 
 SYSTEM_PROMPT_AR = SARA_PERSONA_AR  # alias: literal lives in src/persona.py (Phase-1 extraction); external importers keep working
 WELCOME_AR: Final[str] = "يا هلا عمر! شغّالة وجاهزة — ابعثلي أي شي."
@@ -1020,6 +1020,10 @@ async def run_bot(settings: Settings, bridge=None) -> None:
     # Call_Transcripts/, Studies/ (remote bootstrap never touches disk) —
     # scaffold first so no writer ever meets FileNotFoundError. Never raises.
     ensure_vault_scaffolding(settings.vault_local_path)
+    # RAG mirror (audit 2026-09-14): VaultIndex reads the vault, not the
+    # repo — 04_Resources/*.md must exist under the vault root to be indexed
+    # live. Idempotent one-way copy; never raises.
+    ensure_resources_scaffolding(settings.vault_local_path)
     vault = VaultClient(
         settings.vault_github_repo,
         settings.vault_github_token.get_secret_value(),

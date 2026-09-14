@@ -131,6 +131,15 @@ _ZONE_VERBS: Final[tuple[str, ...]] = (
     "سكري",
     "شوف",
     "وقف",
+    # Observer finding 2026-09-14 (weight 7/8): shadda-bearing verb stems
+    # glued after و («وذكّريني») never split — the lookahead only knew bare
+    # stems, so two-tool turns weighed as one. Diacritic forms occur only in
+    # real verbs, never in «وضع/وقت/وين»-class nouns: zero fracture risk.
+    "ذكّر",
+    "سكّر",
+    "فكّر",
+    "نبّه",
+    "شغّل",
 )
 # Clause splitter: explicit connectors, spaced + a + glued و ONLY before an
 # action-verb stem («وذكريني» splits; «وضع/وقت/وين» never fracture).

@@ -117,7 +117,7 @@ def test_dockerfile_contract():
     assert "ffmpeg" in dockerfile
     assert "WORKDIR /app" in dockerfile
     assert "COPY requirements.txt" in dockerfile
-    for tree in ("src/", "common/", "scripts/omniroute/"):
+    for tree in ("src/", "common/", "scripts/omniroute/", "04_Resources/"):
         assert f"COPY {tree}" in dockerfile, f"the image must carry {tree}"
     assert "useradd" in dockerfile and "sara" in dockerfile
     assert re.search(r"^USER sara\s*$", dockerfile, re.MULTILINE), "container must run non-root"
@@ -216,6 +216,7 @@ def test_durable_state_only_in_vault():
         "src/skills/voice_to_vault_transcriber.py": "Voice_Memos notes — this IS the vault",
         "bridge/app_sessions.py": "PC-local per-minute usage JSON (v2.0 pass-1 §3-د/3) — machine-scoped telemetry state under data/app_sessions/, describes the PC it lives on, gitignored like vault/",
         "src/task_orchestrator.py": "reminder timers state (§5 2026-09-04) — vault-mirror State/ pattern, gitignored; re-armed on restart so a registered reminder can never vanish",
+        "src/vault.py": "04_Resources boot mirror into the vault (audit 2026-09-14) — this IS the vault mirror VaultIndex reads; idempotent, never deletes",
     }
     offenders = []
     for tree in ("src", "bridge", "common"):

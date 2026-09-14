@@ -17,6 +17,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY src/ src/
 COPY common/ common/
+# RAG mirror source (audit 2026-09-14): VaultIndex reads the vault, so the
+# boot mirror needs the repo's 04_Resources/ inside the image.
+COPY 04_Resources/ 04_Resources/
 COPY scripts/omniroute/ scripts/omniroute/
 COPY scripts/supervise.py scripts/supervise.py
 

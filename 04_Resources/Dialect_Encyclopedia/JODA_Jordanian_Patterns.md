@@ -1,3 +1,12 @@
+---
+title: JODA Jordanian Patterns
+type: knowledge-base
+date: 2026-09-14
+summary: Comprehensive empirical catalog of urban Jordanian dialect morphology, discourse markers, conversational pacing, and phonology extracted from 59,135 live sentences.
+tags: [dialect, ar-jo, ammani, joda, phonology]
+aliases: [لهجة أردنية, حكي أردني, عامية عمانية, JODA, ar-JO, مصطلحات أردنية]
+---
+
 # JODA Jordanian Patterns — distilled dialect encyclopedia (Phase-5)
 
 Date: 2026-09-13T14:49:06+0300 · commit: 7852720

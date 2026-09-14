@@ -75,6 +75,57 @@ def ensure_vault_scaffolding(root: str | Path) -> list[str]:
     return created
 
 
+def _default_resources_source() -> Path:
+    """Repo-root 04_Resources/ resolved from this file's location (src/../)."""
+    return Path(__file__).resolve().parent.parent / "04_Resources"
+
+
+def ensure_resources_scaffolding(
+    root: str | Path, *, source: str | Path | None = None
+) -> list[str]:
+    """Mirror 04_Resources/*.md into `<root>/04_Resources/` (idempotent).
+
+    One-way boot mirror: every .md under `source` (default: the repo's own
+    04_Resources/) lands at the mirrored relpath when missing OR byte-different.
+    Unchanged files are never rewritten (mtime preserved); vault-side-only
+    files are never deleted. Returns the mirrored relpaths.
+
+    Never raises (boot must not die on RAG): a missing source degrades to one
+    info line (normal inside the Oracle image until 04_Resources ships there);
+    per-file failures log loudly and skip. This is what makes VaultIndex see
+    the knowledge bases live — the index root is the vault, not the repo.
+    """
+    mirrored: list[str] = []
+    src = Path(source) if source is not None else _default_resources_source()
+    if not src.is_dir():
+        logger.info("resources mirror skipped: source {} absent", src)
+        return mirrored
+    dest_root = Path(root) / "04_Resources"
+    for path in sorted(src.rglob("*.md")):
+        if any(part.startswith(".") for part in path.parts):
+            continue
+        try:
+            rel = path.relative_to(src).as_posix()
+            data = path.read_bytes()
+            dest = dest_root / rel
+            if dest.is_file():
+                try:
+                    if dest.read_bytes() == data:
+                        continue
+                except OSError as error:
+                    logger.warning("resources mirror reread skipped {}: {}", rel, error)
+                    continue
+            else:
+                dest.parent.mkdir(parents=True, exist_ok=True)
+            dest.write_bytes(data)
+            mirrored.append(rel)
+        except OSError as error:
+            logger.warning("resources mirror skipped {}: {}", path, error)
+    if mirrored:
+        logger.bind(mirrored=mirrored).info("resources mirror synced {} files", len(mirrored))
+    return mirrored
+
+
 # Canonical paths consumed by 3.3/3.4.
 PROFILE_USER_INFO = "02_Areas/Profile/User_Info.md"
 PROFILE_DIALECT = "02_Areas/Profile/Dialect_Notes.md"
