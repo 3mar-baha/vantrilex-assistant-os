@@ -1,0 +1,8 @@
+# Bridge (PC-side) dependencies — OpenClaw substrate Phase 2.
+# WINDOWS PC ONLY: installed beside the bridge daemon on Omar's machine
+# (`py -3.12 -m pip install -r requirements-bridge.txt`). NEVER added to
+# requirements.txt — the Oracle container ships neither these wheels nor
+# bridge code (Dockerfile copies src/+common/ only). Free/open-source only.
+playwright>=1.40.0  # Interactive Web Arm: a11y snapshots + persistent profile (Apache-2.0)
+pywinauto>=0.6.8  # T1 desktop: UIA tree element resolution (BSD)
+scrapling>=0.2.0  # Stealth Retrieval Arm: passive read-only fetches (MIT)

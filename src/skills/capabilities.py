@@ -307,6 +307,37 @@ _CAPABILITIES: Final[dict[str, dict]] = {
         "needs": "network",
         "chains_with": ("web_search", "deep_search"),
     },
+    # OpenClaw Phase 2: computer-operation family (router wiring lands in
+    # Phase 3 — capabilities/audit/guides parity ships now so the sacred
+    # floor (matrix == capabilities == guides) never gaps mid-build).
+    "openclaw_browse": {
+        "goals": "تشغيل المتصفح والتفاعل مع صفحة ويب (نقر/تعبئة/تنقل)",
+        "markers": ("المتصفح", "انقر", "زر الإرسال", "خانة البحث", "حرّك الماوس"),
+        "reversible": False,  # clicks may commit — the breaker gates per op
+        "needs": "bridge",
+        "chains_with": ("openclaw_fetch", "web_search", "read_page"),
+    },
+    "openclaw_desktop": {
+        "goals": "تحريك/نقر/كتابة داخل نافذة على سطح المكتب",
+        "markers": ("بالنافذة", "قائمة ابدأ من الكيبورد", "اكتبي بالنافذة"),
+        "reversible": False,  # actuation may commit — the breaker gates per op
+        "needs": "bridge",
+        "chains_with": ("screenshot", "screen_ocr", "openclaw_inspect"),
+    },
+    "openclaw_fetch": {
+        "goals": "جلب نص صفحة ويب قراءة فقط بدون فتح المتصفح",
+        "markers": ("اجلب محتوى", "استخرج نص", "اسحب متن", "محتوى الصفحة"),
+        "reversible": True,
+        "needs": "bridge",
+        "chains_with": ("openclaw_browse", "web_search", "deep_search"),
+    },
+    "openclaw_inspect": {
+        "goals": "فحص عناصر النافذة أو الشاشة (شجرة الوصول)",
+        "markers": ("افحص عناصر", "مكونات الشاشة", "شجرة النافذة"),
+        "reversible": True,
+        "needs": "bridge",
+        "chains_with": ("screenshot", "telemetry", "openclaw_desktop"),
+    },
 }
 
 TOOL_CAPABILITIES: Final[dict[str, dict]] = dict(_CAPABILITIES)

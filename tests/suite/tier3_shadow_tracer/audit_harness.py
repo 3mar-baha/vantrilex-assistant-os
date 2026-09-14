@@ -73,6 +73,12 @@ PROMPTS: dict[str, str] = {
     "fitness": "كم مشيت اليوم؟",
     "network_status": "شو حالة الشبكة وعنوان الآيبي عندي؟",
     "tech_trending": "شو أخبار التقنية اليوم؟",
+    # OpenClaw Phase 2: staged tools (CONSTRUCT tier — boundary-checked, never
+    # fired; each prompt carries its capability markers).
+    "openclaw_browse": "حرّكي الماوس على زر الإرسال",
+    "openclaw_desktop": "اكتبي بالنافذة التقرير النهائي",
+    "openclaw_fetch": "اجلبي محتوى الصفحة https://example.com/x",
+    "openclaw_inspect": "افحصي عناصر النافذة",
 }
 
 # Execution tier per tool (see module docstring). LIVE = read-only real backend.

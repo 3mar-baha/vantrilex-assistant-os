@@ -26,6 +26,8 @@ BACKOFF_CAP_S = 30.0
 # report (same class as telemetry.state: no confirmation gate)
 # M2 (master directive 2026-09-05 §3): +exec.volume, +exec.media_control,
 # +exec.screen_ocr, +file.upload, +file.download — the desktop-bridge tools
+# OpenClaw Phase 2: +openclaw.perceive (read-only tree/screen scan),
+# +openclaw.act (single breaker-gated op), +openclaw.fetch (passive web read)
 CmdName = Literal[
     "exec.launch",
     "exec.open",
@@ -41,6 +43,9 @@ CmdName = Literal[
     "wol",
     "telemetry.state",
     "telemetry.app_sessions",
+    "openclaw.perceive",
+    "openclaw.act",
+    "openclaw.fetch",
 ]
 
 

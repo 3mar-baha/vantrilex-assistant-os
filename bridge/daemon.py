@@ -10,6 +10,7 @@ import platform
 import random
 from contextlib import suppress
 from datetime import UTC, datetime
+from typing import Any
 
 from loguru import logger
 from websockets.asyncio.client import connect
@@ -50,6 +51,7 @@ class BridgeDaemon:
         backoff_cap_s: float = BACKOFF_CAP_S,
         sessions: AppSessionTracker | None = None,
         session_tick_s: float = 60.0,
+        openclaw: Any = None,
     ):
         self._url = url
         # S-6 (deferred queue): a PLAIN ws:// dial (not wss://) is a
@@ -64,11 +66,15 @@ class BridgeDaemon:
             )
         self._token = token
         self._executor = executor
+        self._openclaw = openclaw
         self._heartbeat_interval_s = heartbeat_interval_s
         self._backoff_cap_s = backoff_cap_s
         # pass-1 (v2.0 §3-د/3): minute-level app-session tracking on the daemon
         self._sessions = sessions
         self._session_tick_s = session_tick_s
+        # OpenClaw Phase 2: the injected controller (breaker + backends).
+        # None = chassis without backends (production default until Phase 3
+        # binds Win32/Playwright/Scrapling) — verbs answer honestly.
 
     async def run(self, stop: asyncio.Event) -> None:
         attempt = 0
@@ -254,6 +260,33 @@ class BridgeDaemon:
                         "audit_code": mint_audit_code(),
                     }
                 result = await self._executor.screen_ocr(extractor)
+            elif frame.cmd == "openclaw.perceive":
+                # Phase 2: read-only tree/screen scan via the injected
+                # controller; unconfigured backends answer honestly.
+                if self._openclaw is None:
+                    return "error", {
+                        "detail": "openclaw controller not configured",
+                        "audit_code": mint_audit_code(),
+                    }
+                result = await self._openclaw.perceive(str(args.get("scope", "desktop")))
+            elif frame.cmd == "openclaw.act":
+                # Phase 2: ONE pre-classified op through the breaker + the
+                # injected actuator. Confirmation rides args (fail-closed).
+                if self._openclaw is None:
+                    return "error", {
+                        "detail": "openclaw controller not configured",
+                        "audit_code": mint_audit_code(),
+                    }
+                result = await self._openclaw.act(args.get("op") or {}, args.get("confirmation_id"))
+            elif frame.cmd == "openclaw.fetch":
+                # Phase 2: passive read-only web extraction (first-class
+                # routing path, never a GUI fallback).
+                if self._openclaw is None:
+                    return "error", {
+                        "detail": "openclaw controller not configured",
+                        "audit_code": mint_audit_code(),
+                    }
+                result = await self._openclaw.fetch(str(args.get("url", "")))
             else:
                 result = ExecResult(
                     status="error",

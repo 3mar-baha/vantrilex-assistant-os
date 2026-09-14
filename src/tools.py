@@ -49,6 +49,12 @@ NO_WEB_AR = "ما قدرت أوصل للنت هالمرة — جربها بعد 
 NO_WEATHER_AR = "ما قدرت جيب حالة الطقس هالمرة — جربها بعد شوي."
 # pass-4 (v2.0 §3-ب/1): the YouTube tool (env-gated, free quota)
 NO_YOUTUBE_AR = "ما قدرت اوصل يوتيوب هسا — المفتاح مو مفعّل أو الحصة خلصت."
+# OpenClaw Phase 2: staged computer-operation tools (typed tunnel envelopes;
+# real execution lands in Phase 3 — every path answers honestly until then)
+OPENCLAW_OFFLINE_AR = "الجسر مو متصل هسا — أدوات التحكم بالجهاز واقفة"
+OPENCLAW_BROWSE_STAGED_AR = (
+    "التشغيل التفاعلي للمتصفح بيجهز بالمرحلة 3 — هسا بقدر أجلب نص صفحة برابط مباشر فقط"
+)
 
 
 def _extract_folder_names(head: str, tail: str) -> list[str]:
@@ -471,6 +477,81 @@ class ToolRegistry:
         if payload.get("status") != "ok" or not payload.get("detail"):
             return TOOL_FAIL_AR
         return str(payload["detail"])
+
+    async def _do_openclaw_fetch(self, arg: str) -> str:
+        """OpenClaw Phase 2 — passive read-only page retrieval (first-class
+        routing path, never a GUI fallback). Typed envelope over the tunnel;
+        the daemon answers honestly until Phase 3 binds Scrapling."""
+        if self._bridge is None:
+            return OPENCLAW_OFFLINE_AR
+        try:
+            payload = await self._bridge.send_cmd(
+                "openclaw.fetch", {"url": (arg or "").strip()}, timeout_s=30.0
+            )
+        except BridgeOffline:
+            return OPENCLAW_OFFLINE_AR
+        if payload.get("status") != "ok" or not payload.get("detail"):
+            detail = str(payload.get("detail") or "")
+            return detail if detail else TOOL_FAIL_AR
+        return str(payload["detail"])
+
+    async def _do_openclaw_inspect(self, arg: str) -> str:
+        """OpenClaw Phase 2 — read-only element-tree scan of a scope
+        (default: the desktop). Returns the handle count + names, never pixels."""
+        if self._bridge is None:
+            return OPENCLAW_OFFLINE_AR
+        scope = (arg or "").strip() or "desktop"
+        try:
+            payload = await self._bridge.send_cmd(
+                "openclaw.perceive", {"scope": scope}, timeout_s=30.0
+            )
+        except BridgeOffline:
+            return OPENCLAW_OFFLINE_AR
+        if payload.get("status") != "ok" or not payload.get("detail"):
+            detail = str(payload.get("detail") or "")
+            return detail if detail else TOOL_FAIL_AR
+        import json as _json
+
+        try:
+            handles = _json.loads(str(payload["detail"]))
+        except (ValueError, TypeError):
+            return TOOL_FAIL_AR
+        if not isinstance(handles, list):
+            return TOOL_FAIL_AR
+        names = [str(h.get("name", "?")) for h in handles[:8] if isinstance(h, dict)]
+        return f"فحصت {scope}: {len(handles)} عناصر" + (f" ({'، '.join(names)})" if names else "")
+
+    async def _do_openclaw_desktop(self, arg: str) -> str:
+        """OpenClaw Phase 2 — desktop actuation entry. Phase-2 semantics: a
+        safe read-only probe op rides openclaw.act so the breaker +
+        transcript path is exercised end to end; real DAGs arrive in Phase 3
+        via src/openclaw/plans.py (the router stays unwired until then)."""
+        if self._bridge is None:
+            return OPENCLAW_OFFLINE_AR
+        from src.openclaw.protocol import Op as _Op
+        from src.openclaw.protocol import OpKind as _OpKind
+
+        probe = _Op(op=_OpKind.SCREENSHOT)
+        try:
+            payload = await self._bridge.send_cmd(
+                "openclaw.act", {"op": probe.model_dump()}, timeout_s=30.0
+            )
+        except BridgeOffline:
+            return OPENCLAW_OFFLINE_AR
+        if payload.get("status") != "ok" or not payload.get("detail"):
+            detail = str(payload.get("detail") or "")
+            return detail if detail else TOOL_FAIL_AR
+        return str(payload["detail"])
+
+    async def _do_openclaw_browse(self, arg: str) -> str:
+        """OpenClaw Phase 2 — interactive browsing is staged: a direct URL
+        rides the read-only fetch verb; anything else gets the honest
+        Phase-3 line WITHOUT a tunnel call (no fake execution, ever)."""
+        url = (arg or "").strip()
+        lowered = url.casefold()
+        if lowered.startswith(("http://", "https://")):
+            return await self._do_openclaw_fetch(url)
+        return OPENCLAW_BROWSE_STAGED_AR
 
     async def _do_file_save(self, arg: str, *, file_bytes: bytes | None = None) -> str:
         """§3-A (phone -> PC): «احفظي بالجهاز/نزلي الملف» — the attached file's

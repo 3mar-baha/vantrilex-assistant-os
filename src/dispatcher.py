@@ -20,6 +20,7 @@ from loguru import logger
 
 from src.config import Settings
 from src.gateway import GatewayError, OmniRouteClient, Tier
+from src.openclaw.intents import ROUTER_TOOL_LINES, VALID_OPENCLAW_TOOLS
 
 DEFAULT_ACK_AR: Final[str] = "من عيوني هسا ببدأ..."
 MAX_ACK_CHARS: Final[int] = 30
@@ -38,7 +39,8 @@ _ROUTER_PROMPT_AR: Final[str] = (
     '|"whitelist_apps"|"volume"|"media"|"screen_ocr"|"file_fetch"'
     '|"prayer_times"|"crypto_price"|"convert_currency"|"tech_trending"'
     '|"network_status"|"read_page"|"drive"|"contacts"|"create_event"'
-    '|"create_task"|"places"|"deep_search"|"fitness", "arg": "...", '
+    '|"create_task"|"places"|"deep_search"|"fitness"|"openclaw_browse"'
+    '|"openclaw_desktop"|"openclaw_fetch"|"openclaw_inspect", "arg": "...", '
     '"ack": "...", "voice_reply": true|false}\n'
     "- اكتشف الأداة من القصد الظرفي والمعنى الكامل للطلب — لا تعتمد على كلمات "
     "مفتاحية حرفية: الصياغات العامية المتنوعة لنفس القصد (ارفع/وطّي/اكتم/علي "
@@ -88,7 +90,11 @@ _ROUTER_PROMPT_AR: Final[str] = (
     "analytics=طلب تحليلات وإحصاءات الاستخدام، "
     "quota_safety=سؤال عن الحصص والحدود والاستهلاك. "
     "الطلبات ذات الأداة تصنَّف دائماً tier2.\n"
-    "- voice_reply: هل هذا الطلب يليق ردّه صوتاً (رسالة صوتية) بدل النص؟ true فقط إذا "
+    # OpenClaw Phase 2: staged computer-operation tools (router may name
+    # them; handlers answer honestly until Phase 3 executes. Keyword-net
+    # entries land in Phase 3 with live collision review.)
+    + "".join(ROUTER_TOOL_LINES[tool] for tool in VALID_OPENCLAW_TOOLS)
+    + "- voice_reply: هل هذا الطلب يليق ردّه صوتاً (رسالة صوتية) بدل النص؟ true فقط إذا "
     "المالك طلب الصوت صراحةً أو بنيته (بدي اسمعك، حابب صوتك، احكيلي عن حالك) أو الجو "
     "حميمي/عاطفي يستدعي الصوت؛ false للدردشة العادية والأوامر والمعلومات العملية.\n"
     "لا تكتب أي شيء خارج الـ JSON."
@@ -143,6 +149,8 @@ _VALID_TOOLS: Final = (
     "cloud_backup",
     "analytics",
     "quota_safety",
+    # OpenClaw Phase 2 (single source: src/openclaw/intents.py)
+    *VALID_OPENCLAW_TOOLS,
 )
 _JSON_RE: Final = re.compile(r"\{.*\}", re.DOTALL)
 
