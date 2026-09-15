@@ -1,28 +1,30 @@
 """Docs Guard: verify the canonical documentation set is present.
 
-Exit 0 when all canonical files exist; exit 1 listing what is missing.
-Run: python scripts/docs_guard.py  (wired into `make gate` and CI)
+Canonical = the 16-file suite (README + .env.example + CLAUDE.md + docs/01-13)
+plus docs/ai/. Renames tracked in git; frozen history (VISION, HANDOFF, ...) is
+deliberately NOT canonical. Run: python scripts/docs_guard.py (wired into
+`make gate` and CI).
 """
 
 from pathlib import Path
 
 CANONICAL_FILES = [
-    "CLAUDE.md",
     "README.md",
-    ".gitignore",
     ".env.example",
-    "LICENSE",
-    "CONTRIBUTING.md",
-    "CHANGELOG.md",
-    "SECURITY.md",
-    "Makefile",
-    ".github/workflows/ci.yml",
-    "docs/00-VISION.md",
-    "docs/01-ARCHITECTURE.md",
-    "docs/02-BACKLOG.md",
-    "docs/03-DECISIONS.md",
-    "docs/04-RUNBOOK.md",
-    "docs/05-TEST-PLAN.md",
+    "CLAUDE.md",
+    "docs/01-PRODUCT-REQUIREMENTS.md",
+    "docs/02-PRODUCT-SPECIFICATION.md",
+    "docs/03-TECHNICAL-SPECIFICATION.md",
+    "docs/04-ARCHITECTURE.md",
+    "docs/05-DATA-MODEL.md",
+    "docs/06-API-SPECIFICATION.md",
+    "docs/07-IMPLEMENTATION-PLAN.md",
+    "docs/08-ROADMAP.md",
+    "docs/09-DECISIONS.md",
+    "docs/10-CHECKPOINT.md",
+    "docs/11-TESTING.md",
+    "docs/12-SECURITY.md",
+    "docs/13-DEPLOYMENT.md",
 ]
 
 

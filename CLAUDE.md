@@ -38,7 +38,7 @@ strictly-zero-cost executive AI assistant named **Sara (سارة)**.
   bridge endpoint + `/health`; credentials in the VM environment file (never git);
   `restart: unless-stopped` (the VM never sleeps — keep-alive cron optional).
   Disposable-filesystem stays as a design principle: ALL durable state lives in the
-  git-backed vault. Owner deploy guide: `docs/09-ORACLE-DEPLOY.md`.
+  git-backed vault. Owner deploy guide: `docs/15-ORACLE-DEPLOY.md`.
 - **Knowledge Base**: Git-backed Obsidian vault (PARA + Zettelkasten) via GitHub API / local clone.
   Mandatory directories (ADR-21): `Contacts/`, `Call_Transcripts/`, `Studies/`, `Voice_Memos/`,
   `Daily_Logs/` + `02_Areas/Profile/User_Info.md`, `02_Areas/Profile/Dialect_Notes.md`.
@@ -48,7 +48,7 @@ strictly-zero-cost executive AI assistant named **Sara (سارة)**.
    in `docs/10-CHECKPOINT.md`. Upstream inventory: everything-claude-code, mattpocock/skills,
    ponytail, guard-skills, universal-agentic-os, agency-agents.
 - **Decoupling rule (2026-09-14)**: planned/deferred/unbuilt work lives ONLY in
-  `docs/02-FUTURE-ROADMAP.md` — never in operational docs. System census:
+  `docs/08-ROADMAP.md` — never in operational docs. System census:
   `docs/reports/EXHAUSTIVE_SYSTEM_AUDIT_REPORT.md`.
 - **SESSION START PROTOCOL (mandatory)**: your very first action in EVERY session is to execute
   the ⚡ SESSION RESUME PROTOCOL at the top of `.claude/PHASE-STATE.md` — prime context files,
@@ -56,7 +56,7 @@ strictly-zero-cost executive AI assistant named **Sara (سارة)**.
   uncommitted owner upgrades — NEVER discard them; details in protocol step 2), clear the
   preflight gate, then resume the phase marked **current** in that file. Never act on stale or
   assumed context. Working model in full (checkouts, closed loop, folder map, next-session
-  bootstrap): `.claude/WORKFLOW.md`. Authoritative mission record: `docs/01-ARCHITECTURE.md` §1.
+   bootstrap): `.claude/WORKFLOW.md`. Authoritative mission record: `docs/04-ARCHITECTURE.md` §1.
 
 ## 2. Hard Architectural Rules & Invariants
 

@@ -156,7 +156,7 @@ async def _spawn_ffmpeg(ffmpeg_bin: str = FFMPEG_BIN):
         )
     except FileNotFoundError as exc:
         raise OpusTranscodeError(
-            "ffmpeg binary not found — install it (docs/04-RUNBOOK.md)"
+            "ffmpeg binary not found — install it (docs/14-RUNBOOK.md)"
         ) from exc
 
 

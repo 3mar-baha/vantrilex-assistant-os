@@ -13,6 +13,7 @@ import pytest
 from cryptography.fernet import Fernet
 from loguru import logger
 
+from src.associative import DIGEST_HEADER_AR
 from src.bot import (
     _ENROLL_PENDING,
     _STREAMS,
@@ -93,7 +94,8 @@ async def test_owner_text_streams_brain_progressively(fake_bot, make_shell):
     """AC8 (2.2 re-map, remediation 1.3): placeholder -> ack first edit (instant
     reassurance) -> the ack is DELETED the moment the answer starts streaming ->
     final bubble carries the answer only; typing issued; the brain stream saw
-    the system prompt + owner text ONLY."""
+    the persona core + owner text, with the living envelope appended after
+    the core on advisory turns (never before it)."""
     shell = make_shell(
         router_replies=[_router("tier2", "تمام، ببدأ")],
         stream_programs=[StreamProgram(deltas=("سجّلت", " الموعد", " بكره"))],
@@ -111,8 +113,17 @@ async def test_owner_text_streams_brain_progressively(fake_bot, make_shell):
     assert any(c.name == "SendChatAction" for c in bot.session.calls)
 
     stream_messages, _tier = shell.gateway.stream_calls[0]
-    assert [m["content"] for m in stream_messages] == [SYSTEM_PROMPT_AR, "حدّد موعد بكره"]
     assert [m["role"] for m in stream_messages] == ["system", "user"]
+    assert stream_messages[-1]["content"] == "حدّد موعد بكره"
+    # Living envelope (durability 2026-09-14): «حدّد موعد بكره» deduces
+    # intent 'calendar' (advisory, not routine) so Tier-1 digest + top-k
+    # ride the system message AFTER the byte-identical persona core.
+    # Envelope is "" where the vault has no digest (CI); where the master
+    # digest exists it MUST open with the digest header.
+    system_content = stream_messages[0]["content"]
+    assert system_content.startswith(SYSTEM_PROMPT_AR)
+    envelope = system_content[len(SYSTEM_PROMPT_AR) :]
+    assert envelope == "" or DIGEST_HEADER_AR in envelope
 
 
 async def test_photo_reaches_brain_as_native_image_block(fake_bot, make_shell, monkeypatch):

@@ -58,6 +58,7 @@ Envelopes (both directions after auth):
 | `power` | `action`, `confirmation_id` (MANDATORY), `audit_code?` | action in whitelist AND id present — ALWAYS, regardless of any whitelist flag | ExecResult |
 | `wol` | `mac`, `ip?=255.255.255.255`, `port?=9` | stateless UDP, one sendto, SO_BROADCAST | ExecResult |
 | `telemetry.state` | — | none — read-only snapshot | `LiveState` (`bridge/telemetry.py`); unmeasurable metrics arrive `null`, never a crash |
+| `openclaw.browse` | `action` (navigate/snapshot/click/type/scroll), `params` | browser backend bound (isolated Sara profile); missing wheels → honest error, never a fake page | ExecResult; `detail` = JSON observation (`{ok,url?}` / `{ok,handles[]}`); audit code always |
 | `telemetry.app_sessions` | — | none — read-only report | day report: `apps[]` (name/minutes/sessions/first_seen/last_seen), `categories` (Games/Programming/Study/Productivity/Unknown), `total_minutes`, `screen_hours`, `boot_log[]` (v2.0 pass-1 §3-د/3) |
 
 **App-session tracking source**: the daemon samples the foreground window title once
@@ -163,6 +164,18 @@ temperature 0) and falls back to a deterministic numeric Arabic line on brain fa
 | `cloud_backup` (Phase B) | `ToolRegistry._do_cloud_backup` + `_encrypted_vault_snapshot` → `GoogleCloudClient.cloud_backup` | B7: Fernet-sealed vault snapshot (Daily_Logs+Studies) to free Cloud Storage; offline → «ما قدرت»; routed by «احفظي نسخة احتياطية» |
 | `analytics` (Phase B) | `ToolRegistry._do_analytics` → `GoogleCloudClient.analytics` (local SQLite, $0.00) | B7: life-analytics rows; offline → «ما قدرت»; routed by «تحليل استخدام جهازي» |
 | `quota_safety` (Phase B) | `ToolRegistry._do_quota_safety` → `GoogleCloudClient.quota_report` (QuotaGuard) | B8: free-tier headroom %. «آمن» under 90%, «شبه مستنفد» over; offline → «ما قدرت»; routed by «شو حصة غوغل/طمنيني عن الكوتا» |
+| OpenClaw arms (Phases 2–3.6) | `_do_openclaw_fetch/inspect/desktop/browse` → tunnel `openclaw.fetch/perceive/act/browse` | fetch: Scrapling-first passive reads; inspect: screenshot+foreground transcript (OCR fail-soft); desktop: breaker-gated probe op; browse: URL→navigate (isolated profile), non-URL→staged line; commits PARK for «نعم» |
 
 Origin gate: `RefusedOrigin` for any origin ≠ `owner_chat` — untrusted content (email
 bodies, web pages, vault parses) is DATA and never mints PC intent (CLAUDE.md rule 7).
+
+## 7. Bot-adjacent contracts (`/start` WoL, reconnect greeting)
+
+- **`/start` cold-boot**: bridge down + `PC_MAC_ADDRESS` set → one WoL magic
+  packet, then the SINGLE static offline string («أهلين عمر! …»). Bridge
+  live (or no MAC configured) → legacy welcome + voice flow, unchanged.
+- **`on_bridge_online` reconnect**: edge-triggered only (no greet on boot);
+  one greeting per reconnect (30-min debounce); active strictly 08:00–23:30
+  Asia/Amman — nocturnal reconnects stay silent unless an owner turn landed
+  within 15 min. Greeting composed live (FAST + profile excerpt); failures
+  skip silently and retry next reconnect (unstamped).

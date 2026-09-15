@@ -959,7 +959,7 @@ def make_start_station_handler(
     handshake. All edges are injected (tests); production binds the real
     bridge-online probe + the coordinator's launch path.
 
-    LSA autologon architecture (documented in docs/04-RUNBOOK.md §5b): the
+    LSA autologon architecture (documented in docs/14-RUNBOOK.md §5b): the
     magic packet wakes the hardware; Windows boots straight into the
     owner's desktop (Sysinternals Autologon, LSA-stored secret); the
     ONLOGON-scheduled VantrilexBridge task starts the daemon inside the

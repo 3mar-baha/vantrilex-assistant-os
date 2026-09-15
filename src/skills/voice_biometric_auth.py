@@ -45,13 +45,13 @@ class VoiceprintError(RuntimeError):
 def _fernet(enc_key: str) -> Fernet:
     if not enc_key:
         raise VoiceprintError(
-            "VAULT_ENC_KEY is not set — voiceprints cannot be sealed (docs/04-RUNBOOK.md)"
+            "VAULT_ENC_KEY is not set — voiceprints cannot be sealed (docs/14-RUNBOOK.md)"
         )
     try:
         return Fernet(enc_key.encode())
     except ValueError as error:
         raise VoiceprintError(
-            "VAULT_ENC_KEY is not a valid Fernet key — regenerate per docs/04-RUNBOOK.md"
+            "VAULT_ENC_KEY is not a valid Fernet key — regenerate per docs/14-RUNBOOK.md"
         ) from error
 
 
@@ -308,7 +308,7 @@ class VoiceBiometrics:
         except ImportError as error:
             raise VoiceprintError(
                 f"speechbrain is not installed (voiceprint_model={self._model_id}) — "
-                "pip install speechbrain; see docs/04-RUNBOOK.md voice enrollment"
+                "pip install speechbrain; see docs/14-RUNBOOK.md voice enrollment"
             ) from error
         try:
             savedir = Path(tempfile.gettempdir()) / "sara-ecapa-voiceprint"
@@ -318,5 +318,5 @@ class VoiceBiometrics:
         except Exception as error:
             raise VoiceprintError(
                 f"ECAPA model load failed (speechbrain, {self._model_id}) — "
-                "see docs/04-RUNBOOK.md voice enrollment"
+                "see docs/14-RUNBOOK.md voice enrollment"
             ) from error

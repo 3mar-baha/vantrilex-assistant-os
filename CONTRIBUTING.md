@@ -28,9 +28,9 @@ make test    # pytest (>=85% branch coverage enforced via addopts)
 make gate    # lint + test + security (bandit + secret scan) + docs guard
 ```
 
-All green before merge, no exceptions. Findings are fixed or waived explicitly in `docs/03-DECISIONS.md`.
+All green before merge, no exceptions. Findings are fixed or waived explicitly in `docs/09-DECISIONS.md`.
 
 ## Environment
 
-See `docs/04-RUNBOOK.md` for reproducible setup (Python 3.12, FFmpeg, OmniRoute, preflight checks)
+See `docs/14-RUNBOOK.md` for reproducible setup (Python 3.12, FFmpeg, OmniRoute, preflight checks)
 and `.env.example` for the credential manifest.

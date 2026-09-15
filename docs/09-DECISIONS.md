@@ -276,3 +276,39 @@ Supersedes draft preference for Google Cloud Run deployment.
 - **Consequences**: steady-state greetings ~0.6 s; cold-process floor ~4.6 s
   while the hop holds Gemma (guillotine + Groq latency); deterministic sub-3 s
   cold was the flip itself. Reasoning-model floor: FAST budgets stay >=120.
+
+## ADR-024: Two-Tier Living Memory with Copy-If-Missing Scaffolding — **Accepted** (2026-09-14)
+- **Context**: VaultIndex reads the vault, not the repo — knowledge files
+  outside it are retrieval islands. Meanwhile Sara-authored live edits must
+  survive restarts.
+- **Decision**: (1) Boot mirrors `04_Resources/` → `vault/04_Resources/`
+  under STRICT copy-if-missing (divergence is logged as authorship evidence,
+  never overwritten). (2) Tier-1 living digest (`Omar_Master_Digest.md`,
+  ≤800 words, disjoint aliases) planted once from a repo seed; Tier-2 deep
+  dives retrieved on demand. (3) Ledgers canonical at
+  `Daily_Logs/YYYY/MM/` with flat-legacy read fallback; 90-day hot index.
+- **Consequences**: 14 files index live; RAG recall 13/14 top-1, 14/14 top-3
+  at ~3 ms p95; no live edit has ever been clobbered by a restart since.
+
+## ADR-025: Dialogue Spontaneity with Protocol-Fixed Floor — **Accepted** (2026-09-14)
+- **Context**: Static strings guarantee consistency but read canned;
+  full-dynamic risks silence, cost blowout, and lost auditability.
+- **Decision**: Greetings, PARK warnings, and narrations are LLM-composed in
+  Sara's voice; audit codes, failure taxonomy, wire schemas, confirmation
+  tokens, and the `PARK_LINE_AR`/offline fallbacks stay deterministic. A
+  failed dynamic call ALWAYS lands the static floor — never silence.
+- **Consequences**: +1 FAST call per park; warmth without losing the safety
+  paper trail; form-agnostic tests pin behavior, not wording.
+
+## ADR-026: OpenClaw Gated Desktop Execution and Whitelist Posture — **Accepted** (2026-09-14)
+- **Context**: Desktop actuation is the highest-blast-radius surface: a wrong
+  click can delete, submit, or purchase.
+- **Decision**: Closed `OpKind` (no shell member exists to smuggle);
+  deterministic breaker re-verifies every op server-side ignoring wire
+  claims; shell/registry/credential-exfil shapes raise `ActionForbiddenError`;
+  committing DAGs PARK for «نعم» via `plans.gate` + decision-loop PARK +
+  daemon `authorize` (triple-checked, single enforcer each layer).
+  `cmd.exe` is confirm-gated, never auto-approved; 5 everyday apps are.
+- **Consequences**: 12/12 chaos bench green with zero unconfirmed
+  executions; desktop/browse execution stays staged behind real backends
+  until owners opt in per capability.

@@ -250,3 +250,14 @@ Decoupling: future-only content moved to `docs/02-FUTURE-ROADMAP.md`; live
 docs synced (CLAUDE decoupling rule, 01-ARCHITECTURE tier pins, README Fish
 voice + shipped-scope). Frozen history untouched per owner ruling
 (08-OWNER-NEXT-STEPS, NIGHT_RUN, compendium, PHASE-STATE keep legacy pins).
+
+## Anchor — 2026-09-14 · Commit `3fe6703` · Tests 1,457 passed (0 failures) · STABLE / PRODUCTION CORE SEALED
+
+Living-cognition mission complete (12/12 steps): MAC-bound WoL, copy-if-missing
+mirror + master-digest plant, nested `Daily_Logs/YYYY/MM/` archive, intent-gated
+RAG, inspect net hoist, `openclaw.browse` verb + browser bind, planner adapter,
+dynamic PARK warnings, reconnect hook + quiet hours, whitelist 5+1 with
+confirm-gated cmd.exe, scoped `exec.open` caller, `stream_heavy` MoE reroutes,
+async write-back engine. Canonical 16-doc suite cutover ships in this same
+change (`docs/08-ROADMAP.md` replaces `docs/02-FUTURE-ROADMAP.md`; legacy
+`00–05` numbers retired to unprefixed frozen names).
