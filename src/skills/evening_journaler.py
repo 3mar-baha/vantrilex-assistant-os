@@ -199,8 +199,10 @@ class EveningJournaler:
 
     def _write_ledger(self, data: LedgerData) -> None:
         ledger_dir = self._vault_dir / self._settings.daily_logs_dir
-        ledger_dir.mkdir(parents=True, exist_ok=True)
-        path = ledger_dir / f"{data.date}.md"
+        # Nested archive (durability Solution B): YYYY/MM/ sharding.
+        day = date.fromisoformat(data.date)
+        path = ledger_dir / f"{day:%Y}" / f"{day:%m}" / f"{data.date}.md"
+        path.parent.mkdir(parents=True, exist_ok=True)
         if path.exists():  # same-day state-loss re-run: corrigenda, never a duplicate
             with path.open("a", encoding="utf-8") as handle:
                 handle.write(f"- تصحيح: أُعيد توليد السجل {datetime.now(self._tz):%H:%M}\n")

@@ -217,7 +217,7 @@ async def test_oversize_payload_refused():
 
 def test_daily_log_path_dated_and_guard_importable():
     """AC9: dated daily-log path; the guard test module imports without credentials."""
-    assert daily_log_path(date(2026, 8, 31)) == "Daily_Logs/2026-08-31.md"
+    assert daily_log_path(date(2026, 8, 31)) == "Daily_Logs/2026/08/2026-08-31.md"
     spec = importlib.util.spec_from_file_location(
         "vault_dirs_guard", Path(__file__).parent / "test_vault_dirs.py"
     )

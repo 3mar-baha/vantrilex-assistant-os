@@ -293,3 +293,33 @@ async def test_sse_error_event_classified_loud_stop():
         with pytest.raises(GatewayError, match="denied access"):
             await _collect(client.stream_chat([{"role": "user", "content": "hi"}]))
     assert script.models() == [PRIMARY]
+
+
+def _heavy_client(script) -> OmniRouteClient:
+    return OmniRouteClient(
+        "http://gw.test/v1",
+        "test-key",
+        chains={Tier.HEAVY: ["heavy-base:free", "heavy-fb:free"]},
+        escalated_heavy_chain=["heavy-moe:free", "heavy-fb:free"],
+        transport=script.transport(),
+    )
+
+
+async def test_stream_heavy_base_chain_at_low_task_count():
+    """Step-10 escalation wiring: n_tasks at/below threshold serves the
+    base HEAVY chain in order (today's narration behavior, now logged)."""
+    script = _Scripted(httpx.Response(200, content=_sse(_chunk("تم"))))
+    async with _heavy_client(script) as client:
+        deltas = await _collect(client.stream_heavy([{"role": "user", "content": "hi"}], n_tasks=2))
+    assert deltas == ["تم"]
+    assert script.models() == ["heavy-base:free"]
+
+
+async def test_stream_heavy_escalates_past_threshold():
+    """n_tasks above the concurrency threshold (3) routes to the MoE
+    escalation chain first — the Nemotron path the narration now uses."""
+    script = _Scripted(httpx.Response(200, content=_sse(_chunk("تم"))))
+    async with _heavy_client(script) as client:
+        deltas = await _collect(client.stream_heavy([{"role": "user", "content": "hi"}], n_tasks=5))
+    assert deltas == ["تم"]
+    assert script.models() == ["heavy-moe:free"]

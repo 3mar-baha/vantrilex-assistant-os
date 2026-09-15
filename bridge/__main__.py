@@ -14,6 +14,7 @@ from bridge.openclaw.actuator import DesktopActuator, PyWinAutoBackend
 from bridge.openclaw.controller import OpenClawController
 from bridge.openclaw.fetch_arm import default_fetcher
 from bridge.openclaw.inspect_arm import ScreenInspector
+from bridge.openclaw.web_arm import BrowserArm
 from bridge.server import LanServer
 from src.config import get_settings
 
@@ -46,14 +47,17 @@ async def main() -> int:
     # screenshot/foreground backends (OCR extractor stays unbound: the
     # transcript marks it unavailable instead of failing), desktop
     # actuation over the lazy UIA binding (missing pywinauto wheels answer
-    # honestly at act time, never at boot), and the scrapling-first fetch
-    # chain (httpx fallback, honest error when neither exists).
+    # honestly at act time, never at boot), the scrapling-first fetch
+    # chain (httpx fallback, honest error when neither exists), and the
+    # isolated-profile browser arm (Playwright wheels lazy: missing install
+    # answers honestly at navigate time, never at boot).
     inspector = ScreenInspector()
     openclaw = OpenClawController(
         inspector=inspector,
         perception=inspector,
         actuator=DesktopActuator(uia=PyWinAutoBackend()),
         fetcher=default_fetcher,
+        browser=BrowserArm(),
     )
 
     daemon = BridgeDaemon(

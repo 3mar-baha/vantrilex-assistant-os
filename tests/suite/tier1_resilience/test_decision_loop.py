@@ -43,6 +43,7 @@ class FakeGateway:
         self.chat_error = chat_error
         self.chat_calls = []
         self.stream_calls = []
+        self.heavy_calls = []
 
     async def chat(self, messages, *, tier, **kwargs):
         self.chat_calls.append({"tier": tier, "messages": messages})
@@ -52,6 +53,11 @@ class FakeGateway:
 
     async def stream_chat(self, messages, *, tier, **kwargs):
         self.stream_calls.append({"tier": tier, "messages": messages})
+        for delta in self.streams.pop(0):
+            yield delta
+
+    async def stream_heavy(self, messages, *, n_tasks=1, **kwargs):
+        self.heavy_calls.append({"n_tasks": n_tasks, "messages": messages})
         for delta in self.streams.pop(0):
             yield delta
 
@@ -175,7 +181,8 @@ async def test_chains_two_tools_then_narrates():
     assert deltas[-1] == "سرد نهائي"
     assert tools.calls == [("calendar", "غدا"), ("tasks", "اليوم")]
     assert len(pulses) >= 3  # router + thought + narration stages pulsed
-    narrated = gw.stream_calls[-1]["messages"]
+    narrated = gw.heavy_calls[-1]["messages"]
+    assert gw.heavy_calls[-1]["n_tasks"] == 2
     blob = " ".join(m["content"] if isinstance(m.get("content"), str) else "" for m in narrated)
     assert "موعد 9ص" in blob and "مهمتان" in blob
 
@@ -307,3 +314,111 @@ async def test_plan_flushes_on_park():
     assert "[ ] calendar" in holder["transcript"]  # planned, never executed
     assert "[ ] synthesis" in holder["transcript"]
     assert holder["todo"].items == []  # memory freed
+
+
+async def test_openclaw_turn_records_dag_observability():
+    """Step-7 adapter: an openclaw verdict DAG-builds + gate-consults into
+    plan_out without changing yields (fetch probe is reversible → executes)."""
+    from src.openclaw.protocol import OpKind
+
+    holder: dict = {}
+    gw = FakeGateway(
+        chats=[router_json("openclaw_fetch", "https://x", "لحظة"), thought_json(final=True)],
+        streams=[["سرد"]],
+    )
+    tools = FakeTools({"openclaw_fetch": "نص"})
+    deltas = await run(base_kwargs(gw, tools, plan_out=holder))
+    assert deltas[-1] == "سرد"
+    dag = holder["openclaw_dag"]
+    assert dag.ops[0].op == OpKind.EXTRACT
+    assert holder["openclaw_gate"] == "go"
+
+
+async def test_non_openclaw_turn_records_no_dag():
+    holder: dict = {}
+    gw = FakeGateway(
+        chats=[router_json("calendar", "غدا", "لحظة"), thought_json(final=True)],
+        streams=[["سرد"]],
+    )
+    tools = FakeTools({"calendar": "موعد"})
+    await run(base_kwargs(gw, tools, plan_out=holder))
+    assert "openclaw_dag" not in holder
+    assert "openclaw_gate" not in holder
+
+
+async def test_openclaw_park_still_parks_with_dag_recorded():
+    """The adapter never softens enforcement: unconfirmed desktop parks AND
+    records its (reversible-probe) DAG side by side."""
+    holder: dict = {}
+    gw = FakeGateway(chats=[router_json("openclaw_desktop", "x", "لحظة")])
+    tools = FakeTools({"openclaw_desktop": "SHOULD-NOT-RUN"})
+    deltas = await run(base_kwargs(gw, tools, coordinator=FakeCoordinator(), plan_out=holder))
+    assert deltas == ["لحظة", PARK_LINE_AR]
+    assert tools.calls == []
+    assert holder["openclaw_dag"].ops[0].op.value == "screenshot"
+
+
+async def test_thought_prompt_names_opkind_vocabulary():
+    from src.decision_loop import THOUGHT_PROMPT_AR
+
+    for verb in ("inspect_tree", "type_text", "navigate", "hotkey"):
+        assert verb in THOUGHT_PROMPT_AR
+
+
+async def test_final_narration_rides_stream_heavy_with_call_count():
+    """Step-10 escalation wiring: FINAL narration streams through
+    stream_heavy with n_tasks = tool calls made (MoE past threshold)."""
+    gw = FakeGateway(
+        chats=[
+            router_json("calendar", "غدا", "لحظة"),
+            thought_json("tasks", "x"),
+            thought_json(final=True),
+        ],
+        streams=[["سرد"]],
+    )
+    tools = FakeTools({"calendar": "c", "tasks": "t"})
+    deltas = await run(base_kwargs(gw, tools))
+    assert deltas[-1] == "سرد"
+    assert len(gw.heavy_calls) == 1
+    assert gw.heavy_calls[0]["n_tasks"] == 2
+    assert gw.stream_calls == []
+
+
+async def test_park_warning_dynamic_when_gateway_serves():
+    """Spontaneity doctrine: a serving gateway authors the PARK ask from
+    the pending action — the static line is the floor, not the voice."""
+    gw = FakeGateway(
+        chats=[
+            router_json("close", "notepad", "لحظة"),
+            "عمر، رح أسكّر المفكرة، أكّدلي بـ«نعم» لو موافق.",
+        ]
+    )
+    tools = FakeTools({"close": "SHOULD-NOT-RUN"})
+    deltas = await run(base_kwargs(gw, tools, coordinator=FakeCoordinator()))
+    assert deltas == ["لحظة", "عمر، رح أسكّر المفكرة، أكّدلي بـ«نعم» لو موافق."]
+    assert tools.calls == []
+
+
+async def test_park_warning_static_on_empty_reply():
+    gw = FakeGateway(chats=[router_json("close", "notepad", "لحظة"), "   "])
+    tools = FakeTools({"close": "SHOULD-NOT-RUN"})
+    deltas = await run(base_kwargs(gw, tools, coordinator=FakeCoordinator()))
+    assert deltas == ["لحظة", PARK_LINE_AR]
+    assert tools.calls == []
+
+
+async def test_park_warning_static_on_gateway_error():
+    """Router serves, warning call dies → static floor, still parked."""
+
+    class FlakyGateway(FakeGateway):
+        async def chat(self, messages, *, tier, **kwargs):
+            self.chat_calls.append({"tier": tier, "messages": messages})
+            if len(self.chat_calls) > 1:
+                raise GatewayError("brain down")
+            return self.chats.pop(0)
+
+    gw = FlakyGateway(chats=[router_json("close", "notepad", "لحظة")])
+    tools = FakeTools({"close": "SHOULD-NOT-RUN"})
+    deltas = await run(base_kwargs(gw, tools, coordinator=FakeCoordinator()))
+    assert deltas == ["لحظة", PARK_LINE_AR]
+    assert tools.calls == []

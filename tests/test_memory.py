@@ -234,9 +234,9 @@ def _writer(vault, brain) -> VaultMemoryWriter:
 async def test_log_exchange_appends_dated_chat_section():
     vault, brain = FakeVault(), FakeBrain()
     result = await _writer(vault, brain).log_exchange("شو الأخبار؟", "كل شي تمام", now=NOW)
-    assert result == "written:Daily_Logs/2026-09-01.md"
+    assert result == "written:Daily_Logs/2026/09/2026-09-01.md"
     path, heading, lines, prefix = vault.appends[0]
-    assert path == "Daily_Logs/2026-09-01.md"
+    assert path == "Daily_Logs/2026/09/2026-09-01.md"
     assert "18:30" in heading
     assert "**المالك:** شو الأخبار؟" in lines
     assert "**سارة:** كل شي تمام" in lines

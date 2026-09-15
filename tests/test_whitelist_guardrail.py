@@ -236,3 +236,42 @@ async def test_audit_code_minted_and_ledger_appended(tmp_path: Path):
     lines = [ln for ln in gh.objects[ledger_path][1].splitlines() if ln.strip()]
     assert len(lines) == 1  # exactly one refusal event, one line
     assert AUDIT_CODE_RE.match(lines[0].split("|")[1].strip())
+
+
+def test_productivity_six_pack_resolves_in_live_config():
+    """Step-10 mission pin: the six canonical apps resolve in the shipped
+    config/whitelist.json — five auto-approved, cmd.exe confirm-gated."""
+    from pathlib import Path as _Path
+
+    guard = Guard(str(_Path(__file__).resolve().parents[1] / "config" / "whitelist.json"))
+    for name in ("Notepad", "Spotify", "Telegram Desktop", "WhatsApp", "File Explorer"):
+        verdict = guard.check_app(name)
+        assert verdict.allowed_without_confirmation is True, name
+        assert verdict.requires_confirmation is False, name
+    cmd = guard.check_app("Command Prompt")
+    assert cmd.allowed_without_confirmation is False
+    assert cmd.requires_confirmation is True
+
+
+def test_confirm_gated_verdict_keeps_executable(tmp_path: Path):
+    """A whitelisted-but-gated app still resolves its executable — otherwise
+    the post-confirmation launch would spawn a bare name and fail."""
+    wl = tmp_path / "whitelist.json"
+    wl.write_text(
+        json.dumps(
+            {
+                "allowed_apps": [
+                    {
+                        "name": "Command Prompt",
+                        "executable": "C:\\Windows\\System32\\cmd.exe",
+                        "auto_approve": False,
+                    }
+                ],
+                "restricted_actions": [],
+            }
+        ),
+        encoding="utf-8",
+    )
+    verdict = Guard(str(wl)).check_app("Command Prompt")
+    assert verdict.requires_confirmation is True
+    assert verdict.executable == "C:\\Windows\\System32\\cmd.exe"

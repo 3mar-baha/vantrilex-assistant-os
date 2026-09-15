@@ -32,6 +32,7 @@ from src.dispatcher import (
     _parse_router,
 )
 from src.gateway import GatewayError, Tier
+from src.openclaw import plans as openclaw_plans
 from src.skills.capabilities import IRREVERSIBLE_TOOLS
 from src.tools import TOOL_FAIL_AR
 
@@ -69,6 +70,42 @@ PIVOT_TOOL: Final[str] = "web_search"
 
 PARK_LINE_AR: Final[str] = "هاي الخطوة بتحتاج تأكيدك الصريح قبل ما أنفذها — أكّدلي وأنا بكمل فوراً."
 SUMMARY_HEAD_AR: Final[str] = "جمعتلك اللي لقيته لحد هسا:"
+
+_PARK_WARNING_PROMPT_AR: Final[str] = (
+    "أنت سارة — مساعدة تنفيذية بتخاطب مالكها عمر بعامية أردنية دافئة. "
+    "خطوة ملزمة على جهازه واقفة بانتظار تأكيده الصريح. صيغي تحذيراً عفوياً "
+    "بسطر أو سطرين: سمّي الفعل وخطورته بكلماتك، واطلبي قراره صراحة "
+    "(«نعم» للمضي، «لا» للإلغاء). ممنوع الادعاء بتنفيذ شيء، وممنوع أي "
+    "كلام خارج التحذير والطلب."
+)
+
+
+async def _park_warning(gateway: Any, tool: str, arg: str) -> str:
+    """Dynamic destructive-confirmation ask (spontaneity doctrine): Sara
+    authors the warning from the pending action context — never a canned
+    script. Static PARK_LINE_AR is the floor: any gateway failure, empty
+    reply, or timeout lands it. Never silence, never a hang."""
+    try:
+        reply = await gateway.chat(
+            [
+                {"role": "system", "content": _PARK_WARNING_PROMPT_AR},
+                {
+                    "role": "user",
+                    "content": f"الأداة: {tool}\nالوسيط: {(arg or '').strip() or '—'}",
+                },
+            ],
+            tier=Tier.FAST,
+            temperature=0.7,
+            max_tokens=256,
+        )
+    except Exception as error:  # noqa: BLE001 — gateway failure is never a hang
+        logger.warning("decision loop dynamic park warning failed -> static: {}", error)
+        return PARK_LINE_AR
+    text = (reply or "").strip()
+    if not text:
+        logger.warning("decision loop dynamic park warning empty -> static")
+        return PARK_LINE_AR
+    return text
 
 
 def react_loop_enabled() -> bool:
@@ -138,8 +175,43 @@ THOUGHT_PROMPT_AR: Final[str] = (
     "- final=true تعني: الملاحظات كافية، اكتفِ بالسرد النهائي ولا أفعال بعدها.\n"
     "- action=null مع final=false تعني: لا فعل مناسب، انتقل للخلاصة.\n"
     "- اختر الأداة من القصد الظرفي للهدف والملاحظات — لا تخترع أسماء أدوات.\n"
+    "- مفردات عمليات سطح المكتب/المتصفح (للتفكير فقط — الجواب يبقى tool/arg): "
+    "focus/click/double_click/right_click/type_text/hotkey/scroll/navigate/"
+    "extract/screenshot/inspect_tree. العمليات الملزمة (submit/save/delete/"
+    "close، Alt+F4/Ctrl+S/Enter) تقف للتأكيد — لا تخطط أبداً للالتفاف على البوابة.\n"
     "لا تكتب أي شيء خارج الـ JSON."
 )
+
+
+def _observe_openclaw_plan(
+    tool: str,
+    arg: str,
+    *,
+    goal: str,
+    weight: int,
+    coordinator: Any,
+    plan_out: dict | None,
+) -> str | None:
+    """Advisory planner mirror (Step 7): every pending openclaw step is
+    DAG-built and gate-consulted for observability. Returns the gate verdict
+    or None (non-openclaw tool / build failure). NEVER yields, NEVER gates —
+    the PARK branch below plus the daemon breaker stay the sole enforcers."""
+    try:
+        dag = openclaw_plans.dag_for_tool(tool, arg, weight=weight)
+    except Exception as error:  # noqa: BLE001 — planning never breaks the loop
+        logger.warning("decision loop openclaw mirror failed: {}", error)
+        return None
+    if dag is None:
+        return None
+    try:
+        verdict = openclaw_plans.gate(dag, coordinator=coordinator, tool=tool)
+    except Exception as error:  # noqa: BLE001 — a dead gate reads as park
+        logger.warning("decision loop openclaw gate failed -> park: {}", error)
+        verdict = "park"
+    if plan_out is not None:
+        plan_out["openclaw_dag"] = dag
+        plan_out["openclaw_gate"] = verdict
+    return verdict
 
 
 def _is_empty_observation(result: str | None) -> bool:
@@ -243,6 +315,17 @@ async def run_decision_loop(
         return
 
     pending: tuple[str, str] | None = (tool, arg)
+    # Step-7 planner mirror (advisory): every pending openclaw step is
+    # DAG-built + gate-consulted into plan_out. Observability only — the
+    # PARK branch below and the daemon breaker stay the sole enforcers.
+    _observe_openclaw_plan(
+        tool,
+        arg,
+        goal=user_text,
+        weight=_plan.weight,
+        coordinator=coordinator,
+        plan_out=plan_out,
+    )
     final = False
     iterations = 0
     while iterations < budget.max_iterations and now() - t0 < budget.max_wall_s:
@@ -271,6 +354,14 @@ async def run_decision_loop(
                 final = True
                 break
             pending = (verdict["action"]["tool"], verdict["action"]["arg"])
+            _observe_openclaw_plan(
+                pending[0],
+                pending[1],
+                goal=user_text,
+                weight=_plan.weight,
+                coordinator=coordinator,
+                plan_out=plan_out,
+            )
         tool, arg = pending
         pending = None
         if tool_calls >= budget.max_tool_calls:
@@ -281,7 +372,8 @@ async def run_decision_loop(
         if tool in IRREVERSIBLE_TOOLS and (
             coordinator is None or not coordinator.has_confirmation(tool, arg)
         ):
-            yield PARK_LINE_AR  # parked: honest ask, zero execution
+            await pulse()
+            yield await _park_warning(gateway, tool, arg)  # parked: honest ask, zero execution
             _close(False)
             return
         await pulse()
@@ -316,6 +408,8 @@ async def run_decision_loop(
         return
 
     # FINAL narration (Phase-2 upgrades to the M6 skill-guide envelope).
+    # Step 10: escalation-aware HEAVY lane — evidence volume (tool calls
+    # made) sizes the narration; past-threshold turns escalate to MoE.
     await pulse()
     messages = (
         ([{"role": "system", "content": system}] if system else [])
@@ -327,6 +421,6 @@ async def run_decision_loop(
             }
         ]
     )
-    async for delta in gateway.stream_chat(messages, tier=Tier.HEAVY):
+    async for delta in gateway.stream_heavy(messages, n_tasks=max(1, tool_calls)):
         yield delta
     _close(True)

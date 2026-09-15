@@ -19,7 +19,8 @@ from typing import Any, Final
 from loguru import logger
 
 from bridge.openclaw.breaker import SafetyCircuitBreaker
-from src.openclaw.protocol import ActionDAG, Op
+from src.openclaw.intents import VALID_OPENCLAW_TOOLS
+from src.openclaw.protocol import ActionDAG, Op, OpKind
 
 PARK_LINE_AR: Final[str] = "هاي الخطوة بتحتاج تأكيدك الصريح قبل ما أنفذها — أكّدلي وأنا بكمل فوراً."
 
@@ -64,3 +65,35 @@ def gate(dag: ActionDAG, *, coordinator: Any = None, tool: str = "openclaw") -> 
         return "go"
     logger.warning("openclaw gate parked committing DAG {}", dag.plan_id)
     return "park"
+
+
+def dag_for_tool(tool: str, arg: str = "", *, weight: int = 1) -> ActionDAG | None:
+    """Mirror one pending registry step as an ActionDAG for observability.
+
+    Returns None for non-OpenClaw tools (nothing to mirror). The mapping is
+    deliberately conservative — probe-grade ops only, matching the Phase-2/3
+    handler semantics (_do_openclaw_desktop's screenshot probe, fetch's
+    extract, inspect's tree scan, browse's navigate-on-URL). Real multi-step
+    DAGs arrive from the planner; this keeps every live openclaw turn
+    DAG-observed without inventing actions the handlers won't take.
+    """
+    name = (tool or "").strip().casefold()
+    if name not in VALID_OPENCLAW_TOOLS:
+        return None
+    clean = (arg or "").strip()
+    if name == "openclaw_fetch":
+        ops = [Op(op=OpKind.EXTRACT, value=clean or None)]
+    elif name == "openclaw_inspect":
+        ops = [Op(op=OpKind.INSPECT_TREE, target=clean or None)]
+    elif name == "openclaw_desktop":
+        ops = [Op(op=OpKind.SCREENSHOT)]
+    elif name == "openclaw_browse":
+        lowered = clean.casefold()
+        ops = (
+            [Op(op=OpKind.NAVIGATE, value=clean)]
+            if lowered.startswith(("http://", "https://"))
+            else []
+        )
+    else:  # pragma: no cover -- VALID set is exhaustive; belt first
+        return None
+    return build_dag(goal=clean or name, ops=ops, weight=weight)

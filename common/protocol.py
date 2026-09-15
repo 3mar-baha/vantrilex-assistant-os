@@ -46,6 +46,7 @@ CmdName = Literal[
     "openclaw.perceive",
     "openclaw.act",
     "openclaw.fetch",
+    "openclaw.browse",
 ]
 
 

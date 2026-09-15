@@ -59,9 +59,9 @@ def test_dispatcher_wiring_names_and_allows():
 
 
 def test_net_patterns_match_intents_single_source():
-    """The live net IS the intents table: fetch inlined mid-net + the rest
-    appended from INTENT_PATTERNS. Any edit in one place fails here until
-    the other follows."""
+    """The live net IS the intents table: fetch inlined mid-net, inspect
+    hoisted before screenshot, the rest appended from INTENT_PATTERNS.
+    Any edit in one place fails here until the other follows."""
     from src.dispatcher import _TOOL_NET
 
     by_tool = {}
@@ -83,6 +83,8 @@ def test_net_routes_openclaw_samples():
     assert tool == "openclaw_fetch" and arg == "https://example.com/x"
     tool, arg = _keyword_net("افحصي عناصر النافذة")
     assert tool == "openclaw_inspect"
+    for text in ("افحصي عناصر الشاشة", "اعرضي مكونات الشاشة", "افحصي شجرة الصفحة"):
+        assert _keyword_net(text)[0] == "openclaw_inspect", text
 
 
 def test_net_existing_owners_keep_priority():
@@ -92,6 +94,8 @@ def test_net_existing_owners_keep_priority():
 
     cases = {
         "ارسلي لقطة الشاشة": "screenshot",
+        "صوري الشاشة": "screenshot",
+        "شو وضع الجهاز؟": "telemetry",
         "سكري الآلة الحاسبة": "close",
         "افتحي المفكرة عندي": "launch",
         "لخصيلي محتوى هالصفحة https://example.com": "read_page",
@@ -101,6 +105,25 @@ def test_net_existing_owners_keep_priority():
     }
     for text, expected in cases.items():
         assert _keyword_net(text)[0] == expected, text
+
+
+def test_dag_for_tool_mapping():
+    """Step-7 planner mirror: registry steps map to probe-grade ops; unknown
+    tools map to None (nothing invented)."""
+    from src.openclaw.plans import dag_for_tool
+
+    fetch = dag_for_tool("openclaw_fetch", "https://x")
+    assert fetch is not None and fetch.ops[0].op == OpKind.EXTRACT
+    inspect = dag_for_tool("openclaw_inspect", "")
+    assert inspect is not None and inspect.ops[0].op == OpKind.INSPECT_TREE
+    desktop = dag_for_tool("openclaw_desktop", "whatever")
+    assert desktop is not None and desktop.ops[0].op == OpKind.SCREENSHOT
+    browse_url = dag_for_tool("openclaw_browse", "https://x")
+    assert browse_url is not None and browse_url.ops[0].op == OpKind.NAVIGATE
+    browse_text = dag_for_tool("openclaw_browse", "دوري على أسعار الذهب")
+    assert browse_text is not None and browse_text.ops == []
+    assert dag_for_tool("calendar", "غدا") is None
+    assert dag_for_tool("", "") is None
 
 
 def test_build_dag_stamps_plan_and_weight():
@@ -225,12 +248,13 @@ async def test_act_handler_sends_typed_envelope():
     assert Op.model_validate(probe).op == OpKind.SCREENSHOT
 
 
-async def test_browse_url_uses_fetch_verb():
-    reg = _registry(_FakeBridge({"status": "ok", "detail": "page text"}))
+async def test_browse_url_navigates_via_browse_verb():
+    reg = _registry(_FakeBridge({"status": "ok", "detail": json.dumps({"ok": True})}))
     bridge = reg._bridge
     out = await reg.call("openclaw_browse", "https://example.com/x")
-    assert "page text" in out
-    assert bridge.sent[0][0] == "openclaw.fetch"
+    assert bridge.sent[0][0] == "openclaw.browse"
+    assert bridge.sent[0][1]["action"] == "navigate"
+    assert out
 
 
 async def test_browse_without_url_is_honest_no_tunnel_call():

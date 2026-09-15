@@ -562,14 +562,53 @@ class ToolRegistry:
         return str(payload["detail"])
 
     async def _do_openclaw_browse(self, arg: str) -> str:
-        """OpenClaw Phase 2 — interactive browsing is staged: a direct URL
-        rides the read-only fetch verb; anything else gets the honest
-        Phase-3 line WITHOUT a tunnel call (no fake execution, ever)."""
+        """OpenClaw browse: a direct URL navigates the isolated browser via
+        the openclaw.browse verb; when the browser lane is unavailable the
+        passive fetch verb serves as documented degradation (still zero UI
+        fakery). Anything else gets the honest staged line WITHOUT a tunnel
+        call (no fake execution, ever)."""
         url = (arg or "").strip()
         lowered = url.casefold()
-        if lowered.startswith(("http://", "https://")):
+        if not lowered.startswith(("http://", "https://")):
+            return OPENCLAW_BROWSE_STAGED_AR
+        if self._bridge is None:
+            return OPENCLAW_OFFLINE_AR
+        try:
+            payload = await self._bridge.send_cmd(
+                "openclaw.browse",
+                {"action": "navigate", "params": {"url": url}},
+                timeout_s=30.0,
+            )
+        except BridgeOffline:
+            return OPENCLAW_OFFLINE_AR
+        if payload.get("status") == "ok" and payload.get("detail"):
+            return f"فتحت الصفحة بالمتصفح: {url}"
+        detail = str(payload.get("detail") or "")
+        if "not configured" in detail or "BrowserUnavailable" in detail or not detail:
+            logger.warning("openclaw browse unavailable, fetch fallback: {}", detail[:120])
             return await self._do_openclaw_fetch(url)
-        return OPENCLAW_BROWSE_STAGED_AR
+        return detail if detail else TOOL_FAIL_AR
+
+    async def _do_open_path(self, arg: str) -> str:
+        """Step 10 — the orphaned exec.open verb gets its core caller: open a
+        file/folder on the PC. Read-equivalent (reversible); the daemon's own
+        shape walls (no UNC, no traversal, executables forced through the app
+        whitelist) stay authoritative — this lane adds no checks of its own."""
+        path = (arg or "").strip()
+        if not path:
+            return "شو الملف اللي بدك أفتحه؟ قولي اسمه."
+        if self._bridge is None:
+            return OFFLINE_VISION_AR
+        try:
+            payload = await self._bridge.send_cmd("exec.open", {"path": path}, timeout_s=30.0)
+        except BridgeOffline:
+            return OFFLINE_VISION_AR
+        if payload.get("status") != "ok":
+            detail = str(payload.get("detail") or "")
+            return detail if detail else TOOL_FAIL_AR
+        code = str(payload.get("audit_code") or "").strip()
+        suffix = f" رمز التدقيق: {code}" if code else ""
+        return f"✅ فتحت {path}.{suffix}"
 
     async def _do_file_save(self, arg: str, *, file_bytes: bytes | None = None) -> str:
         """§3-A (phone -> PC): «احفظي بالجهاز/نزلي الملف» — the attached file's
@@ -774,7 +813,9 @@ class ToolRegistry:
         """Fetch the main vault dirs' notes (bounded read, best-effort)."""
         snapshot: dict[str, str] = {}
         for directory in ("Daily_Logs", "Studies", "01_Projects/Scheduled_Tasks"):
-            for path in await self._vault.list_dir(directory):
+            # Recursive: nested Daily_Logs/YYYY/MM archives must not vanish
+            # from the graph (durability Solution B).
+            for path in await self._vault.list_dir(directory, recursive=True):
                 try:
                     snapshot[path] = await self._vault.read(path)
                 except (FileNotFoundError, ValueError):
@@ -1169,7 +1210,7 @@ class ToolRegistry:
         parts: list[str] = []
         for directory in ("Daily_Logs", "Studies"):
             try:
-                for path in await self._vault.list_dir(directory):
+                for path in await self._vault.list_dir(directory, recursive=True):
                     parts.append(f"{path}\n{await self._vault.read(path)}")
             except Exception as error:  # noqa: BLE001 — best-effort per dir
                 logger.warning(

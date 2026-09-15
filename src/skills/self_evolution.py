@@ -70,10 +70,12 @@ class SelfEvolutionWorker:
         now = self._now()
         local = now.astimezone(self._tz)
         today = local.date()
-        ledger_path = f"Daily_Logs/{today.isoformat()}.md"
         notes_path = "02_Areas/Profile/Dialect_Notes.md"
         try:
-            ledger = split_frontmatter(await self._vault.read(ledger_path))[1]
+            from src.vault import read_daily_log
+
+            _hit, ledger = await read_daily_log(self._vault, today)
+            ledger = split_frontmatter(ledger)[1]
             notes = await self._vault.read(notes_path)
         except Exception:  # noqa: BLE001 — nothing to reflect on / vault down
             logger.warning("self-evolution: ledger/notes unavailable — skip")

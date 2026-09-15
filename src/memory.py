@@ -22,7 +22,7 @@ from zoneinfo import ZoneInfo
 from loguru import logger
 
 from src.gateway import Tier
-from src.vault import PROFILE_USER_INFO, daily_log_path, split_frontmatter
+from src.vault import PROFILE_USER_INFO, split_frontmatter
 
 DEFAULT_BUFFER_MESSAGES = 50
 SECTION_CHAR_CAP = 1600
@@ -350,7 +350,6 @@ async def _load_long_term_uncached(vault, *, today: date, max_chars: int = SECTI
         PROFILE_USER_INFO,
         SARA_CAPABILITIES_PATH,  # M5: her exact powers ride every envelope
         "02_Areas/Profile/Dialect_Notes.md",
-        daily_log_path(today),
     ):
         try:
             text = await vault.read(path)
@@ -371,6 +370,18 @@ async def _load_long_term_uncached(vault, *, today: date, max_chars: int = SECTI
             # 2.7 (head-vs-tail flaw): facts append to the END — the cap keeps
             # the NEWEST slice so learned facts are always what the brain sees.
             parts.append(section[-max_chars:])
+    # Daily ledger via the nested-first reader (flat legacy still honored).
+    try:
+        from src.vault import read_daily_log
+
+        _hit, text = await read_daily_log(vault, today)
+        section = split_frontmatter(text)[1].strip()
+        if section:
+            parts.append(section[-max_chars:])
+    except FileNotFoundError:
+        pass
+    except Exception as error:  # noqa: BLE001 — same best-effort contract
+        logger.warning("long-term context read failed for daily ledger: {}", error)
     return "\n\n".join(parts)
 
 
@@ -393,7 +404,7 @@ class VaultMemoryWriter:
         self._max = max_chars
 
     def _log_path(self, day: date) -> str:
-        return f"{self._logs_dir}/{day.isoformat()}.md"
+        return f"{self._logs_dir}/{day:%Y/%m}/{day.isoformat()}.md"
 
     async def log_exchange(self, user_text: str, reply_text: str, *, now: datetime) -> object:
         local = now.astimezone(self._tz)
@@ -481,11 +492,12 @@ class DailySummarizer:
         return (local.hour, local.minute) >= (self._at.hour, self._at.minute)
 
     async def summarize_day(self, day: date, *, now: datetime) -> str | None:
-        """Summarize the day's chat into the ledger; None = nothing to do (no note,
+        """Summarize the day's chat into the ledger; None =         nothing to do (no note,
         no turns, already summarized, or the model failed — loud log, retry next tick)."""
-        path = daily_log_path(day)
+        from src.vault import read_daily_log
+
         try:
-            note = await self._vault.read(path)
+            path, note = await read_daily_log(self._vault, day)
         except FileNotFoundError:
             return None
         except Exception as error:  # noqa: BLE001 — a dead vault must not kill the loop

@@ -77,3 +77,10 @@ def test_voiceprint_threshold_calibrated_2026_09_03(make_settings):
     notes scored just under it and were locked out as guests. 0.60 keeps every
     measured impostor 0.49 below while leaving the owner's voice room to vary."""
     assert make_settings().voiceprint_threshold == 0.60
+
+
+def test_pc_mac_address_pickup_for_wol(make_settings):
+    """WoL kickoff (2026-09-14): PC_MAC_ADDRESS flows into settings for the
+    /start wake routine; unset reads as None (honest no-MAC answer)."""
+    assert make_settings().pc_mac_address is None
+    assert make_settings(pc_mac_address="08:BF:B8:28:B2:F9").pc_mac_address == "08:BF:B8:28:B2:F9"

@@ -17,7 +17,7 @@ class FakeVaultGraph:
         "Studies/Physics.md": "الميكانيكا — بدون روابط",
     }
 
-    async def list_dir(self, directory: str) -> list[str]:
+    async def list_dir(self, directory: str, *, recursive: bool = False) -> list[str]:
         return [p for p in self.FILES if p.startswith(f"{directory}/")]
 
     async def read(self, path: str) -> str:

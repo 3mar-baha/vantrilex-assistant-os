@@ -5,6 +5,7 @@ before any filter, handler, or outbound call exists — dropped updates never
 generate a single Telegram API request.
 """
 
+import time
 from typing import Final
 
 from aiogram.dispatcher.middlewares.base import BaseMiddleware
@@ -43,4 +44,21 @@ class OwnerOnlyMiddleware(BaseMiddleware):
                 "owner gate: dropped non-owner update (silent)"
             )
             return None
+        note_owner_event()
         return await handler(event, data)
+
+
+_LAST_OWNER_EVENT_TS: float | None = None
+
+
+def note_owner_event(*, now_fn=time.time) -> None:
+    """Stamp the latest owner ingress (epoch seconds). Single stamp
+    point for reconnect-greeting recency, idle monitors, and diagnostics —
+    stranger updates never touch it."""
+    global _LAST_OWNER_EVENT_TS
+    _LAST_OWNER_EVENT_TS = now_fn()
+
+
+def last_owner_event_ts() -> float | None:
+    """Monotonic timestamp of the last owner update, None when never."""
+    return _LAST_OWNER_EVENT_TS

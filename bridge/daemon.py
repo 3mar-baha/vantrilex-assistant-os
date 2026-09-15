@@ -304,6 +304,18 @@ class BridgeDaemon:
                         "audit_code": mint_audit_code(),
                     }
                 result = await self._openclaw.fetch(str(args.get("url", "")))
+            elif frame.cmd == "openclaw.browse":
+                # Interactive web lane: one browser action per frame through
+                # the bound BrowserArm; unconfigured backends answer honestly.
+                if self._openclaw is None:
+                    return "error", {
+                        "detail": "openclaw controller not configured",
+                        "audit_code": mint_audit_code(),
+                    }
+                params = args.get("params")
+                result = await self._openclaw.browse(
+                    str(args.get("action", "")), params if isinstance(params, dict) else {}
+                )
             else:
                 result = ExecResult(
                     status="error",

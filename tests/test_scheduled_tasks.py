@@ -29,7 +29,7 @@ class FakeVault:
             raise FileNotFoundError(path)
         return self.files[path]
 
-    async def list_dir(self, path: str) -> list[str]:
+    async def list_dir(self, path: str, *, recursive: bool = False) -> list[str]:
         prefix = f"{path}/"
         return [p for p in self.files if p.startswith(prefix) and p.endswith(".md")]
 

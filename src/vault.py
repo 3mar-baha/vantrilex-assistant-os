@@ -16,7 +16,7 @@ from __future__ import annotations
 import asyncio
 import base64
 import re
-from datetime import date
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -85,9 +85,12 @@ def ensure_resources_scaffolding(
 ) -> list[str]:
     """Mirror 04_Resources/*.md into `<root>/04_Resources/` (idempotent).
 
-    One-way boot mirror: every .md under `source` (default: the repo's own
-    04_Resources/) lands at the mirrored relpath when missing OR byte-different.
-    Unchanged files are never rewritten (mtime preserved); vault-side-only
+    Strict copy-if-missing (ratified 2026-09-14, durability Solution A): a
+    relpath lands ONLY when the vault side lacks it. An existing vault file
+    is NEVER overwritten — not even on byte-difference — because the vault
+    is the live layer where Sara's own write-backs land; the repo is merely
+    the seed. A diverged file (same relpath, different bytes) is logged
+    loudly as evidence of live Sara authorship, and skipped. Vault-side-only
     files are never deleted. Returns the mirrored relpaths.
 
     Never raises (boot must not die on RAG): a missing source degrades to one
@@ -106,24 +109,56 @@ def ensure_resources_scaffolding(
             continue
         try:
             rel = path.relative_to(src).as_posix()
-            data = path.read_bytes()
             dest = dest_root / rel
             if dest.is_file():
                 try:
-                    if dest.read_bytes() == data:
-                        continue
+                    if dest.read_bytes() != path.read_bytes():
+                        logger.warning(
+                            "resources mirror diverged (Sara-authored?) — keeping vault copy: {}",
+                            rel,
+                        )
                 except OSError as error:
                     logger.warning("resources mirror reread skipped {}: {}", rel, error)
-                    continue
-            else:
-                dest.parent.mkdir(parents=True, exist_ok=True)
-            dest.write_bytes(data)
+                continue
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            dest.write_bytes(path.read_bytes())
             mirrored.append(rel)
         except OSError as error:
             logger.warning("resources mirror skipped {}: {}", path, error)
     if mirrored:
         logger.bind(mirrored=mirrored).info("resources mirror synced {} files", len(mirrored))
     return mirrored
+
+
+MASTER_DIGEST_SEED = "Personal_Context/Omar_Core_Digest.md"
+MASTER_DIGEST_DEST = "02_Areas/Profile/Omar_Master_Digest.md"
+
+
+def ensure_master_digest(root: str | Path, *, source: str | Path | None = None) -> list[str]:
+    """Plant the Tier-1 seed digest as the runtime source of truth.
+
+    Copies `<source>/Personal_Context/Omar_Core_Digest.md` (default: the
+    repo seed) to `<root>/02_Areas/Profile/Omar_Master_Digest.md` — but ONLY
+    when the destination is missing. An existing live copy (Sara-refreshed
+    by write-back) is never touched. Returns the planted relpath, else [].
+    Never raises.
+    """
+    try:
+        src = Path(source) if source is not None else _default_resources_source()
+        seed = src / MASTER_DIGEST_SEED
+        dest = Path(root) / MASTER_DIGEST_DEST
+        if not seed.is_file():
+            logger.info("master digest seed absent: {}", seed)
+            return []
+        if dest.is_file():
+            return []
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.write_bytes(seed.read_bytes())
+        logger.info("master digest planted: {}", MASTER_DIGEST_DEST)
+        return [MASTER_DIGEST_DEST]
+    except OSError as error:
+        logger.warning("master digest plant skipped: {}", error)
+        return []
 
 
 # Canonical paths consumed by 3.3/3.4.
@@ -204,7 +239,64 @@ def para_path(category: str, title: str, *, ext: str = ".md") -> str:
 
 
 def daily_log_path(day: date) -> str:
-    return f"Daily_Logs/{day.isoformat()}.md"
+    """Canonical ledger location (durability Solution B, 2026-09-14):
+    nested `Daily_Logs/YYYY/MM/YYYY-MM-DD.md` so a decade of ledgers never
+    chokes one flat directory. Writers always land here."""
+    return f"Daily_Logs/{day:%Y/%m}/{day.isoformat()}.md"
+
+
+def daily_log_candidates(day: date) -> list[str]:
+    """Read order: nested canonical first, flat legacy fallback (pre-2026-09-14 notes)."""
+    return [daily_log_path(day), f"Daily_Logs/{day.isoformat()}.md"]
+
+
+async def read_daily_log(vault, day: date) -> tuple[str, str]:
+    """Read a day's ledger as (hit_path, text), nested-first.
+
+    Raises FileNotFoundError only when both shapes miss (existing callers'
+    `except FileNotFoundError` clauses keep working); other vault errors
+    propagate for the callers' loud-log paths.
+    """
+    for path in daily_log_candidates(day):
+        try:
+            return path, await vault.read(path)
+        except FileNotFoundError:
+            continue
+    raise FileNotFoundError(daily_log_candidates(day)[0])
+
+
+def daily_log_local_path(root: str | Path, day: date) -> Path:
+    """Local-mirror twin of daily_log_path (evening journaler + hot index)."""
+    return Path(root) / "Daily_Logs" / f"{day:%Y}" / f"{day:%m}" / f"{day.isoformat()}.md"
+
+
+def iter_recent_daily_logs(root: str | Path, *, days: int = 90, today: date | None = None):
+    """90-day hot rolling window over a local vault mirror, newest-first.
+
+    Yields existing ledger Paths (nested canonical + flat legacy shapes);
+    non-log files never match. Pure/local/total — backs batch summarizer
+    passes; deep history stays in cold RAG (VaultIndex walks everything).
+    """
+    base = Path(root) / "Daily_Logs"
+    anchor = today if today is not None else datetime.now(UTC).date()
+    floor = anchor - timedelta(days=days)
+    found: list[tuple[date, Path]] = []
+    if not base.is_dir():
+        return iter(())
+    for path in sorted(base.rglob("*.md")):
+        stem = path.stem
+        try:
+            stamp = date.fromisoformat(stem[-10:])
+        except ValueError:
+            continue
+        if floor <= stamp <= anchor:
+            found.append((stamp, path))
+
+    def _gen():
+        for _, path in sorted(found, reverse=True):
+            yield path
+
+    return _gen()
 
 
 def write_frontmatter(meta: dict, body: str) -> str:
@@ -283,11 +375,12 @@ class VaultClient:
             raise ValueError(f"{path}: {error}") from error
         return text
 
-    async def list_dir(self, path: str) -> list[str]:
+    async def list_dir(self, path: str, *, recursive: bool = False) -> list[str]:
         """List note paths under a vault directory (v2.0 pass-2: the knowledge
         graph + Scheduled_Tasks sync need directory scans). Returns
         `dir/file.md` paths; a missing directory is an empty list (an honest
-        empty vault section, never an error)."""
+        empty vault section, never an error). With recursive=True, descends
+        into subdirectories (nested Daily_Logs archives) depth-first."""
         response = await self._get_with_rate_limit(path)
         if response.status_code == 404:
             return []
@@ -295,11 +388,15 @@ class VaultClient:
         data = response.json()
         if not isinstance(data, list):
             raise TypeError(f"{path} is a note, not a directory")
-        return [
-            f"{path}/{entry['name']}"
-            for entry in data
-            if entry.get("type") == "file" and str(entry.get("name", "")).endswith(".md")
-        ]
+        out: list[str] = []
+        for entry in data:
+            kind = entry.get("type")
+            name = str(entry.get("name", ""))
+            if kind == "file" and name.endswith(".md"):
+                out.append(f"{path}/{name}")
+            elif recursive and kind == "dir" and name and not name.startswith("."):
+                out.extend(await self.list_dir(f"{path}/{name}", recursive=True))
+        return out
 
     async def _get_with_rate_limit(self, path: str) -> httpx.Response:
         """2.10 (deferred queue): a 429/403 rate limit with Retry-After is

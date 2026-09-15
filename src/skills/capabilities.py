@@ -307,6 +307,13 @@ _CAPABILITIES: Final[dict[str, dict]] = {
         "needs": "network",
         "chains_with": ("web_search", "deep_search"),
     },
+    "open_path": {
+        "goals": "فتح ملف أو مجلد على جهاز المالك",
+        "markers": ("افتح ملف", "افتحي الملف", "افتحي مجلد", "open file"),
+        "reversible": True,  # read-equivalent; daemon shape walls (no UNC/traversal/exe) stay authoritative
+        "needs": "bridge",
+        "chains_with": ("file_fetch", "screenshot"),
+    },
     # OpenClaw Phase 2: computer-operation family (router wiring lands in
     # Phase 3 — capabilities/audit/guides parity ships now so the sacred
     # floor (matrix == capabilities == guides) never gaps mid-build).

@@ -945,6 +945,36 @@
         "-File",
         "scripts/start_station.ps1"
       ]
+    },
+    {
+      "name": "Notepad",
+      "executable": "C:\\Windows\\System32\\notepad.exe",
+      "auto_approve": true
+    },
+    {
+      "name": "Spotify",
+      "executable": "C:\\Users\\omarb\\AppData\\Roaming\\Spotify\\Spotify.exe",
+      "auto_approve": true
+    },
+    {
+      "name": "Telegram Desktop",
+      "executable": "C:\\Users\\omarb\\AppData\\Roaming\\Telegram Desktop\\Telegram.exe",
+      "auto_approve": true
+    },
+    {
+      "name": "WhatsApp",
+      "executable": "",
+      "auto_approve": true
+    },
+    {
+      "name": "File Explorer",
+      "executable": "C:\\Windows\\explorer.exe",
+      "auto_approve": true
+    },
+    {
+      "name": "Command Prompt",
+      "executable": "C:\\Windows\\System32\\cmd.exe",
+      "auto_approve": false
     }
   ],
   "restricted_actions": [

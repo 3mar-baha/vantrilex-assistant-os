@@ -40,7 +40,7 @@ _ROUTER_PROMPT_AR: Final[str] = (
     '|"prayer_times"|"crypto_price"|"convert_currency"|"tech_trending"'
     '|"network_status"|"read_page"|"drive"|"contacts"|"create_event"'
     '|"create_task"|"places"|"deep_search"|"fitness"|"openclaw_browse"'
-    '|"openclaw_desktop"|"openclaw_fetch"|"openclaw_inspect", "arg": "...", '
+    '|"openclaw_desktop"|"openclaw_fetch"|"openclaw_inspect"|"open_path", "arg": "...", '
     '"ack": "...", "voice_reply": true|false}\n'
     "- اكتشف الأداة من القصد الظرفي والمعنى الكامل للطلب — لا تعتمد على كلمات "
     "مفتاحية حرفية: الصياغات العامية المتنوعة لنفس القصد (ارفع/وطّي/اكتم/علي "
@@ -71,6 +71,7 @@ _ROUTER_PROMPT_AR: Final[str] = (
     'media=طلب تشغيل أغنية أو موسيقى أو فيديو — بأي صياغة — مع المطلوب تشغيله في "arg"، '
     'screen_ocr=قراءة نص أو كود ظاهر على الشاشة (اقرأ/استخرج) مع المطلوب في "arg"، '
     'file_fetch=طلب ملف من الجهاز لإرساله مع اسم الملف في "arg"، '
+    'open_path=فتح ملف أو مجلد على الجهاز (افتحي ملف/مجلد X) مع المسار في "arg"، '
     "running_apps=سؤال عن البرامج المفتوحة والشغالة هسا على الجهاز، "
     "whitelist_apps=سؤال عن البرامج المعتمدة أو المسموحة بقائمة سارة، "
     'prayer_times=مواقيت الصلاة والأذان مع اسم المدينة في "arg" (عمان افتراضياً)، '
@@ -132,6 +133,7 @@ _VALID_TOOLS: Final = (
     "media",
     "screen_ocr",
     "file_fetch",
+    "open_path",
     "prayer_times",
     "crypto_price",
     "convert_currency",
@@ -174,6 +176,18 @@ _MULTI_ACTION_VERBS: Final = (
     # («وافتحي» -> «وفتحي») — the bare stems keep the connector match alive
     r"|فتحي|شغلي|سكري|اغلقي|وقفي|طفي|ذكّري|نبّهي|سجّلي|دوّري|لقطي"
 )
+
+
+def _openclaw_net_entry(tool_name: str) -> tuple[str, re.Pattern[str]]:
+    """Compile one OpenClaw intent pattern (single source: INTENT_PATTERNS).
+
+    Used for position-sensitive insertions (fetch before read_page, inspect
+    before screenshot); the tail splat covers the rest."""
+    for tool, pattern, _samples in INTENT_PATTERNS:
+        if tool == tool_name:
+            return (tool, re.compile(pattern))
+    raise KeyError(f"unknown OpenClaw intent: {tool_name}")
+
 
 _TOOL_NET: Final[tuple[tuple[str, re.Pattern[str]], ...]] = (
     # multi_task (STT-4 2026-09-04) — FIRST: 2+ imperative action verbs joined
@@ -433,6 +447,12 @@ _TOOL_NET: Final[tuple[tuple[str, re.Pattern[str]], ...]] = (
     ),
     # gmail — colloquial mail words (شغّل/افتح never match mail)
     ("gmail", re.compile(r"جيميل|بريدي|ايميل|إيميل|الايميل|الإيميل|البريد|بريد")),
+    # openclaw_inspect (hoisted 2026-09-14): explicit examine-verbs
+    # (افحصي/اعرضي + عناصر/مكونات/شجرة) beat the bare-الشاشة telemetry rule
+    # AND capture phrasing — «افحصي عناصر الشاشة» inspects. screen_ocr above
+    # keeps its اقرأ/استخرج priority (verified disjoint); screenshot below
+    # keeps its لقطة/صوري priority.
+    _openclaw_net_entry("openclaw_inspect"),
     # screenshot — BEFORE telemetry: a capture/delivery verb-phrase is a
     # screenshot intent even though it contains the word الشاشة (§4 2026-09-04:
     # «ارسلي لقطة الشاشة» must not fall to telemetry on the bare word)
@@ -509,15 +529,25 @@ _TOOL_NET: Final[tuple[tuple[str, re.Pattern[str]], ...]] = (
     # launch — imperative open/start verbs; the app name follows the verb,
     # stripped of trailing device clauses («على جهازي», «بجهازي», «لو سمحت»...)
     # (?<!ال) keeps the noun الشغل out — bare شغل substring-matches inside it.
+    # open_path (Step 10) sits BEFORE launch: a file/folder noun after the
+    # verb («افتحي ملف X») opens a path via exec.open, never an app launch.
+    (
+        "open_path",
+        re.compile(
+            r"(?:افتحي|افتح|افتحيلي)\s+(?:ملف|مجلد|مجلّد|صورة|فيديو|مستند|"
+            r"الملف|المجلد|الصورة|الفيديو|المستند)\s+(.+)"
+        ),
+    ),
     ("launch", re.compile(r"(?<!ال)(?:افتحي|افتحيلي|افتحيلي |شغّل|شغل|شغّلي|شغيلي)\s+(.+)")),
-    # OpenClaw Phase 3.5 (browse/desktop/inspect): appended LAST so every
+    # OpenClaw Phase 3.5 (browse/desktop): appended LAST so every
     # existing owner keeps priority. Regexes owned by src/openclaw/intents.py
     # (single source — the sync test pins them equal); openclaw_fetch is
-    # inlined mid-net before read_page instead (see above).
+    # inlined mid-net before read_page and openclaw_inspect is hoisted
+    # before screenshot instead (see above).
     *(
         (tool, re.compile(pattern))
         for tool, pattern, _samples in INTENT_PATTERNS
-        if tool != "openclaw_fetch"
+        if tool not in ("openclaw_fetch", "openclaw_inspect")
     ),
 )
 _LAUNCH_STRIP_RE: Final = re.compile(
@@ -558,6 +588,9 @@ def _keyword_net(text: str) -> tuple[str, str]:
         if tool == "file_fetch":
             # M2 (§3-A): the filename + folder words ride the arg
             return ("file_fetch", (match.group(1) or "").strip(" .!؟?،,"))
+        if tool == "open_path":
+            # Step 10: the path remainder rides the arg (daemon walls validate)
+            return ("open_path", (match.group(1) or "").strip(" .!؟?،,"))
         if tool == "read_page":
             # M4 + D: the URL rides the arg — group 1 = after هالرابط, group 2 =
             # a verb-led URL, group 3 = a bare URL. Take the first group that
@@ -902,7 +935,9 @@ class FrontDoorDispatcher:
         # the system prompt — the mediating layer between the tool and its
         # best narration (usage + output shape + failure lines, per tool).
         messages = await self._tool_skill_note(tool, system, history, user_text, result)
-        async for delta in self._gateway.stream_chat(messages, tier=Tier.HEAVY):
+        # Step 10: narration streams through the escalation-aware HEAVY lane
+        # (single-tool turns stay on the base chain; route is logged).
+        async for delta in self._gateway.stream_heavy(messages, n_tasks=1):
             yield delta
 
     @staticmethod

@@ -40,6 +40,13 @@ class _Gateway:
         for delta in self._deltas:
             yield delta
 
+    async def stream_heavy(self, messages, *, n_tasks=1, **kw):
+        from src.gateway import Tier as _Tier
+
+        self.streamed_tiers.append(_Tier.HEAVY)
+        for delta in self._deltas:
+            yield delta
+
 
 _MULTI_VERDICT = json.dumps(
     {

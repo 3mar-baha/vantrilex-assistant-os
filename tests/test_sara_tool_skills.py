@@ -136,6 +136,10 @@ async def _dispatcher_with_vault(vault, verdict_tool: str, deltas=("تمام",))
             for d in deltas:
                 yield d
 
+        async def stream_heavy(self, messages, *, n_tasks=1, **kw):
+            async for d in self.stream_chat(messages, tier=None):
+                yield d
+
     class _Tools:
         async def call(self, tool, arg=""):
             return "المعالج 23% والرام 5.2 من 16 جيجا"

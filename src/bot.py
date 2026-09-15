@@ -52,11 +52,23 @@ from src.skills.voice_biometric_auth import VoiceBiometrics, owner_voice_gate
 from src.skills.voice_to_vault_transcriber import _DEFAULT_PROMPT_TERMS, VoiceToVault
 from src.telemetry import TelemetryClient
 from src.tools import ToolRegistry
-from src.vault import VaultClient, ensure_resources_scaffolding, ensure_vault_scaffolding
+from src.vault import (
+    VaultClient,
+    ensure_master_digest,
+    ensure_resources_scaffolding,
+    ensure_vault_scaffolding,
+)
 
 SYSTEM_PROMPT_AR = SARA_PERSONA_AR  # alias: literal lives in src/persona.py (Phase-1 extraction); external importers keep working
 WELCOME_AR: Final[str] = "يا هلا عمر! شغّالة وجاهزة — ابعثلي أي شي."
 GREETING_AR: Final[str] = "أهلا فيك، أنا سارة، جاهزة أوامر."
+# Step-9 (2026-09-14): the SINGLE allowed static offline string — /start
+# while the PC bridge is down. WoL fires first (when PC_MAC_ADDRESS is set);
+# everything else Sara says is composed live.
+WOL_OFFLINE_AR: Final[str] = (
+    "أهلين عمر! 🌟 بعثت إشارة تشغيل الجهاز (WOL)، وعم بيصحى هسا... "
+    "أول ما يشبك الجسر وأومني روت رح أعطيك خبر فوراً!"
+)
 HELP_AR: Final[str] = (
     "أنا سارة — مساعدتك التنفيذية وهسا بذاكر محادثاتنا. بقدر: دردشة بأي موضوع، "
     "أفحص بريدك وتقويمك ومهامك، أطلعلك حالة جهازك من الجسر، وأفتحلك أي برنامج "
@@ -104,6 +116,162 @@ def _make_photo_sender(bot: Bot, chat_id: int):
         )
 
     return _send
+
+
+def wake_decision(mac: str | None, bridge_online: bool) -> str:
+    """Step-9 /start routing (pure): "welcome" (bridge live — legacy greeting),
+    "wol_offline" (MAC set + bridge down — fire WoL, static offline string),
+    "no_mac" (bridge down, nothing to wake with — legacy welcome; claiming a
+    WoL signal never sent would violate the honesty doctrine)."""
+    if bridge_online:
+        return "welcome"
+    if (mac or "").strip():
+        return "wol_offline"
+    return "no_mac"
+
+
+def _tunnel_online(bridge_tunnel) -> bool:
+    """Bridge liveness probe that never raises (a crashing probe reads as
+    offline-for-welcome — but the caller then takes the welcome path, never
+    a spurious WoL)."""
+    try:
+        return bool(bridge_tunnel is not None and bridge_tunnel.online())
+    except Exception:  # noqa: BLE001 — probe failure degrades to welcome
+        logger.warning("bridge online probe failed; treating as offline-for-welcome")
+        return False
+
+
+async def _send_wol(mac: str) -> None:
+    """Lazy WoL import (monkeypatchable as src.bot._send_wol in tests)."""
+    from bridge.wol import send_wol
+
+    await send_wol(mac)
+
+
+def _hhmm(value: str) -> tuple[int, int]:
+    hours, _, minutes = value.strip().partition(":")
+    return int(hours), int(minutes or 0)
+
+
+def in_active_window(
+    now: datetime, tzname: str, *, start: str = "08:00", end: str = "23:30"
+) -> bool:
+    """Quiet-hours guard core (Step 9): True when wall-clock `now` falls in
+    [start, end] in `tzname` (overnight wraps supported). Pure + total."""
+    local = now.astimezone(ZoneInfo(tzname))
+    point = (local.hour, local.minute)
+    lower, upper = _hhmm(start), _hhmm(end)
+    if lower <= upper:
+        return lower <= point <= upper
+    return point >= lower or point <= upper
+
+
+def should_greet_on_reconnect(
+    *,
+    last_greet_ts: float | None,
+    now_ts: float,
+    last_turn_ts: float | None,
+    in_window: bool,
+    debounce_s: float = 1800.0,
+    recent_turn_s: float = 900.0,
+) -> bool:
+    """Reconnect-greeting policy (pure): in-window greets on first sight or
+    past debounce; nocturnal stays silent unless an owner turn landed within
+    the recent-turn window. All epochs share one clock (time.time)."""
+    if in_window:
+        return last_greet_ts is None or (now_ts - last_greet_ts) >= debounce_s
+    return last_turn_ts is not None and (now_ts - last_turn_ts) <= recent_turn_s
+
+
+def make_bridge_greeter(*, bot, chat_id: int, gateway, vault=None, tzname: str = "Asia/Amman"):
+    """Dynamic reconnect greeting factory (spontaneity doctrine): composes
+    persona + best-effort profile excerpt through one FAST call and sends it
+    as text. Any failure raises (the watcher logs and does NOT stamp
+    last_greet, so the next reconnect retries) — never a canned string."""
+
+    async def _greet() -> None:
+        system = SARA_PERSONA_AR
+        if vault is not None:
+            try:
+                excerpt = " ".join((await vault.read("02_Areas/Profile/User_Info.md")).split())
+                if excerpt:
+                    system = f"{system}\n\n[صاحبك باختصار — بيانات مرجعية]\n{excerpt[:500]}"
+            except Exception as error:  # noqa: BLE001 — profile is garnish, not load-bearing
+                logger.warning("bridge greeting profile excerpt failed: {}", error)
+        reply = await gateway.chat(
+            [
+                {"role": "system", "content": system},
+                {
+                    "role": "user",
+                    "content": "رجع الاتصال مع جهاز عمر هسا بعد انقطاع — حيّيه بجملة أو جملتين "
+                    "بعاميتك الدافئة حسب وقت النهار، واذكر إنك رجعت.",
+                },
+            ],
+            tier=Tier.FAST,
+            temperature=0.7,
+            max_tokens=256,
+        )
+        text = (reply or "").strip()
+        if not text:
+            raise ValueError("blank bridge greeting")
+        await bot.send_message(chat_id, text)
+
+    return _greet
+
+
+async def run_bridge_watcher(
+    *,
+    bridge_tunnel,
+    greet,
+    tzname: str = "Asia/Amman",
+    now_fn=None,
+    last_turn_fn=None,
+    poll_s: float = 15.0,
+    debounce_s: float = 1800.0,
+    window_start: str = "08:00",
+    window_end: str = "23:30",
+    stop=None,
+) -> None:
+    """Bridge-reconnect monitor (Step 9): polls liveness, greets once per
+    reconnect honoring debounce + quiet hours. No greet on boot (initial
+    state seeds silently). Any single failure degrades to a skipped poll —
+    the loop outlives everything except cancellation or `stop`."""
+    import datetime as _datetime
+
+    now_fn = now_fn or (lambda: _datetime.datetime.now(_datetime.UTC))
+    last_turn_fn = last_turn_fn or (lambda: None)
+    was_online = _tunnel_online(bridge_tunnel)
+    last_greet: float | None = None
+    while True:
+        if stop is not None:
+            try:
+                await asyncio.wait_for(stop.wait(), timeout=poll_s)
+            except TimeoutError:
+                pass
+            else:
+                return
+        else:
+            await asyncio.sleep(poll_s)
+        online = _tunnel_online(bridge_tunnel)
+        if not (online and not was_online):
+            was_online = online
+            continue
+        was_online = True
+        try:
+            now = now_fn()
+            if should_greet_on_reconnect(
+                last_greet_ts=last_greet,
+                now_ts=now.timestamp(),
+                last_turn_ts=last_turn_fn(),
+                in_window=in_active_window(now, tzname, start=window_start, end=window_end),
+                debounce_s=debounce_s,
+            ):
+                await greet()
+                last_greet = now.timestamp()
+        except asyncio.CancelledError:
+            raise
+        except Exception as error:  # noqa: BLE001 — a failed greeting retries next reconnect
+            logger.warning("bridge greeting failed (unstamped, will retry): {}", error)
 
 
 def build_dispatcher(
@@ -176,6 +344,17 @@ def build_dispatcher(
 
     @dp.message(CommandStart())
     async def on_start(message: Message) -> None:
+        # Step 9 (2026-09-14): cold-boot WoL — MAC set + bridge down fires
+        # one magic packet, then the SINGLE static offline string (mandated
+        # wording). Bridge live (or no MAC to wake with) keeps the legacy
+        # welcome + voice flow untouched.
+        if wake_decision(settings.pc_mac_address, _tunnel_online(bridge_tunnel)) == "wol_offline":
+            try:
+                await _send_wol((settings.pc_mac_address or "").strip())
+            except Exception as error:  # noqa: BLE001 — dead WoL is honest, not fatal
+                logger.warning("on_start WoL failed: {}", error)
+            await message.answer(WOL_OFFLINE_AR)
+            return
         await message.answer(WELCOME_AR)
         try:
             ogg = await voice.synthesize(GREETING_AR)
@@ -457,10 +636,15 @@ async def _stream_answer(
             system = f"{system}\n\n{acoustic}"
         # Phase-6 (Leap 2): associative RAG — local-mirror lookup, "" on miss.
         # Index lives in the dispatcher closure (mtime-cached); never blocks.
+        # Intent-gated (durability 2026-09-14): the router tool (or "direct")
+        # rides along so routine device turns spend zero memory tokens while
+        # advisory turns carry the Tier-1 digest + top-k.
         if assoc_index is not None:
-            from src.associative import inject
+            from src.associative import inject, intent_for
 
-            assoc = inject(text, settings.vault_local_path, index=assoc_index)
+            assoc = inject(
+                text, settings.vault_local_path, index=assoc_index, intent=intent_for(text)
+            )
             if assoc:
                 system = f"{system}\n\n{assoc}"
         # Phase-6 (Leap 3): situational posture — NORMAL returns system untouched.
@@ -889,6 +1073,22 @@ def _persist_exchange(writer, user_text: str, reply_text: str) -> None:
     task = asyncio.create_task(_job())
     _PERSIST_TASKS.add(task)
     task.add_done_callback(_PERSIST_TASKS.discard)
+    # Step-11 (durability): self-expanding memory — trigger-checked FIRST
+    # (routine turns schedule nothing), background-only so TTFT is untouched.
+    try:
+        from src.memory_ledger import schedule_write_back
+
+        wb_task = schedule_write_back(
+            getattr(writer, "_vault", None),
+            user_text,
+            tz=getattr(writer, "_tz", None),
+        )
+    except Exception as error:  # noqa: BLE001 — write-back must never break persist
+        logger.warning("write-back schedule failed: {}", error)
+        wb_task = None
+    if wb_task is not None:
+        _PERSIST_TASKS.add(wb_task)
+        wb_task.add_done_callback(_PERSIST_TASKS.discard)
 
 
 DIALECT_NOTES_PATH: Final[str] = "02_Areas/Profile/Dialect_Notes.md"
@@ -1024,6 +1224,9 @@ async def run_bot(settings: Settings, bridge=None) -> None:
     # repo — 04_Resources/*.md must exist under the vault root to be indexed
     # live. Idempotent one-way copy; never raises.
     ensure_resources_scaffolding(settings.vault_local_path)
+    # Tier-1 plant (durability Solution A): seed digest → runtime master
+    # copy, copy-if-missing only — Sara's live refreshes are never clobbered.
+    ensure_master_digest(settings.vault_local_path)
     vault = VaultClient(
         settings.vault_github_repo,
         settings.vault_github_token.get_secret_value(),
@@ -1196,6 +1399,7 @@ async def run_bot(settings: Settings, bridge=None) -> None:
         affect=AffectiveStateTracker(
             brain=gateway, history=[], baseline=""
         ),  # f2: per-turn tracker reads live history
+        bridge_tunnel=bridge,  # Step 9: on_start WoL/offline routing + start_station probe
     )
     summarizer = DailySummarizer(vault, gateway, tz=ZoneInfo(settings.tz))
     # 3.1: the owner-promised loops, all through one testable stitch point —
@@ -1248,6 +1452,28 @@ async def run_bot(settings: Settings, bridge=None) -> None:
         task_engine=task_engine,  # pass-2: mirror catch-up rides the loop set
         orchestrator=orchestrator,  # §5: the reminder timers ride the loop set
     )
+    # Step 9 (2026-09-14): bridge-reconnect greeter — same cancel/reap
+    # contract as every loop above. Dynamic greeting only (spontaneity
+    # doctrine); quiet hours + debounce enforced inside the watcher.
+    if bot is not None and bridge is not None:
+        from src.middleware import last_owner_event_ts
+
+        loop_tasks.append(
+            asyncio.create_task(
+                run_bridge_watcher(
+                    bridge_tunnel=bridge,
+                    greet=make_bridge_greeter(
+                        bot=bot,
+                        chat_id=settings.authorized_user_id,
+                        gateway=gateway,
+                        vault=vault,
+                        tzname=settings.tz,
+                    ),
+                    tzname=settings.tz,
+                    last_turn_fn=last_owner_event_ts,
+                )
+            )
+        )
     try:
         await dp.start_polling(bot, skip_updates=True)
     finally:

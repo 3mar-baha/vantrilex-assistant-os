@@ -117,19 +117,36 @@ class ProactiveOutreach:
         time-only context (the outreach is best-effort)."""
         local = now.astimezone(self._tz)
         parts: list[str] = []
-        for path, kind in (
-            (f"Daily_Logs/{local.date().isoformat()}.md", "ledger"),
-            ("02_Areas/Profile/User_Info.md", "profile"),
-        ):
-            try:
-                text = await self._vault.read(path)
-            except FileNotFoundError:
-                continue  # a day with no ledger yet, a fresh profile — normal
-            except Exception as error:  # noqa: BLE001 — context is best-effort
-                logger.warning(
-                    "proactive context read failed for {path}: {error}", path=path, error=error
-                )
+        ledger_text: str | None
+        try:
+            from src.vault import read_daily_log
+
+            _hit, ledger_text = await read_daily_log(self._vault, local.date())
+        except FileNotFoundError:
+            ledger_text = None  # a day with no ledger yet — normal
+        except Exception as error:  # noqa: BLE001 — context is best-effort
+            logger.warning("proactive context ledger read failed: {}", error)
+            ledger_text = None
+        pending: list[tuple[str | None, str]] = [
+            (ledger_text, "ledger"),
+            (None, "profile"),
+        ]
+        for text, kind in pending:
+            if text is None and kind == "ledger":
                 continue
+            if text is None:
+                path = "02_Areas/Profile/User_Info.md"
+                try:
+                    text = await self._vault.read(path)
+                except FileNotFoundError:
+                    continue  # a fresh profile — normal
+                except Exception as error:  # noqa: BLE001 — context is best-effort
+                    logger.warning(
+                        "proactive context read failed for {path}: {error}",
+                        path=path,
+                        error=error,
+                    )
+                    continue
             body = split_frontmatter(text)[1].strip()
             if not body:
                 continue

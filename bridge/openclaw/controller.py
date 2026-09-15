@@ -21,6 +21,7 @@ from bridge.openclaw.protocol import ActionTranscript, ElementHandle, Op
 STAGED_ACT = "openclaw actuator not configured (Phase 3 binds Win32/Playwright)"
 STAGED_PERCEIVE = "openclaw perception not configured (Phase 3 binds UIA/DOM)"
 STAGED_INSPECT = "openclaw inspector not configured"
+STAGED_BROWSE = "openclaw browser not configured (bind BrowserArm)"
 
 
 class Actuator(Protocol):
@@ -38,12 +39,14 @@ class OpenClawController:
         perception: Any = None,
         fetcher: Any = None,
         inspector: Any = None,
+        browser: Any = None,
     ) -> None:
         self._breaker = breaker or SafetyCircuitBreaker()
         self._actuator = actuator
         self._perception = perception
         self._fetcher = fetcher
         self._inspector = inspector
+        self._browser = browser
 
     async def perceive(self, scope: str = "desktop") -> ExecResult:
         code = mint_audit_code()
@@ -114,6 +117,50 @@ class OpenClawController:
             return ExecResult(status="error", detail=f"inspect failed: {exc}", audit_code=code)
         return ExecResult(
             status="ok", detail=json.dumps(transcript, ensure_ascii=False), audit_code=code
+        )
+
+    async def browse(self, action: str, params: dict | None = None) -> ExecResult:
+        """Interactive web lane: navigate/snapshot/click/type/scroll against
+        the bound browser backend. Unknown actions and dead backends refuse
+        loudly with audit codes — never a fake page."""
+        code = mint_audit_code()
+        params = params or {}
+        if self._browser is None:
+            return ExecResult(status="error", detail=STAGED_BROWSE, audit_code=code)
+        try:
+            starter = getattr(self._browser, "start", None)
+            if callable(starter):
+                await starter()
+            kind = (action or "").strip().casefold()
+            if kind == "navigate":
+                observation = await self._browser.navigate(str(params.get("url", "")))
+            elif kind == "snapshot":
+                handles = await self._browser.snapshot()
+                observation = {
+                    "ok": True,
+                    "handles": [h.model_dump() if hasattr(h, "model_dump") else h for h in handles],
+                }
+            elif kind == "click":
+                observation = await self._browser.click_by_role(
+                    str(params.get("role", "")), params.get("name")
+                )
+            elif kind == "type":
+                observation = await self._browser.type_into(
+                    str(params.get("role", "")),
+                    params.get("name"),
+                    str(params.get("text", "")),
+                )
+            elif kind == "scroll":
+                observation = await self._browser.scroll(str(params.get("direction", "down")))
+            else:
+                return ExecResult(
+                    status="error", detail=f"unknown browse action {action!r}", audit_code=code
+                )
+        except Exception as exc:  # noqa: BLE001 — dead browser is honest, never a crash
+            logger.warning("openclaw browse failed: {}", exc)
+            return ExecResult(status="error", detail=f"browse failed: {exc}", audit_code=code)
+        return ExecResult(
+            status="ok", detail=json.dumps(observation, ensure_ascii=False), audit_code=code
         )
 
     async def fetch(self, url: str) -> ExecResult:

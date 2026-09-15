@@ -322,7 +322,7 @@ async def test_cloud_backup_uses_vault_and_confirms():
     from src.tools import ToolRegistry
 
     class _Vault:
-        async def list_dir(self, directory):
+        async def list_dir(self, directory, *, recursive: bool = False):
             return ["Daily_Logs/2026-09-06.md"]
 
         async def read(self, path):

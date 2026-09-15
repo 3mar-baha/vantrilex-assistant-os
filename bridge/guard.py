@@ -75,6 +75,7 @@ class Guard:
                     )
                 return Verdict(
                     allowed_without_confirmation=False,
+                    executable=entry.get("executable"),
                     requires_confirmation=True,
                     reason="whitelisted but requires confirmation",
                 )

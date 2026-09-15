@@ -65,7 +65,7 @@ def _state(vault_root) -> dict:
 
 
 def _ledger_path(vault_root) -> Path:
-    return vault_root / "vault" / "Daily_Logs" / f"{TODAY}.md"
+    return vault_root / "vault" / "Daily_Logs" / "2026" / "08" / f"{TODAY}.md"
 
 
 def _ledger(vault_root) -> str:
