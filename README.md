@@ -15,7 +15,7 @@ pinned: false
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python: 3.12](https://img.shields.io/badge/Python-3.12-green.svg)](https://python.org)
 [![Telegram: Aiogram 3.x](https://img.shields.io/badge/Telegram-Aiogram%203.x-blue.svg)](https://docs.aiogram.dev)
-[![Voice: ar-JO-SanaNeural](https://img.shields.io/badge/Voice-ar--JO--SanaNeural-purple.svg)](https://github.com/rany2/edge-tts)
+[![Voice: Fish Audio](https://img.shields.io/badge/Voice-Fish%20Audio%20s2.1-purple.svg)](docs/03-DECISIONS.md)
 [![Brain: OmniRoute](https://img.shields.io/badge/Brain-OmniRoute%20free%20pools-orange.svg)](https://github.com/diegosouzapw/OmniRoute)
 [![Version: v1.0.2](https://img.shields.io/badge/Version-v1.0.2-8A2BE2.svg)](CHANGELOG.md#102---2026-09-01)
 [![Cost: $0.00/month](https://img.shields.io/badge/Cost-%240.00%2Fmonth-brightgreen.svg)](docs/03-DECISIONS.md)
@@ -36,7 +36,9 @@ Telegram, reasoning through a 3-tier multi-model brain behind a fast front-door 
    triage matrix: spam dropped · semi-important as Markdown text · important as a voice note ·
    critical as priority voice note + repeat ping (live call from v1.1).
 2. **Jordanian voice & chat** — Telegram text chat plus native Ogg Opus voice notes synthesized
-   locally with Edge-TTS (`ar-JO-SanaNeural`) — <600 ms to first audible chunk, zero cloud fees.
+   with Fish Audio (`fish-audio/s2.1-pro-free:free`, سمسم voice) via OpenRouter speech, dialect-shaped
+   before synthesis — zero cloud fees beyond the free tier. Fish is the only voice: no Edge fallback;
+   a Fish failure lands an honest text reply.
 3. **Knowledge vault** — every conversation, preference, and voice memo filed automatically into a
    git-backed Obsidian vault (PARA + Zettelkasten), including her own adaptive dialect notebook.
 4. **Safe PC control** — Wake-on-LAN, whitelisted app launching, drive access, and a 20-minute
@@ -52,7 +54,7 @@ Owner ⇄ Telegram ⇄ [Oracle VM 24/7 (ADR-15)]       [Windows PC]
                      │   ├─ Tier1 fast (reflex, <250ms)  ├─ Wake-on-LAN sender
                      │   ├─ Tier2 medium (tools)         └─ Idle monitor (20 min)
                      │   └─ Tier3 heavy (DAG/tutoring)
-                     ├─ Edge-TTS → ffmpeg → Opus
+                     ├─ Fish Audio s2.1 → ffmpeg → Opus
                      ├─ Google Suite clients
                      └─ Obsidian vault (GitHub-backed)
 ```
@@ -92,25 +94,11 @@ Ops health probe (no Telegram traffic): `python -m src.main --health` prints a J
 
 ## Roadmap
 
-| Release | Scope |
-|---|---|
-| **v1.0** | Chat + voice notes, 3-tier OmniRoute brain + dispatcher, voice biometrics + Guest Mode, Google suite + triage, Obsidian vault, whitelisted PC control |
-| **v1.1** | Live bidirectional PyTgCalls calls · tech-hardware-scout · career-project-incubator · Mem0/Firestore memory evaluation |
-| **v1.5** | Virtual cloud SIP telephony (landline calling) |
-| **v2.0** | Social media agent (GitHub, LinkedIn, Instagram) |
-
-### Future Scope (unscheduled — no version assigned)
-
-Owner-directed additions parked without release commitment; each lands only through the
-standard spec → TDD pipeline when prioritized:
-
-- **PC Health Monitor** — CPU/GPU/thermals/disk telemetry surfaced to the owner on demand
-- **Voice Read-It-Later** — save links mid-chat; Sara delivers them as narrated voice notes
-- **Emotional Context Memory** — tone-adaptive replies driven by recent owner mood signals
-- **Silent Vault Backup** — background vault integrity snapshots, zero chat noise
-- **On-demand external APIs — YouTube / Weather / Maps** — per-request consumption on
-  free-tier endpoints only; no standing subscriptions, $0.00 invariant preserved.
-  (Morning Briefing is **not** future scope — it ships in v1.0 as the Sprint-2 daily brief.)
+Shipped at HEAD: chat + voice notes (Fish), 3-tier OmniRoute brain + dispatcher (Groq FAST),
+voice biometrics + Guest Mode, Google suite + triage, Obsidian vault + RAG, whitelisted PC
+control, OpenClaw substrate (Phases 1–4, bench-harnessed). Planned, deferred, and unbuilt
+work lives exclusively in [`docs/02-FUTURE-ROADMAP.md`](docs/02-FUTURE-ROADMAP.md) — nothing
+here is promised or scheduled.
 
 ## Security
 

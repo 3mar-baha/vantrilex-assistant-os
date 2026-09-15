@@ -45,8 +45,11 @@ strictly-zero-cost executive AI assistant named **Sara (سارة)**.
 - **Skill Rotation (master directive 2026-08-29)**: each sprint ingests upstream toolkit
   skills into `.claude/skills/` for the sprint's duration; at sprint exit apply the
   **teardown protocol** — wipe `.claude/skills/*`, keep all code/tests, record the entry
-  in `docs/10-CHECKPOINT.md`. Upstream inventory: everything-claude-code, mattpocock/skills,
-  ponytail, guard-skills, universal-agentic-os, agency-agents.
+   in `docs/10-CHECKPOINT.md`. Upstream inventory: everything-claude-code, mattpocock/skills,
+   ponytail, guard-skills, universal-agentic-os, agency-agents.
+- **Decoupling rule (2026-09-14)**: planned/deferred/unbuilt work lives ONLY in
+  `docs/02-FUTURE-ROADMAP.md` — never in operational docs. System census:
+  `docs/reports/EXHAUSTIVE_SYSTEM_AUDIT_REPORT.md`.
 - **SESSION START PROTOCOL (mandatory)**: your very first action in EVERY session is to execute
   the ⚡ SESSION RESUME PROTOCOL at the top of `.claude/PHASE-STATE.md` — prime context files,
   sync the universal-agentic-os framework FROM ITS LOCAL STATE FIRST (that repo often holds

@@ -238,3 +238,15 @@ response-coach ceiling aligned to 6, persona hash re-pinned
 live, Tier3 calibrated (11/12 live checks; single emoji-pileup deviation now
 governed by the cap). Core restart still required for the `.env` flip to
 bite on the live bot.
+
+## Phase D — 2026-09-14: Forensic Audit, 45/44 Census, Roadmap Decoupling
+
+Three-track forensic sweep (subagents, lead-verified; two agent errors
+struck) at baseline `1116de6`/1,385 green. Census re-measured: 45 handlers /
+44 valid+net / 41 capabilities / 44 guides / 6 irreversible. Forgotten-feature
+shortlist ranked in `docs/reports/EXHAUSTIVE_SYSTEM_AUDIT_REPORT.md` §Track 1
+(strongest: orphaned `exec.open` verb, tunnel `wol` verb, `stream_heavy`).
+Decoupling: future-only content moved to `docs/02-FUTURE-ROADMAP.md`; live
+docs synced (CLAUDE decoupling rule, 01-ARCHITECTURE tier pins, README Fish
+voice + shipped-scope). Frozen history untouched per owner ruling
+(08-OWNER-NEXT-STEPS, NIGHT_RUN, compendium, PHASE-STATE keep legacy pins).
