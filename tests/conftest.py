@@ -335,6 +335,7 @@ def make_shell(make_settings):
         coordinator=None,
         decide_modality=None,
         situational=None,
+        bridge_tunnel=None,
         **settings_overrides,
     ):
         # Round-2 (2026-09-03): the decider returns ONLY the explicit request
@@ -358,6 +359,7 @@ def make_shell(make_settings):
             coordinator=coordinator,
             decide_modality=decide_modality,
             situational=situational,
+            bridge_tunnel=bridge_tunnel,
         )
         return SimpleNamespace(
             dp=dp,

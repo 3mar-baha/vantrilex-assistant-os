@@ -73,6 +73,7 @@ PROMPTS: dict[str, str] = {
     "fitness": "كم مشيت اليوم؟",
     "network_status": "شو حالة الشبكة وعنوان الآيبي عندي؟",
     "tech_trending": "شو أخبار التقنية اليوم؟",
+    "open_path": "افتحي ملف الميزانية",
     # OpenClaw Phase 2: staged tools (CONSTRUCT tier — boundary-checked, never
     # fired; each prompt carries its capability markers).
     "openclaw_browse": "حرّكي الماوس على زر الإرسال",
