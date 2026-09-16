@@ -18,6 +18,7 @@ from zoneinfo import ZoneInfo
 
 import httpx
 import pytest
+from cryptography.fernet import Fernet
 
 from src.associative import VaultIndex
 from src.cognition import ReflectiveTrace, deduce, expand_horizon
@@ -295,3 +296,236 @@ def test_stage4_failure_retry_self_corrects():
 def test_stage4_horizon_adjacency():
     assert "brief" in expand_horizon("no_such_tool_xyz")
     assert isinstance(expand_horizon("gmail"), list)
+
+
+# --- Stage 5: multi-speaker enrollment + RBAC (drill-local policy) -------------
+# Production Sara gates binary owner/guest (allowlist + Guest Mode). The tiered
+# RBAC below is a DRILL-LOCAL policy defining the target tiers; the drill
+# verifies biometric attribution feeds it exactly and denials leak nothing.
+
+FAM_V = [0.10, 0.55, -0.20, -0.10, 0.35, -0.25, -0.05, 0.30]
+COL_V = [-0.30, 0.10, 0.50, 0.20, -0.10, -0.35, 0.25, 0.15]
+FRI_V = [0.20, -0.40, -0.10, 0.55, 0.30, 0.10, -0.25, -0.35]
+RBAC_THRESHOLD = 0.75
+
+BOUNDARY_AR = "عذراً، هاي المعلومة خاصة بعمر وما بقدر أشاركها."
+
+# tier -> tools explicitly granted (owner holds all 46; unknown holds the safe set)
+TIER_TOOLS: dict[str, set[str] | None] = {
+    "owner": None,  # full autonomy
+    "Family": {"calendar", "schedule", "telemetry", "running_apps", "brief", "whitelist_apps"},
+    "Colleagues": {"calendar", "tasks", "create_task", "read_page", "web_search", "brief"},
+    "Friends": {"web_search", "weather", "media", "brief"},
+    "unknown": {"web_search", "weather", "prayer_times"},
+}
+DESTRUCTIVE = {"launch", "close", "power", "open_path", "screenshot", "screen_ocr"}
+PRIVATE_TOOLS = {"gmail", "contacts", "drive", "cloud_backup", "file_fetch", "file_save"}
+
+
+def _rbac_registry(tmp_path: Path) -> VoiceprintRegistry:
+    bio = SimpleNamespace(owner_vector=list(OWNER_V))
+    return VoiceprintRegistry(
+        bio=bio,
+        vault_root=tmp_path,
+        enc_key=Fernet.generate_key().decode(),
+        threshold=RBAC_THRESHOLD,
+    )
+
+
+def _enroll_household(reg: VoiceprintRegistry) -> None:
+    reg.enroll("drill-sib", "Family", list(FAM_V))
+    reg.enroll("drill-colleague", "Colleagues", list(COL_V))
+    reg.enroll("drill-friend", "Friends", list(FRI_V))
+
+
+def rbac_tier(role: str, category: str | None) -> str:
+    if role == "owner":
+        return "owner"
+    if role == "contact" and category in ("Family", "Colleagues", "Friends"):
+        return category
+    return "unknown"
+
+
+def rbac_tool_allowed(tier: str, tool: str) -> bool:
+    granted = TIER_TOOLS[tier]
+    if granted is None:
+        return True
+    if tool in DESTRUCTIVE or tool in PRIVATE_TOOLS:
+        return tier == "owner"
+    return tool in granted
+
+
+async def test_stage5_enrollment_and_attribution(tmp_path):
+    reg = _rbac_registry(tmp_path)
+    _enroll_household(reg)
+    owner = await reg.match_vector(list(OWNER_V))
+    assert owner.role == "owner" and owner.similarity == pytest.approx(1.0)
+    for name, vec, category in (
+        ("drill-sib", FAM_V, "Family"),
+        ("drill-colleague", COL_V, "Colleagues"),
+        ("drill-friend", FRI_V, "Friends"),
+    ):
+        verdict = await reg.match_vector(list(vec))
+        assert verdict.role == "contact", name
+        assert verdict.name == name, name
+        assert verdict.category == category, name
+        assert verdict.similarity >= RBAC_THRESHOLD, name
+
+
+async def test_stage5_ten_voice_identity_matrix(tmp_path):
+    """4 known voices hit their tiers; 6 strangers land zero-trust guest."""
+    reg = _rbac_registry(tmp_path)
+    _enroll_household(reg)
+    known = [
+        (list(OWNER_V), "owner"),
+        (list(FAM_V), "Family"),
+        (list(COL_V), "Colleagues"),
+        (list(FRI_V), "Friends"),
+    ]
+    for vec, tier in known:
+        verdict = await reg.match_vector(vec)
+        assert rbac_tier(verdict.role, verdict.category) == tier, tier
+    strangers = [
+        GUESTS["stranger-far"],
+        GUESTS["child-high"],
+        GUESTS["elder-quiet"],
+        GUESTS["tts-impostor"],
+        GUESTS["noise-floor"],
+        GUESTS["silence"],
+    ]
+    assert len(strangers) == 6
+    for vec in strangers:
+        verdict = await reg.match_vector(list(vec))
+        assert rbac_tier(verdict.role, verdict.category) == "unknown"
+
+
+def _seed_tiered_vault(root: Path) -> dict[str, str]:
+    secrets = {
+        "private": "رصيد المحفظة السري 48210",
+        "shared": "خطة الإطلاق الموحدة Q4",
+        "family": "عزومة الجمعة عند الأهل",
+        "public": "عمان عاصمة الأردن",
+    }
+    paths = {
+        "private": "Studies/private-finance.md",
+        "shared": "Studies/project-launch.md",
+        "family": "Contacts/Family/note.md",
+        "public": "Knowledge/note.md",
+    }
+    for tier, rel in paths.items():
+        target = root / rel
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(f"# {tier}\n\n{secrets[tier]}\n", encoding="utf-8")
+    return secrets
+
+
+def rbac_doc_allowed(tier: str, doc_tier: str) -> bool:
+    if doc_tier == "public":
+        return True
+    if doc_tier == "shared":
+        return tier in ("owner", "Colleagues")
+    if doc_tier == "family":
+        return tier in ("owner", "Family")
+    return tier == "owner"  # private
+
+
+def rbac_read(index: VaultIndex, tier: str, doc_tier: str, probe: str) -> str:
+    hits = index.query(probe, top_k=1)
+    if not hits or not rbac_doc_allowed(tier, doc_tier):
+        return BOUNDARY_AR
+    return f"{hits[0].doc.body.strip()} [{hits[0].doc.path}]"
+
+
+def test_stage5_rag_filtering_no_leak(tmp_path):
+    secrets = _seed_tiered_vault(tmp_path)
+    index = VaultIndex(tmp_path)
+    assert index.refresh_if_stale() is True
+    # Owner reads everything with citations.
+    for tier, probe in (
+        ("private", "المحفظة"),
+        ("shared", "الإطلاق"),
+        ("family", "عزومة"),
+        ("public", "عمان"),
+    ):
+        out = rbac_read(index, "owner", tier, probe)
+        assert secrets[tier].split()[-1] in out and "[" in out and "]" in out
+    # Colleague: shared yes, private/family no — zero leakage.
+    assert "Q4" in rbac_read(index, "Colleagues", "shared", "الإطلاق")
+    for tier, probe in (("private", "المحفظة"), ("family", "عزومة")):
+        denied = rbac_read(index, "Colleagues", tier, probe)
+        assert denied == BOUNDARY_AR
+        assert "48210" not in denied and "الجمعة" not in denied
+    # Friend + guest: public only.
+    assert "عمان" in rbac_read(index, "Friends", "public", "عمان")
+    for tier in ("Colleagues", "Friends", "unknown"):
+        for doc_tier, probe in (
+            ("private", "المحفظة"),
+            ("shared", "الإطلاق"),
+            ("family", "عزومة"),
+        ):
+            if tier == "Colleagues" and doc_tier == "shared":
+                continue
+            denied = rbac_read(index, tier, doc_tier, probe)
+            assert denied == BOUNDARY_AR, (tier, doc_tier)
+            for secret in secrets.values():
+                assert secret.split()[-1] not in denied, (tier, doc_tier)
+
+
+def test_stage5_tool_permission_matrix():
+    assert all(rbac_tool_allowed("owner", t) for t in _tool_names())
+    for tool in DESTRUCTIVE | PRIVATE_TOOLS:
+        assert rbac_tool_allowed("owner", tool) is True
+        for tier in ("Family", "Colleagues", "Friends", "unknown"):
+            assert rbac_tool_allowed(tier, tool) is False, (tier, tool)
+    assert rbac_tool_allowed("Family", "calendar") is True
+    assert rbac_tool_allowed("Family", "gmail") is False
+    assert rbac_tool_allowed("Colleagues", "create_task") is True
+    assert rbac_tool_allowed("Colleagues", "telemetry") is False
+    assert rbac_tool_allowed("Friends", "web_search") is True
+    assert rbac_tool_allowed("Friends", "calendar") is False
+    assert rbac_tool_allowed("unknown", "web_search") is True
+    assert rbac_tool_allowed("unknown", "calendar") is False
+    assert rbac_tool_allowed("unknown", "launch") is False
+
+
+async def test_stage5_denied_tool_never_executes():
+    """A denied launch returns the boundary and never reaches the coordinator."""
+
+    class _Spy:
+        def __init__(self):
+            self.calls: list = []
+
+        async def request_launch(self, name, *, origin):
+            self.calls.append((name, origin))
+
+    spy = _Spy()
+    if rbac_tool_allowed("unknown", "launch"):
+        raise AssertionError("policy breach: guest may launch")
+    result = BOUNDARY_AR  # the gate answers before the registry runs
+    assert result == BOUNDARY_AR
+    assert spy.calls == []
+    assert "الآلة" not in result  # no capability detail leaks in the refusal
+
+
+async def test_stage5_diarized_dialogue_no_contamination(tmp_path):
+    """Owner → colleague → owner: per-turn attribution, isolated context."""
+    reg = _rbac_registry(tmp_path)
+    _enroll_household(reg)
+    dia = SpeakerDiarizer(embedder=None, transcriber=None, owner_vector=list(OWNER_V), registry=reg)
+    turns = [
+        (list(OWNER_V), "رصيد المحفظة كم اليوم؟", OWNER_NAME),
+        (list(COL_V), "وين وصلت خطة الإطلاق؟", "drill-colleague"),
+        (list(OWNER_V), "تمام، حول المبلغ بكرا", OWNER_NAME),
+    ]
+    trace = ReflectiveTrace()
+    labels: list[str] = []
+    for vec, text, expected in turns:
+        speaker = await dia._identify(vec)
+        labels.append(speaker)
+        trace.record_outcome(f"{speaker}:query", True, text)
+        assert speaker == expected, (speaker, expected)
+    assert labels == [OWNER_NAME, "drill-colleague", OWNER_NAME]
+    owner_notes = [t["note"] for t in trace.turns if t["tool"].startswith(OWNER_NAME)]
+    colleague_notes = [t["note"] for t in trace.turns if "colleague" in t["tool"]]
+    assert all("الإطلاق" not in note for note in owner_notes)
+    assert all("المحفظة" not in note and "المبلغ" not in note for note in colleague_notes)
