@@ -48,5 +48,5 @@ confirmation · docs ship with behavior in the same commit.
 ## See also (graph links)
 
 - [12 — Security](../12-SECURITY.md) · [09 — Decisions](../09-DECISIONS.md)
-- [API Wiring Audit](./API_WIRING_AND_USAGE_AUDIT.md)
+- [Tools & API Compendium](./TOOLS_AND_API_COMPENDIUM.md)
 - [Map of Testing & Audits](../00-MAP-OF-TESTING-AND-AUDITS.md)

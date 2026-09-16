@@ -93,5 +93,5 @@ Protocol:
 - [04 — System Architecture](./04-ARCHITECTURE.md)
 - [10 — Sprint Checkpoint Ledger](./10-CHECKPOINT.md)
 - [11 — Testing](./11-TESTING.md)
-- [Repository Audit & Cleanup Proposal](./reports/REPOSITORY_AUDIT_AND_CLEANUP_PROPOSAL.md)
+- [Master Roadmap & Remaining Work](./MASTER_ROADMAP_AND_REMAINING_WORK.md)
 - [Map of Architecture](./00-MAP-OF-ARCHITECTURE.md)

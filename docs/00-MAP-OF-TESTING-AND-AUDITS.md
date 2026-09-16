@@ -13,13 +13,12 @@ back here via its own `See also` block — no orphaned nodes.
 - [11 — Testing](./11-TESTING.md)
 - [Benchmark harness](../scripts/live_interactive_benchmark.py) (Tests A–F + 5 invariants)
 
-## Audit reports
+## Audit reports (consolidated 2026-09-16 — the only reports)
 
-- [Full System Audit & Live Benchmark](./reports/SARA_FULL_SYSTEM_AUDIT_AND_LIVE_BENCHMARK_REPORT.md)
-- [Exhaustive System Audit](./reports/EXHAUSTIVE_SYSTEM_AUDIT_REPORT.md)
-- [Repository Audit & Cleanup Proposal](./reports/REPOSITORY_AUDIT_AND_CLEANUP_PROPOSAL.md)
-- [OpenHuman Assessment](./reports/OPENHUMAN-ASSESSMENT.md)
-- [Sara Capabilities Roadmap](./reports/SARA-CAPABILITIES-ROADMAP.md)
+- [Timeline & Milestones](./reports/PROJECT_TIMELINE_AND_MILESTONES.md)
+- [Objectives Ledger](./reports/OBJECTIVES_LEDGER_MET_VS_PENDING.md)
+- [Tools & API Compendium](./reports/TOOLS_AND_API_COMPENDIUM.md)
+- [Risks, Costs & Governance](./reports/RISKS_COSTS_AND_GOVERNANCE.md)
 
 ## Benchmark evidence
 

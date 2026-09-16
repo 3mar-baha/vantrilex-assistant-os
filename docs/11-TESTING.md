@@ -39,6 +39,5 @@ red→green→refactor; halt for owner review per task.
 ## See also (graph links)
 
 - [10 — Sprint Checkpoint Ledger](./10-CHECKPOINT.md)
-- [Full System Audit & Live Benchmark](./reports/SARA_FULL_SYSTEM_AUDIT_AND_LIVE_BENCHMARK_REPORT.md)
 - [Benchmark harness](../scripts/live_interactive_benchmark.py)
 - [Map of Testing & Audits](./00-MAP-OF-TESTING-AND-AUDITS.md)

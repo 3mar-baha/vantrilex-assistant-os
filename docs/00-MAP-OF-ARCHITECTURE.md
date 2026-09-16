@@ -37,10 +37,6 @@ links back here via its own `See also` block — no orphaned nodes.
 
 - [Map of Testing & Audits](./00-MAP-OF-TESTING-AND-AUDITS.md)
 
-## Capability catalogs
-
-- [Sara's Tools — Uses & Benefits](./reports/SARA_TOOLS_USES_AND_BENEFITS.md)
-
 ## Strategic reports (2026-09-16 comprehensive set)
 
 - [Timeline & Milestones](./reports/PROJECT_TIMELINE_AND_MILESTONES.md)

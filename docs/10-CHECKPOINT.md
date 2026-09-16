@@ -418,7 +418,7 @@ This prints the Executive Summary Scorecard to stdout and writes `benchmarks/LIV
 - `src/openclaw/plans.py`: `build_dag`, `gate`, `needs_confirmation`.
 - `src/openclaw/protocol.py`: `Op`, `OpKind`.
 - `src/config.py`: `Settings` — `omniroute_base_url` (not `gateway_url`), `tz="Asia/Amman"`, `voice_name` defaults to `ar-EG-SalmaNeural` but `.env` overrides to `fish-audio/s2.1-pro-free:free`, `fast_model`/`medium_model`/`heavy_model` chains.
-- `docs/reports/EXHAUSTIVE_SYSTEM_AUDIT_REPORT.md`: 45-tool census source (lines 46–113).
+- `docs/reports/TOOLS_AND_API_COMPENDIUM.md`: tool census + API rollup (consolidated 2026-09-16; supersedes the pruned exhaustive audit).
 - `docs/01-PRODUCT-REQUIREMENTS.md`, `docs/04-ARCHITECTURE.md`, `docs/09-DECISIONS.md`,
   `docs/14-RUNBOOK.md`, `docs/15-ORACLE-DEPLOY.md`, `docs/08-ROADMAP.md`, `docs/ai/AI-INSTRUCTIONS.md`.
 - `vault/02_Areas/Profile/Omar_Master_Digest.md`: two-tier memory anchor.
@@ -430,5 +430,5 @@ This prints the Executive Summary Scorecard to stdout and writes `benchmarks/LIV
 
 - [07 — Implementation Plan](./07-IMPLEMENTATION-PLAN.md)
 - [11 — Testing](./11-TESTING.md)
-- [Full System Audit & Live Benchmark](./reports/SARA_FULL_SYSTEM_AUDIT_AND_LIVE_BENCHMARK_REPORT.md)
+- [Objectives Ledger](./reports/OBJECTIVES_LEDGER_MET_VS_PENDING.md)
 - [Map of Testing & Audits](./00-MAP-OF-TESTING-AND-AUDITS.md)
