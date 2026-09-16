@@ -20,6 +20,7 @@ links back here via its own `See also` block — no orphaned nodes.
 - [05 — Data Model](./05-DATA-MODEL.md)
 - [06 — API Specification](./06-API-SPECIFICATION.md)
 - [07 — Implementation Plan](./07-IMPLEMENTATION-PLAN.md)
+- [16 — Operational Workflows](./16-WORKFLOWS.md)
 
 ## Governance
 
