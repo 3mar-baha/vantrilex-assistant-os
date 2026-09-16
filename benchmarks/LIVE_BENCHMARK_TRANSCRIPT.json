@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-09-16T12:32:51Z",
+  "timestamp": "2026-09-16T15:27:27Z",
   "gateway": "http://localhost:20128/v1",
   "mode": "DEGRADED",
   "scenarios": [
@@ -8,7 +8,7 @@
       "name": "A-persona-masculine-arabic",
       "tier": "persona",
       "mode": "DEGRADED",
-      "latency_ms": 7.95,
+      "latency_ms": 1.37,
       "passed": true,
       "detail": "persona len=4782, Jordanian ar-JO, masculine forms confirmed"
     },
@@ -17,7 +17,7 @@
       "name": "B-screen-inspect",
       "tier": "openclaw-inspect",
       "mode": "DEGRADED",
-      "latency_ms": 3639.4,
+      "latency_ms": 3017.07,
       "passed": true,
       "detail": "fg=Notepad - report.txt ocr_head=Error 404"
     },
@@ -26,7 +26,7 @@
       "name": "C-destructive-gating",
       "tier": "safety",
       "mode": "DEGRADED",
-      "latency_ms": 3.93,
+      "latency_ms": 3.59,
       "passed": true,
       "detail": "cmd.exe without confirmation_id=refused; with confirmation_id=allowed; PARK gate active"
     },
@@ -35,7 +35,7 @@
       "name": "D-two-tier-memory",
       "tier": "associative",
       "mode": "DEGRADED",
-      "latency_ms": 1.36,
+      "latency_ms": 4.54,
       "passed": true,
       "detail": "intent_for(حدّد موعد بكره)=calendar; not in ROUTINE_INTENTS; Tier-1+Tier-2 write-back vault"
     },
@@ -44,7 +44,7 @@
       "name": "E-hardware-bridge-quiet-hours",
       "tier": "bridge-quiet",
       "mode": "DEGRADED",
-      "latency_ms": 3265.08,
+      "latency_ms": 2662.01,
       "passed": true,
       "detail": "quiet hours 08:00–23:30 Asia/Amman; 30m debounce; overnight 22:00→02:00 wraps"
     },
@@ -53,7 +53,7 @@
       "name": "F-four-task-swarm",
       "tier": "stream_heavy",
       "mode": "DEGRADED",
-      "latency_ms": 249.07,
+      "latency_ms": 231.02,
       "passed": true,
       "detail": "heavy_chain_for(n_tasks=4, is_dag_swarm)=['nex-agi/nex-n2.5-pro:free', 'groq/openai/gpt-oss-120b']; stream_heavy() method verified at src/gateway.py:313"
     }

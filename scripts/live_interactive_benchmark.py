@@ -39,6 +39,7 @@ GATEWAY_URL = "http://localhost:20128/v1"
 def gateway_reachable(timeout: float = 2.0) -> bool:
     try:
         import httpx
+
         with httpx.Client(timeout=timeout) as client:
             r = client.get(f"{GATEWAY_URL}/models", headers={"Authorization": "Bearer x"})
             return r.status_code == 200
@@ -48,8 +49,8 @@ def gateway_reachable(timeout: float = 2.0) -> bool:
 
 def _make_settings():
     """Build a valid Settings from .env.example mirror, matching conftest.make_settings."""
-    from tests.conftest import ENV_EXAMPLE
     from src.config import Settings
+    from tests.conftest import ENV_EXAMPLE
 
     return Settings(_env_file=None, **{k.lower(): v for k, v in ENV_EXAMPLE.items()})
 
@@ -60,6 +61,7 @@ def in_active_window(now, tzname: str, start: str = "08:00", end: str = "23:30")
     (tests/test_bridge_online.py::test_active_window_amman_bounds pins
     23:30 -> True). Script-local so the benchmark never imports the bot shell."""
     from zoneinfo import ZoneInfo
+
     local = now.astimezone(ZoneInfo(tzname))
     point = (local.hour, local.minute)
 
@@ -76,10 +78,12 @@ def in_active_window(now, tzname: str, start: str = "08:00", end: str = "23:30")
 def _amman(hhmm: str):
     from datetime import datetime
     from zoneinfo import ZoneInfo
+
     return datetime(2026, 9, 14, int(hhmm[:2]), int(hhmm[3:]), tzinfo=ZoneInfo("Asia/Amman"))
 
 
 # -- Test A: Persona & Masculine Arabic --------------------------------------
+
 
 async def test_a_persona_masculine_arabic(live: bool) -> ScenarioResult:
     res = ScenarioResult(name="A-persona-masculine-arabic", test="A", tier="persona")
@@ -87,7 +91,6 @@ async def test_a_persona_masculine_arabic(live: bool) -> ScenarioResult:
     t0 = time.perf_counter()
     try:
         from src.persona import SARA_PERSONA_AR, build_persona
-        from src.associative import DIGEST_HEADER_AR
 
         assert "سارة" in SARA_PERSONA_AR, "persona must name Sara"
         assert "عمان" in SARA_PERSONA_AR or "أردني" in SARA_PERSONA_AR, "must be Jordanian"
@@ -105,15 +108,18 @@ async def test_a_persona_masculine_arabic(live: bool) -> ScenarioResult:
 
 # -- Test B: Screen inspection --------------------------------------
 
+
 async def test_b_screen_inspect(live: bool) -> ScenarioResult:
     res = ScenarioResult(name="B-screen-inspect", test="B", tier="openclaw-inspect")
     res.mode = "LIVE" if live else "DEGRADED"
     t0 = time.perf_counter()
     try:
-        from tests.suite.openclaw_bench.mock_desktop import (
-            notepad_desktop, mock_grab_factory, mock_ocr_factory,
-        )
         from bridge.openclaw.inspect_arm import ScreenInspector
+        from tests.suite.openclaw_bench.mock_desktop import (
+            mock_grab_factory,
+            mock_ocr_factory,
+            notepad_desktop,
+        )
 
         desktop = notepad_desktop()
         inspector = ScreenInspector(
@@ -137,33 +143,54 @@ async def test_b_screen_inspect(live: bool) -> ScenarioResult:
 
 # -- Test C: Destructive gating & whitelist guardrails ------------------------
 
+
 async def test_c_destructive_gating(live: bool) -> ScenarioResult:
     res = ScenarioResult(name="C-destructive-gating", test="C", tier="safety")
     res.mode = "LIVE" if live else "DEGRADED"
     t0 = time.perf_counter()
     try:
-        import tempfile, json as _json
-        from bridge.guard import Guard
+        import json as _json
+        import tempfile
+
         from bridge.executor import Executor
+        from bridge.guard import Guard
         from bridge.openclaw.breaker import SafetyCircuitBreaker
         from src.openclaw.plans import build_dag, gate
         from src.openclaw.protocol import Op, OpKind
 
-        wl_path = tempfile.NamedTemporaryFile(suffix=".json", delete=False).name
-        with open(wl_path, "w") as _wf:
-            _json.dump({"allowed_apps": [{"name": "Command Prompt", "executable": "C:\\Windows\\System32\\cmd.exe", "auto_approve": False}], "restricted_actions": []}, _wf)
+        wl_path = Path(tempfile.mkdtemp()) / "whitelist.json"
+        wl_path.write_text(
+            _json.dumps(
+                {
+                    "allowed_apps": [
+                        {
+                            "name": "Command Prompt",
+                            "executable": "C:\\Windows\\System32\\cmd.exe",
+                            "auto_approve": False,
+                        }
+                    ],
+                    "restricted_actions": [],
+                }
+            ),
+        )
         guard = Guard(wl_path)
         e = Executor(guard)
+
         # Hermetic seam stub (benchmark-only): the confirmed-launch branch must
         # resolve WITHOUT spawning a real process on the owner's machine.
         async def _fake_spawn(argv: list) -> None:
             return None
+
         e._spawn = _fake_spawn  # harness seam stub; production untouched
         refused = await e.launch("cmd.exe", confirmation_id=None)
-        assert refused.status == "error", f"cmd.exe without confirmation must be refused, got {refused.status}"
+        assert refused.status == "error", (
+            f"cmd.exe without confirmation must be refused, got {refused.status}"
+        )
         assert refused.detail, "refusal must carry a non-empty reason"
         allowed = await e.launch("cmd.exe", confirmation_id="cid-123")
-        assert allowed.status == "ok", f"cmd.exe with confirmation must resolve, got {allowed.status}: {allowed.detail}"
+        assert allowed.status == "ok", (
+            f"cmd.exe with confirmation must resolve, got {allowed.status}: {allowed.detail}"
+        )
         op = Op(op=OpKind.HOTKEY, value="Alt+F4")
         assert SafetyCircuitBreaker.classify(op) == "irreversible"
         dag = build_dag(goal="close app", ops=[op], weight=2)
@@ -181,14 +208,17 @@ async def test_c_destructive_gating(live: bool) -> ScenarioResult:
 
 # -- Test D: Two-tier associative memory -------------------------------------
 
+
 async def test_d_two_tier_memory(live: bool) -> ScenarioResult:
     res = ScenarioResult(name="D-two-tier-memory", test="D", tier="associative")
     res.mode = "LIVE" if live else "DEGRADED"
     t0 = time.perf_counter()
     try:
         from src.associative import (
-            DIGEST_HEADER_AR, ROUTINE_INTENTS, intent_for,
+            ROUTINE_INTENTS,
+            intent_for,
         )
+
         intent = intent_for("حدّد موعد بكره")
         assert intent == "calendar", f"intent={intent} expected calendar"
         assert "calendar" not in ROUTINE_INTENTS
@@ -204,6 +234,7 @@ async def test_d_two_tier_memory(live: bool) -> ScenarioResult:
 
 # -- Test E: Hardware bridge & Amman quiet hours ------------------------------
 
+
 async def test_e_hardware_bridge_quiet_hours(live: bool) -> ScenarioResult:
     res = ScenarioResult(name="E-hardware-bridge-quiet-hours", test="E", tier="bridge-quiet")
     res.mode = "LIVE" if live else "DEGRADED"
@@ -213,6 +244,7 @@ async def test_e_hardware_bridge_quiet_hours(live: bool) -> ScenarioResult:
         assert settings.tz == "Asia/Amman", f"tz={settings.tz}"
         from datetime import datetime
         from zoneinfo import ZoneInfo
+
         now = datetime(2026, 9, 14, 10, 0, tzinfo=ZoneInfo("Asia/Amman"))
         assert in_active_window(now, "Asia/Amman") is True
         assert in_active_window(_amman("08:00"), "Asia/Amman") is True
@@ -233,6 +265,7 @@ async def test_e_hardware_bridge_quiet_hours(live: bool) -> ScenarioResult:
 
 
 # -- Test F: 4-task swarm via stream_heavy() ---------------------------------
+
 
 async def test_f_four_task_swarm(live: bool) -> ScenarioResult:
     res = ScenarioResult(name="F-four-task-swarm", test="F", tier="stream_heavy")
@@ -266,14 +299,16 @@ async def test_f_four_task_swarm(live: bool) -> ScenarioResult:
 
 # -- Invariant verification ---------------------------------------------------
 
+
 async def verify_invariants() -> dict[str, str]:
     results: dict[str, str] = {}
 
     # 1. Immersion: Arabic Jordanian ar-JO dialect
     try:
         from src.persona import SARA_PERSONA_AR
+
         assert "سارة" in SARA_PERSONA_AR
-        assert ("عمان" in SARA_PERSONA_AR or "أردني" in SARA_PERSONA_AR), SARA_PERSONA_AR[:60]
+        assert "عمان" in SARA_PERSONA_AR or "أردني" in SARA_PERSONA_AR, SARA_PERSONA_AR[:60]
         assert "ar-JO" in SARA_PERSONA_AR or "الأردنية" in SARA_PERSONA_AR
         results["Immersion"] = "PASS"
     except Exception as exc:
@@ -282,7 +317,8 @@ async def verify_invariants() -> dict[str, str]:
     # 2. Masculine addressing: masculine verb forms
     try:
         from src.persona import SARA_PERSONA_AR
-        assert ("يعمل" in SARA_PERSONA_AR or "يقول" in SARA_PERSONA_AR), "no masculine verb"
+
+        assert "يعمل" in SARA_PERSONA_AR or "يقول" in SARA_PERSONA_AR, "no masculine verb"
         results["Masculine"] = "PASS"
     except Exception as exc:
         results["Masculine"] = f"FAIL: {exc}"
@@ -290,26 +326,33 @@ async def verify_invariants() -> dict[str, str]:
     # 3. Zero Edge-TTS: FISH_AUDIO_MODEL = fish-audio/s2.1-pro-free:free
     try:
         from tests.conftest import ENV_EXAMPLE
+
         fish_model = ENV_EXAMPLE.get("FISH_AUDIO_MODEL", "")
         voice_name = ENV_EXAMPLE.get("VOICE_NAME", "")
         assert "fish-audio/s2.1-pro-free:free" in fish_model, f"FISH_AUDIO_MODEL={fish_model}"
+        assert voice_name, "VOICE_NAME must be configured"
         results["Zero Edge-TTS"] = "PASS"
     except Exception as exc:
         results["Zero Edge-TTS"] = f"FAIL: {exc}"
 
     # 4. Zero unconfirmed cmd: whitelist + confirmation_id gate
     try:
-        import tempfile, json as _json
-        from bridge.guard import Guard
-        from bridge.executor import Executor
+        import json as _json
+        import tempfile
 
-        wl_path = tempfile.NamedTemporaryFile(suffix=".json", delete=False).name
-        with open(wl_path, "w") as _wf:
-            _json.dump({"allowed_apps": [], "restricted_actions": []}, _wf)
+        from bridge.executor import Executor
+        from bridge.guard import Guard
+
+        wl_path = Path(tempfile.mkdtemp()) / "whitelist.json"
+        wl_path.write_text(
+            _json.dumps({"allowed_apps": [], "restricted_actions": []}), encoding="utf-8"
+        )
         guard = Guard(wl_path)
         e = Executor(guard)
         result = await e.launch("cmd.exe", confirmation_id=None)
-        assert result.status == "error", f"cmd.exe without confirmation_id must be refused, got {result.status}"
+        assert result.status == "error", (
+            f"cmd.exe without confirmation_id must be refused, got {result.status}"
+        )
         results["Zero unconfirmed cmd"] = "PASS"
     except Exception as exc:
         results["Zero unconfirmed cmd"] = f"FAIL: {exc}"
@@ -317,13 +360,13 @@ async def verify_invariants() -> dict[str, str]:
     # 5. $0.00 cost: all models free-tier
     try:
         from tests.conftest import ENV_EXAMPLE
+
         fast = ENV_EXAMPLE["FAST_MODEL"].lower()
         med = ENV_EXAMPLE["MEDIUM_MODEL"].lower()
         heavy = ENV_EXAMPLE["HEAVY_MODEL"].lower()
         assert "free" in fast or "openai/gpt-oss" in fast, f"FAST not free: {fast}"
         assert "free" in med, f"MEDIUM not free: {med}"
         assert "free" in heavy or "nemotron" in heavy, f"HEAVY not free: {heavy}"
-        from src.gateway import PaidModelBlockedError
         results["$0.00 cost"] = "PASS"
     except Exception as exc:
         results["$0.00 cost"] = f"FAIL: {exc}"
@@ -332,6 +375,7 @@ async def verify_invariants() -> dict[str, str]:
 
 
 # -- Runner -------------------------------------------------------------------
+
 
 async def run_all() -> list[ScenarioResult]:
     live = gateway_reachable()

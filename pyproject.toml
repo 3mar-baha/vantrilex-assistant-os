@@ -6,6 +6,11 @@ target-version = "py312"
 # upstream owns its formatting. archive/ holds relocated (non-executed) files.
 extend-exclude = [".claude", "archive"]
 
+# The live benchmark harness degrades every failure into a ScenarioResult FAIL
+# row by design — it must never raise. Blind-except is its contract, not a smell.
+[tool.ruff.lint.per-file-ignores]
+"scripts/live_interactive_benchmark.py" = ["BLE001"]
+
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
