@@ -1,3 +1,7 @@
+---
+tags: [decision]
+---
+
 # 08 — Roadmap (future ONLY — nothing here is promised or scheduled)
 
 > Charter: this file is the sole home for planned/deferred/unbuilt work.
@@ -44,3 +48,9 @@
 
 - Groq per-key TPD pressure → OmniRoute-side rotation is owner-operated; client keeps single bearer + quarantine doctrine.
 - `vault/02_Areas` + `04_Archives` materialize on live boot; local dev mirror stays partial by design.
+
+## See also (graph links)
+
+- [01 — Product Requirements](./01-PRODUCT-REQUIREMENTS.md)
+- [09 — Decision Records](./09-DECISIONS.md)
+- [Map of Architecture](./00-MAP-OF-ARCHITECTURE.md)

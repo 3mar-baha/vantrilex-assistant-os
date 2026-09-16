@@ -1,3 +1,7 @@
+---
+tags: [decision]
+---
+
 # تقييم OpenHuman — هل يفيد سارة؟ وكيف ومتى؟
 
 **التاريخ**: 2026-08-29 · **أعدّه**: Lead Implementation Architect · **الحالة**: تقرير بحثي (ليس ADR)

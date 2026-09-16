@@ -38,3 +38,11 @@ data/
 
 # Local working copy of the git-backed Obsidian vault (owner data — never commit)
 vault/
+
+# Ephemeral tool dumps — never commit (audit 2026-09-16)
+compile.txt
+ruff_out.txt
+
+# Harness config under review — never commit while it carries machine secrets
+opencode.json
+litellm_config.yaml

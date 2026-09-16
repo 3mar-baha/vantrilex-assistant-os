@@ -1,3 +1,7 @@
+---
+tags: [architecture]
+---
+
 # 02 — Product Specification (feature logic, workflows, edge cases)
 
 > Shipped behavior at HEAD. Future work: `docs/08-ROADMAP.md`.
@@ -76,3 +80,11 @@ compulsory human confirm. Shell/registry/credential-exfil shapes →
 static offline string; bridge live → normal welcome. Reconnect monitor
 greets once per reconnect (30-min debounce) only 08:00–23:30 Amman; nocturnal
 reconnects stay silent unless an owner turn landed within 15 min.
+
+## See also (graph links)
+
+- [01 — Product Requirements](./01-PRODUCT-REQUIREMENTS.md)
+- [03 — Technical Specification](./03-TECHNICAL-SPECIFICATION.md)
+- [04 — System Architecture](./04-ARCHITECTURE.md)
+- [06 — API Specification](./06-API-SPECIFICATION.md)
+- [Map of Architecture](./00-MAP-OF-ARCHITECTURE.md)

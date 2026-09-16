@@ -1,3 +1,7 @@
+---
+tags: [bridge]
+---
+
 # 09 — دليل النشر على Oracle Cloud Always Free (المرجع النهائي للمالك)
 
 > اعتمد المالك هذه المنصة 2026-08-31 (تعديل ADR-15): HF أصبحت Docker فيها مدفوعاً ($9/شهر)،
@@ -185,3 +189,9 @@ BRIDGE_SERVER_URL=wss://sara-os.duckdns.org/bridge
 | `omniroute: not found` في السجل | بنيت قبل استنساخ `scripts/omniroute` | أعد `docker build` بعد الاستنساخ |
 | Caddy لا يحصل على شهادة | الدومين لا يشير لعنوان VM أو منفذ 80 مقفل | حدّث DuckDNS + Ingress Rules §2.5 |
 | تلغرام صامت والحاوية حية | توكن/معرّف خاطئ في `sara.env` | `docker exec sara-core python -m src.main --health` |
+
+## راجع أيضاً (روابط الرسم)
+
+- [13 — Deployment](./13-DEPLOYMENT.md)
+- [14 — Runbook](./14-RUNBOOK.md)
+- [Map of Architecture](./00-MAP-OF-ARCHITECTURE.md)

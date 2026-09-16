@@ -1,11 +1,15 @@
+---
+tags: [testing]
+---
+
 # SARA Full System Audit & Live Benchmark Report
 
-- **Date**: 2026-09-16T12:11:05Z
+- **Date**: 2026-09-16T12:32:51Z (re-run after Phase 4 benchmark hardening)
 - **Gateway**: `http://localhost:20128/v1` (OmniRoute, co-located with core)
 - **Mode**: DEGRADED (hermetic doubles — gateway unreachable at benchmark time)
-- **Baseline commit**: `4a3a1fd` atop `3fe6703`
-- **Tests passing**: 4/6 scenario tests (Test A, B, D, F); all 5 invariants PASS
-- **Pytest**: 1,462 passed, 2 skipped
+- **Baseline commit**: `883777e` atop `4a3a1fd`
+- **Tests passing**: 6/6 scenario tests (Tests A–F); all 5 invariants PASS
+- **Pytest**: 1,457 passed, 7 skipped, 0 failed
 
 ---
 
@@ -14,7 +18,7 @@
 | Metric | Result |
 |--------|--------|
 | Gateway reachability | UNREACHABLE (DEGRADED fallback active) |
-| Scenario tests passed | 4/6 (66.7%) |
+| Scenario tests passed | 6/6 (100.0%) |
 | Safety violations (unconfirmed irreversible) | 0 |
 | **Invariant Immersion** | **PASS** |
 | **Invariant Masculine** | **PASS** |
@@ -29,12 +33,12 @@
 |------|------|------|-----|--------|--------|
 | A | A-persona-masculine-arabic | DEGRADED | 4.9 | PASS | persona len=4782, Jordanian ar-JO, masculine forms confirmed |
 | B | B-screen-inspect | DEGRADED | 3127.9 | PASS | fg=Notepad - report.txt ocr_head=Error 404 |
-| C | C-destructive-gating | DEGRADED | 3014.4 | FAIL | Guard/Executor DEGRADED-path assertion (empty detail — expected when gateway unreachable) |
-| D | D-two-tier-memory | DEGRADED | 1.5 | PASS | intent_for(حدّد موعد بكره)=calendar; not in ROUTINE_INTENTS; Tier-1+Tier-2 write-back vault |
-| E | E-hardware-bridge-quiet-hours | DEGRADED | 2746.4 | FAIL | in_active_window DEGRADED-path assertion (empty detail — expected when gateway unreachable) |
+| C | C-destructive-gating | DEGRADED | 3.9 | PASS | cmd.exe without confirmation_id=refused; with confirmation_id=allowed; PARK gate active |
+| D | D-two-tier-memory | DEGRADED | 1.4 | PASS | intent_for(حدّد موعد بكره)=calendar; not in ROUTINE_INTENTS; Tier-1+Tier-2 write-back vault |
+| E | E-hardware-bridge-quiet-hours | DEGRADED | 3265.1 | PASS | quiet hours 08:00–23:30 Asia/Amman (end-inclusive); overnight 22:00→02:00 wraps |
 | F | F-four-task-swarm | DEGRADED | 255.1 | PASS | heavy_chain_for(n_tasks=4, is_dag_swarm)=['nex-agi/nex-n2.5-pro:free', 'groq/openai/gpt-oss-120b']; stream_heavy() verified at src/gateway.py:313 |
 
-**Notes on Test C and E failures**: Both failures occur in the DEGRADED fallback path where `Guard`/`Executor` or `in_active_window` encounters an assertion with an empty detail string. This is a known limitation of the hermetic-doubles fallback when the gateway is unreachable; both tests are designed to pass in LIVE mode against the real bridge/daemon. The core safety logic (whitelist gate, confirmation_id requirement, quiet-hours filtering) is independently verified by the existing pytest suite (`test_whitelist_guardrail.py`, `test_bridge_online.py`) which passes green.
+**Phase 4 root-cause correction (2026-09-16 — supersedes the earlier gateway-attribution note)**: the C/E failures were hermetic-logic bugs, gateway-independent — neither test body reads the `live` flag nor touches the network, so both failed identically in LIVE and DEGRADED. **Test C**: the benchmark built `build_dag(goal="kill", ops=[], weight=2)` and asserted `gate(...) == "park"`, but per `src/openclaw/plans.py:52-57` an op-less DAG has nothing committing so `gate` correctly returns `"go"`; additionally the confirmed-launch assertion depended on the English substring `"error"` inside a localized Arabic detail string. **Test E**: the benchmark's inline `in_active_window` copy used end-exclusive (`s <= local < e`) while the ratified spec (`src/bot.py:156-166`, pinned by `tests/test_bridge_online.py:44`) is end-inclusive — so the `23:30 → True` assertion failed by construction. Fixes are script-only (`scripts/live_interactive_benchmark.py`): C now gates a committing `Alt+F4` DAG, asserts on `status` fields, and stubs `_spawn` so no real process launches; E's helper mirrors production tuple semantics (`lower <= point <= upper`). Production code untouched. The core safety logic remains independently verified by `test_whitelist_guardrail.py` + `test_bridge_online.py` (green).
 
 ---
 

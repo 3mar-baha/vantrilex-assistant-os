@@ -1,3 +1,7 @@
+---
+tags: [architecture]
+---
+
 # 03 — Technical Specification (stack, constraints, benchmarks)
 
 ## 1. Stack rationale
@@ -51,3 +55,11 @@ FAST TTFT ~0.6–1.2 s (bar 1.2 s; worst transient ~2.2 s absorbed, never a
 stall). RAG recall 13/14 top-1, 14/14 top-3, p95 ~3.1 ms (bar 5 ms).
 Suite 1,457 passed / 0 failed, coverage ≥ 85%. OpenClaw bench 12/12, 0
 unconfirmed executions.
+
+## See also (graph links)
+
+- [02 — Product Specification](./02-PRODUCT-SPECIFICATION.md)
+- [04 — System Architecture](./04-ARCHITECTURE.md)
+- [06 — API Specification](./06-API-SPECIFICATION.md)
+- [11 — Testing](./11-TESTING.md)
+- [Map of Architecture](./00-MAP-OF-ARCHITECTURE.md)

@@ -1,3 +1,7 @@
+---
+tags: [bridge]
+---
+
 # 13 — Deployment (topology, env, boot, containers)
 
 ## 1. Topology (ADR-15 as amended 2026-08-31)
@@ -34,3 +38,9 @@ install on the PC only — never in the Oracle image.
 Verify: `python scripts/deploy_smoke.py` (exit 0 = alive);
 `python -m src.main --health` (JSON report). Run: `make run-core` (VM),
 `make run-bridge` (PC).
+
+## See also (graph links)
+
+- [14 — Runbook](./14-RUNBOOK.md)
+- [15 — Oracle Deploy](./15-ORACLE-DEPLOY.md)
+- [Map of Architecture](./00-MAP-OF-ARCHITECTURE.md)

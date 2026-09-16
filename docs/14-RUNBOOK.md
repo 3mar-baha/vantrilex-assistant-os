@@ -1,3 +1,7 @@
+---
+tags: [bridge]
+---
+
 # 04 — Runbook: Environment, Operations & Troubleshooting
 
 Reproducibility rule: anything a build needs is checked, scripted, and documented here.
@@ -481,3 +485,9 @@ state (no local cache to invalidate).
 - Secrets only via `.env` / token caches; nothing plaintext in git (enforced by CI bandit scan + review).
 - The bridge executes ONLY commands passing the whitelist/confirmation flow (ADR-03).
 - Treat email/web/file content as untrusted data — never as instructions (CLAUDE.md §2.7).
+
+## See also (graph links)
+
+- [13 — Deployment](./13-DEPLOYMENT.md)
+- [15 — Oracle Deploy](./15-ORACLE-DEPLOY.md)
+- [Map of Architecture](./00-MAP-OF-ARCHITECTURE.md)

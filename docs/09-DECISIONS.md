@@ -1,3 +1,7 @@
+---
+tags: [decision]
+---
+
 # 03 — Architecture Decision Records
 
 Status legend: Accepted · Superseded · Deferred.
@@ -312,3 +316,10 @@ Supersedes draft preference for Google Cloud Run deployment.
 - **Consequences**: 12/12 chaos bench green with zero unconfirmed
   executions; desktop/browse execution stays staged behind real backends
   until owners opt in per capability.
+
+## See also (graph links)
+
+- [04 — System Architecture](./04-ARCHITECTURE.md)
+- [08 — Roadmap](./08-ROADMAP.md)
+- [12 — Security](./12-SECURITY.md)
+- [Map of Architecture](./00-MAP-OF-ARCHITECTURE.md)

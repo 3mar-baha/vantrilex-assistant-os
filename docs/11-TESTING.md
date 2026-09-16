@@ -1,3 +1,7 @@
+---
+tags: [testing]
+---
+
 # 11 — Testing (strategy, pyramid, metrics)
 
 > Absorbs `docs/05-TEST-PLAN.md` (retired): architecture §1, catalog §2,
@@ -31,3 +35,10 @@ never mute.
 secret scan, 0 hits) → `scripts/docs_guard.py` (16 canonical files).
 Docs change in the same commit as the behavior they describe; TDD
 red→green→refactor; halt for owner review per task.
+
+## See also (graph links)
+
+- [10 — Sprint Checkpoint Ledger](./10-CHECKPOINT.md)
+- [Full System Audit & Live Benchmark](./reports/SARA_FULL_SYSTEM_AUDIT_AND_LIVE_BENCHMARK_REPORT.md)
+- [Benchmark harness](../scripts/live_interactive_benchmark.py)
+- [Map of Testing & Audits](./00-MAP-OF-TESTING-AND-AUDITS.md)

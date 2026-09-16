@@ -1,3 +1,7 @@
+---
+tags: [architecture]
+---
+
 # 01 — Product Requirements (PRD)
 
 > Living document. Active scope = shipped at HEAD. Anything v1.1+ lives in
@@ -60,3 +64,11 @@ TTFT < 1.2 s · RAG p95 ≤ 5 ms · voice-note first chunk < 600 ms target ·
 
 v1.1 live calls, social agents, SIP telephony, multi-agent swarms (ruled
 out), Edge-TTS fallback (ruled out), real-profile browser control.
+
+## See also (graph links)
+
+- [02 — Product Specification](./02-PRODUCT-SPECIFICATION.md)
+- [04 — System Architecture](./04-ARCHITECTURE.md)
+- [08 — Roadmap](./08-ROADMAP.md)
+- [09 — Decision Records](./09-DECISIONS.md)
+- [Map of Architecture](./00-MAP-OF-ARCHITECTURE.md)

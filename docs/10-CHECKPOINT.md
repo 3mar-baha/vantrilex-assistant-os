@@ -1,3 +1,7 @@
+---
+tags: [testing]
+---
+
 # 10 — Sprint Checkpoint Ledger
 
 Per-sprint record of the MASTER DIRECTIVE skill rotation + teardown protocol. Each sprint
@@ -305,7 +309,7 @@ NOT yet been executed in the current session (was interrupted before completion)
 | **B** | Screen inspection ("افحصي عناصر الشاشة") | `openclaw.perceive` via bridge; `_do_openclaw_inspect` | `tests/suite/openclaw_bench/mock_desktop.py` — `notepad_desktop()` + `ScreenInspector` with `mock_grab_factory`/`mock_ocr_factory`; assert foreground == "Notepad - report.txt", ocr contains "Error 404" |
 | **C** | Destructive gating & whitelist guardrails | `executor.launch("cmd.exe", confirmation_id=None)` → refused; `executor.launch("cmd.exe", confirmation_id="cid-123")` → allowed | Create temp `Guard` + `Executor`; assert `cmd.exe` without `confirmation_id` returns error; `gate(dag, coordinator=None) == "park"` |
 | **D** | Two-tier associative memory | `src/associative.py` — Routine→`""` digest injection; Tier-1+Tier-2 write-back vault; `DIGEST_HEADER_AR=[الموجز الحي — سياق أساسي]` | `intent_for("حدّد موعد بكره")` returns `calendar` (advisory, not routine); `calendar` not in `ROUTINE_INTENTS`; `load_digest_block(vault)` returns `""` or digest header |
-| **E** | Hardware bridge & Amman quiet hours | `bridge/daemon.py` quiet-hours gate; `in_active_window(now, "Asia/Amman", start="08:00", end="23:30")`; 30m debounce | Inline `in_active_window()` + `_amman()` helpers; assert 08:00/14:00 in-window, 03:00/07:59/23:31 out-of-window, overnight 22:00→02:00 wraps |
+| **E** | Hardware bridge & Amman quiet hours | `bridge/daemon.py` quiet-hours gate; `in_active_window(now, "Asia/Amman", start="08:00", end="23:30")` end-INCLUSIVE (matches `src/bot.py`; `test_bridge_online.py` pins 23:30 → True); 30m debounce | Inline `in_active_window()` + `_amman()` helpers; assert 08:00/14:00/23:30 in-window, 03:00/07:59/23:31 out-of-window, overnight 22:00→02:00 wraps |
 | **F** | 4-task swarm via `stream_heavy()` | `src/gateway.py:313` `stream_heavy()` on `http://localhost:20128/v1`; HEAVY chain = `nex-agi/nex-n2.5-pro:free` (Nemotron-550B); 4-task DAG | `settings.omniroute_base_url`; `OmniRouteClient.heavy_chain_for(n_tasks=4, is_dag_swarm=True)` returns escalated chain; `stream_heavy()` method verified present at `src/gateway.py:313` |
 
 ### Fallback Logic (strict)
@@ -421,3 +425,10 @@ This prints the Executive Summary Scorecard to stdout and writes `benchmarks/LIV
 - `config/whitelist.json`: 5 auto-approved + `cmd.exe` confirm-gated.
 - `benchmarks/LIVE_BENCHMARK_TRANSCRIPT.json`: **OUTPUT** of Phase 2 benchmark run.
 - `.env.example`: `OMNIROUTE_BASE_URL=http://localhost:20128/v1`, `OMNIROUTE_API_KEY=sk-omniroute-local-key`.
+
+## See also (graph links)
+
+- [07 — Implementation Plan](./07-IMPLEMENTATION-PLAN.md)
+- [11 — Testing](./11-TESTING.md)
+- [Full System Audit & Live Benchmark](./reports/SARA_FULL_SYSTEM_AUDIT_AND_LIVE_BENCHMARK_REPORT.md)
+- [Map of Testing & Audits](./00-MAP-OF-TESTING-AND-AUDITS.md)

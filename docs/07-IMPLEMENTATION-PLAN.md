@@ -1,3 +1,7 @@
+---
+tags: [architecture]
+---
+
 # 07 — Implementation Plan (12-step living-core DAG — ALL COMPLETED)
 
 > Every step below shipped behind TDD (failing test → minimal code →
@@ -21,3 +25,9 @@
 
 Acceptance was per-step proof (failing→passing tests, live route probes,
 gate output) reported at each halt; the full matrix is in `docs/10-CHECKPOINT.md`.
+
+## See also (graph links)
+
+- [10 — Sprint Checkpoint Ledger](./10-CHECKPOINT.md)
+- [11 — Testing](./11-TESTING.md)
+- [Map of Architecture](./00-MAP-OF-ARCHITECTURE.md)

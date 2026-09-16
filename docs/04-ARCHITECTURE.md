@@ -1,3 +1,7 @@
+---
+tags: [architecture]
+---
+
 # 04 — System Architecture
 
 > Canonical topology. Migrated 2026-09-14 from `docs/01-ARCHITECTURE.md`
@@ -104,3 +108,12 @@ Ignored,Unknown}/ Call_Transcripts/ Studies/ Voice_Memos/
 Daily_Logs/YYYY/MM/YYYY-MM-DD.md` (flat legacy read-fallback) `State/`
 (skipped by index). Transport: GitHub Contents API (`Bearer
 VAULT_GITHUB_TOKEN`, `?ref=VAULT_BRANCH`); local mirror is disposable.
+
+## See also (graph links)
+
+- [01 — Product Requirements](./01-PRODUCT-REQUIREMENTS.md)
+- [03 — Technical Specification](./03-TECHNICAL-SPECIFICATION.md)
+- [05 — Data Model](./05-DATA-MODEL.md)
+- [06 — API Specification](./06-API-SPECIFICATION.md)
+- [09 — Decision Records](./09-DECISIONS.md)
+- [Map of Architecture](./00-MAP-OF-ARCHITECTURE.md)

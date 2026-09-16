@@ -1,3 +1,7 @@
+---
+tags: [security]
+---
+
 # 12 — Security (threat model + controls)
 
 ## 1. Threat model
@@ -31,3 +35,9 @@ API credentials. Non-goals: nation-state endpoints, Telegram server trust.
 - **Quiet hours**: nocturnal reconnect greetings suppressed (08:00–23:30
   Amman gate) — no unsolicited night traffic.
 - **$0.00**: free/open-source only; non-free model IDs die before the wire.
+
+## See also (graph links)
+
+- [06 — API Specification](./06-API-SPECIFICATION.md)
+- [09 — Decision Records](./09-DECISIONS.md)
+- [Map of Architecture](./00-MAP-OF-ARCHITECTURE.md)

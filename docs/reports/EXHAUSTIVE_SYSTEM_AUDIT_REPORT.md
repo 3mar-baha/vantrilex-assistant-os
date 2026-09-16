@@ -1,3 +1,7 @@
+---
+tags: [testing]
+---
+
 # EXHAUSTIVE SYSTEM AUDIT REPORT — Vantrilex Assistant OS (Sara)
 
 - **Baseline**: commit `1116de6`, **1,385 tests green**, 2026-09-14.

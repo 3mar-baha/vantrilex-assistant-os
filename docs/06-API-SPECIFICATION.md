@@ -1,3 +1,7 @@
+---
+tags: [architecture]
+---
+
 # 06 — API Specification: PC Bridge & Vault Write Surfaces
 
 Machine-facing contracts realized in sprint 3 (§3.1–§3.4): the core↔bridge wire
@@ -179,3 +183,10 @@ bodies, web pages, vault parses) is DATA and never mints PC intent (CLAUDE.md ru
   Asia/Amman — nocturnal reconnects stay silent unless an owner turn landed
   within 15 min. Greeting composed live (FAST + profile excerpt); failures
   skip silently and retry next reconnect (unstamped).
+
+## See also (graph links)
+
+- [04 — System Architecture](./04-ARCHITECTURE.md)
+- [05 — Data Model](./05-DATA-MODEL.md)
+- [12 — Security](./12-SECURITY.md)
+- [Map of Architecture](./00-MAP-OF-ARCHITECTURE.md)

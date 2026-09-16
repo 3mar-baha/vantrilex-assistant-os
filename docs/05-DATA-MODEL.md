@@ -1,3 +1,7 @@
+---
+tags: [architecture]
+---
+
 # 05 — Data Model (vault records, wire entities, indexes)
 
 ## 1. Vault directories (PARA backbone, expansion-only)
@@ -45,3 +49,9 @@ Tunnel verbs: `openclaw.perceive` (+`full`), `.act` (op + `confirmation_id?`),
 skips `.obsidian/`, `State/`; scoring alias+10, title×3, tags×2, body×1;
 top-3 ≤600-char injection block. 90-day hot window helper over the local
 mirror; deep history stays in cold RAG (same index walks everything).
+
+## See also (graph links)
+
+- [04 — System Architecture](./04-ARCHITECTURE.md)
+- [06 — API Specification](./06-API-SPECIFICATION.md)
+- [Map of Architecture](./00-MAP-OF-ARCHITECTURE.md)

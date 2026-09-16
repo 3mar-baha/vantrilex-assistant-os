@@ -55,13 +55,22 @@ def _make_settings():
 
 
 def in_active_window(now, tzname: str, start: str = "08:00", end: str = "23:30") -> bool:
+    """Hermetic mirror of src.bot.in_active_window: the window is END-INCLUSIVE
+    ([start, end], overnight wraps supported) per the ratified spec
+    (tests/test_bridge_online.py::test_active_window_amman_bounds pins
+    23:30 -> True). Script-local so the benchmark never imports the bot shell."""
     from zoneinfo import ZoneInfo
     local = now.astimezone(ZoneInfo(tzname))
-    s = local.replace(hour=int(start[:2]), minute=int(start[3:]), second=0, microsecond=0)
-    e = local.replace(hour=int(end[:2]), minute=int(end[3:]), second=0, microsecond=0)
-    if s < e:
-        return s <= local < e
-    return local >= s or local < e
+    point = (local.hour, local.minute)
+
+    def _hhmm(value: str) -> tuple[int, int]:
+        hours, _, minutes = value.strip().partition(":")
+        return int(hours), int(minutes or 0)
+
+    lower, upper = _hhmm(start), _hhmm(end)
+    if lower <= upper:
+        return lower <= point <= upper
+    return point >= lower or point <= upper
 
 
 def _amman(hhmm: str):
@@ -145,13 +154,20 @@ async def test_c_destructive_gating(live: bool) -> ScenarioResult:
             _json.dump({"allowed_apps": [{"name": "Command Prompt", "executable": "C:\\Windows\\System32\\cmd.exe", "auto_approve": False}], "restricted_actions": []}, _wf)
         guard = Guard(wl_path)
         e = Executor(guard)
-        result = await e.launch("cmd.exe", confirmation_id=None)
-        assert result.status == "error", "cmd.exe without confirmation must be refused"
-        ok = await e.launch("cmd.exe", confirmation_id="cid-123")
-        assert ok.status == "ok" or "error" in ok.detail, "cmd.exe with confirmation must resolve"
-        dag = build_dag(goal="kill", ops=[], weight=2)
-        assert gate(dag, coordinator=None) == "park"
+        # Hermetic seam stub (benchmark-only): the confirmed-launch branch must
+        # resolve WITHOUT spawning a real process on the owner's machine.
+        async def _fake_spawn(argv: list) -> None:
+            return None
+        e._spawn = _fake_spawn  # harness seam stub; production untouched
+        refused = await e.launch("cmd.exe", confirmation_id=None)
+        assert refused.status == "error", f"cmd.exe without confirmation must be refused, got {refused.status}"
+        assert refused.detail, "refusal must carry a non-empty reason"
+        allowed = await e.launch("cmd.exe", confirmation_id="cid-123")
+        assert allowed.status == "ok", f"cmd.exe with confirmation must resolve, got {allowed.status}: {allowed.detail}"
         op = Op(op=OpKind.HOTKEY, value="Alt+F4")
+        assert SafetyCircuitBreaker.classify(op) == "irreversible"
+        dag = build_dag(goal="close app", ops=[op], weight=2)
+        assert gate(dag, coordinator=None) == "park"
         assert SafetyCircuitBreaker.authorize(op, None) is False
         res.detail = "cmd.exe without confirmation_id=refused; with confirmation_id=allowed; PARK gate active"
         res.passed = True
