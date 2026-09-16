@@ -36,7 +36,11 @@ class ScenarioResult:
 GATEWAY_URL = "http://localhost:20128/v1"
 
 
-def gateway_reachable(timeout: float = 2.0) -> bool:
+def gateway_reachable(timeout: float = 15.0) -> bool:
+    """Liveness probe (audit 2026-09-16): the /models catalog holds ~1,400
+    entries and answers in ~2.3 s — a 2 s timeout misreported a live gateway
+    as DEGRADED forever. One-shot check only; turn-level fail-fast budgets
+    elsewhere are untouched."""
     try:
         import httpx
 

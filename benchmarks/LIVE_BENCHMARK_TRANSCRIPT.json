@@ -1,14 +1,14 @@
 {
-  "timestamp": "2026-09-16T15:27:27Z",
+  "timestamp": "2026-09-16T19:51:00Z",
   "gateway": "http://localhost:20128/v1",
-  "mode": "DEGRADED",
+  "mode": "LIVE",
   "scenarios": [
     {
       "test": "A",
       "name": "A-persona-masculine-arabic",
       "tier": "persona",
-      "mode": "DEGRADED",
-      "latency_ms": 1.37,
+      "mode": "LIVE",
+      "latency_ms": 1.29,
       "passed": true,
       "detail": "persona len=4782, Jordanian ar-JO, masculine forms confirmed"
     },
@@ -16,8 +16,8 @@
       "test": "B",
       "name": "B-screen-inspect",
       "tier": "openclaw-inspect",
-      "mode": "DEGRADED",
-      "latency_ms": 3017.07,
+      "mode": "LIVE",
+      "latency_ms": 4305.75,
       "passed": true,
       "detail": "fg=Notepad - report.txt ocr_head=Error 404"
     },
@@ -25,8 +25,8 @@
       "test": "C",
       "name": "C-destructive-gating",
       "tier": "safety",
-      "mode": "DEGRADED",
-      "latency_ms": 3.59,
+      "mode": "LIVE",
+      "latency_ms": 4.5,
       "passed": true,
       "detail": "cmd.exe without confirmation_id=refused; with confirmation_id=allowed; PARK gate active"
     },
@@ -34,8 +34,8 @@
       "test": "D",
       "name": "D-two-tier-memory",
       "tier": "associative",
-      "mode": "DEGRADED",
-      "latency_ms": 4.54,
+      "mode": "LIVE",
+      "latency_ms": 5.8,
       "passed": true,
       "detail": "intent_for(حدّد موعد بكره)=calendar; not in ROUTINE_INTENTS; Tier-1+Tier-2 write-back vault"
     },
@@ -43,8 +43,8 @@
       "test": "E",
       "name": "E-hardware-bridge-quiet-hours",
       "tier": "bridge-quiet",
-      "mode": "DEGRADED",
-      "latency_ms": 2662.01,
+      "mode": "LIVE",
+      "latency_ms": 3897.87,
       "passed": true,
       "detail": "quiet hours 08:00–23:30 Asia/Amman; 30m debounce; overnight 22:00→02:00 wraps"
     },
@@ -52,8 +52,8 @@
       "test": "F",
       "name": "F-four-task-swarm",
       "tier": "stream_heavy",
-      "mode": "DEGRADED",
-      "latency_ms": 231.02,
+      "mode": "LIVE",
+      "latency_ms": 270.31,
       "passed": true,
       "detail": "heavy_chain_for(n_tasks=4, is_dag_swarm)=['nex-agi/nex-n2.5-pro:free', 'groq/openai/gpt-oss-120b']; stream_heavy() method verified at src/gateway.py:313"
     }
