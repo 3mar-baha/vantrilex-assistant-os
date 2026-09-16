@@ -1,1 +1,1 @@
-{"userIgnoreFilters": [".git", ".venv", "__pycache__", ".pytest_cache", ".ruff_cache", ".mypy_cache", "node_modules", "build", "dist", ".ingest", ".claude", "State"]}
+{"userIgnoreFilters": [".git", ".venv", "__pycache__", ".pytest_cache", ".ruff_cache", ".mypy_cache", "node_modules", "build", "dist", ".ingest", ".claude", "State", "archive"]}

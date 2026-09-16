@@ -51,7 +51,7 @@ printed; one live secret exposure is flagged in §3 without quoting it.
 | `tests/live_probe/` | Live (gateway-required) probes | **Keep** | Skipped hermetically by design | Low |
 | `scripts/live_interactive_benchmark.py` | Tests A–F + 5-invariant benchmark | **Keep** (+ Phase 4 hardening) | Mission deliverable; script-only fixes | Med |
 | `scripts/{security_gate,secret_scan,docs_guard,make_release,deploy_smoke,benchmark_500,benchmark_openclaw,live_canary_phase6,live_telegram_tester}.py` | Gates, release, probes | **Keep** | Wired into `make gate`/CI/release | Med |
-| `scripts/{joda_distill,groq_persona_probe,fish_calibration_spike,supervise,cognitive_shadow_observer,joda_schema_probe}.py` | One-off spikes/probes | **Keep** (revisit next audit) | Provenance for calibrations; harmless | Low |
+| `scripts/{joda_distill,groq_persona_probe,fish_calibration_spike,supervise,cognitive_shadow_observer,joda_schema_probe}.py` | One-off spikes/probes | **PARTIAL: 5 spikes RELOCATED → `archive/scratch_scripts/` 2026-09-16; `supervise.py` KEPT (imported by `test_packaging.py`, pinned by Dockerfile CMD)** | Zero importers on the moved five; harmless | Low |
 | `config/whitelist.json` | App/power allowlist (re-read live) | **Keep** | Rule-4 guardrail source | High (to touch) |
 | `config/google_oauth_client.json` | OAuth client secret (on disk) | **Keep ignored** | `gitignore:6` covers `config/google_*.json` ✓ — verify never staged | High (if staged) |
 | `.env.example`, `requirements*.txt`, `Dockerfile`, `Makefile`, `pyproject.toml`, `conftest.py`, `sara.ps1`, `sara.bat` | Env manifest, deps, build, entry | **Keep** | Pins + runbooks | Med |
@@ -59,16 +59,16 @@ printed; one live secret exposure is flagged in §3 without quoting it.
 | `04_Resources/` (tracked KB seed) vs `vault/04_Resources/` (gitignored local copy) | Dialect/KB/style content in two places | **Keep both; owner ruling needed on canonical source** | Tracked copy is the committable seed; vault copy is owner-data working state. Do NOT dedupe without confirmation | Med |
 | `vault/**` (entire tree) | Owner-data working copy of git-backed vault | **Keep ignored** | `gitignore:40` (`vault/`) ✓ — vault edits are local-only, never committed | High (if staged) |
 | `benchmarks/LIVE_BENCHMARK_TRANSCRIPT.json`, `benchmarks/records*.jsonl`, `BENCHMARK_*_REPORT.md`, `DISCOVERY_AND_IMPROVEMENTS.md` | Benchmark evidence | **Keep** | Transcript refreshed this mission | Low |
-| `EXECUTIVE_PROGRESS_REPORT_2026_09_06.md` (17 KB, tracked?) | One-off progress snapshot (root) | **Relocate → `docs/reports/`** | Root must stay entry-point-only; content preserved verbatim | Low |
-| `NIGHT_RUN_REPORT.md` (9 KB) | One-off night-run notes (root) | **Relocate → `docs/reports/`** | Same as above | Low |
-| `MANUAL_TEST_CHECKLIST_2026_09_06.md` (9 KB) | Manual checklist (root) | **Relocate → `docs/reports/`** | Same as above | Low |
-| `AUDIT_AND_PLAN_40_FEATURES.md` (58 KB) | Feature audit + plan (root) | **Relocate → `docs/reports/`** | Same as above | Low |
-| `PROJECT_IDEAS_COMPENDIUM.md` (15 KB) | Idea backlog (root) | **Relocate → `docs/08-ROADMAP.md` appendix or `docs/reports/`** | Decoupling rule: planned work lives in `08-ROADMAP.md` | Low |
-| `run_live_probe.py` (4 KB, root) | Live probe entry (root) | **Relocate → `scripts/`** | Scripts belong in `scripts/` | Low |
-| `tests/reports/*` (`FISH_TAG_CALIBRATION.md`, `FULL_SYSTEM_EXHAUSTIVE_AUDIT.md`, `JODA_SCHEMA_NOTE.md`, `audit_records.jsonl`) | Calibration/audit notes under tests | **Relocate → `docs/reports/` or `benchmarks/`** | Test tree should hold code + fixtures, not reports | Low |
-| `versions/release-v*/CHANGELOG.md` (×10 dirs, tracked) | Generated release snapshots | **Deprecate (consolidate) — confirmation required** | Superseded by root `CHANGELOG.md` + tags `v1.0.x`; history preserved in git even if removed | Med |
-| `compile.txt` (untracked) | Compiler dump | **Never commit → add to `.gitignore`** | Ephemera; not ignored today (verified) | Low |
-| `ruff_out.txt` (untracked) | Linter dump | **Never commit → add to `.gitignore`** | Same as above | Low |
+| `EXECUTIVE_PROGRESS_REPORT_2026_09_06.md` (17 KB) | One-off progress snapshot (root) | **[RELOCATED → `archive/reports/` 2026-09-16]** | Root must stay entry-point-only; content preserved verbatim | Low |
+| `NIGHT_RUN_REPORT.md` (9 KB) | One-off night-run notes (root) | **[RELOCATED → `archive/reports/` 2026-09-16]** | Same as above | Low |
+| `MANUAL_TEST_CHECKLIST_2026_09_06.md` (9 KB) | Manual checklist (root) | **[RELOCATED → `archive/reports/` 2026-09-16]** | Same as above | Low |
+| `AUDIT_AND_PLAN_40_FEATURES.md` (58 KB) | Feature audit + plan (root) | **[RELOCATED → `archive/reports/` 2026-09-16]** | Same as above | Low |
+| `PROJECT_IDEAS_COMPENDIUM.md` (15 KB) | Idea backlog (root) | **[RELOCATED → `archive/reports/` 2026-09-16]** | Decoupling rule: planned work lives in `08-ROADMAP.md` | Low |
+| `run_live_probe.py` (4 KB, root) | Live probe entry (root) | **[RELOCATED → `archive/scratch_scripts/` 2026-09-16]** | Zero importers; scripts belong out of root | Low |
+| `tests/reports/*` (`FISH_TAG_CALIBRATION.md`, `FULL_SYSTEM_EXHAUSTIVE_AUDIT.md`, `JODA_SCHEMA_NOTE.md`, `audit_records.jsonl`) | Calibration/audit notes under tests | **KEPT 2026-09-16 (relocation vetoed): `audit_harness.py` writes `FULL_SYSTEM_EXHAUSTIVE_AUDIT.md` + `audit_records.jsonl` there at runtime** | Test tree should hold code + fixtures, not reports | Low |
+| `versions/release-v*/CHANGELOG.md` (×10 dirs, tracked) | Generated release snapshots | **[RELOCATED → `archive/legacy_versions/versions/` 2026-09-16]** | Superseded by root `CHANGELOG.md` + tags `v1.0.x`; history preserved in git even if removed | Med |
+| `compile.txt` (untracked) | Compiler dump | **[RELOCATED → `archive/ephemera/` 2026-09-16, stays gitignored]** | Ephemera; never committed | Low |
+| `ruff_out.txt` (untracked) | Linter dump | **[RELOCATED → `archive/ephemera/` 2026-09-16, stays gitignored]** | Same as above | Low |
 | `litellm_config.yaml` (untracked) | Gateway config (?) | **Review → `config/` or `.gitignore`** | Untracked + not ignored; owner decides committable vs local | Low |
 | `opencode.json` (untracked) | Harness config **containing a live OpenRouter API key** | **NEVER commit; add to `.gitignore`; rotate the key** | Secret would enter git history on commit. Relative `instructions[]` paths are clean; the `provider.openrouter.options.apiKey` value is the exposure | **High** |
 | `.claude/hooks/*.json`, `.claude/agents/`, `.claude/plugins/` (untracked) | Harness hooks/agents/plugins | **Review for absolute paths/secrets before any commit** | Commit only if generic + machine-independent | Med |

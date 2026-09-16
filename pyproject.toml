@@ -3,8 +3,8 @@
 line-length = 100
 target-version = "py312"
 # Vendored agent-harness content (skills/hooks/checkpoint) is not project source;
-# upstream owns its formatting.
-extend-exclude = [".claude"]
+# upstream owns its formatting. archive/ holds relocated (non-executed) files.
+extend-exclude = [".claude", "archive"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

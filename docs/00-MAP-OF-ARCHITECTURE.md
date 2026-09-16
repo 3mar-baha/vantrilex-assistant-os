@@ -79,5 +79,7 @@ links back here via its own `See also` block — no orphaned nodes.
 
 - [README](../README.md) · [CLAUDE.md](../CLAUDE.md) (agent directives) · [AI-INSTRUCTIONS](../AI-INSTRUCTIONS.md)
 - [CHANGELOG](../CHANGELOG.md) · [CONTRIBUTING](../CONTRIBUTING.md) · [SECURITY](../SECURITY.md)
-- [40-feature audit & plan](../AUDIT_AND_PLAN_40_FEATURES.md) · [Project ideas](../PROJECT_IDEAS_COMPENDIUM.md)
-- [Executive progress 2026-09-06](../EXECUTIVE_PROGRESS_REPORT_2026_09_06.md) · [Night-run report](../NIGHT_RUN_REPORT.md) · [Manual test checklist](../MANUAL_TEST_CHECKLIST_2026_09_06.md)
+## Archived reports (moved 2026-09-16 — manifest in `archive/README.md`)
+
+- [40-feature audit & plan](./../archive/reports/AUDIT_AND_PLAN_40_FEATURES.md) · [Project ideas](./../archive/reports/PROJECT_IDEAS_COMPENDIUM.md)
+- [Executive progress 2026-09-06](./../archive/reports/EXECUTIVE_PROGRESS_REPORT_2026_09_06.md) · [Night-run report](./../archive/reports/NIGHT_RUN_REPORT.md) · [Manual test checklist](./../archive/reports/MANUAL_TEST_CHECKLIST_2026_09_06.md)

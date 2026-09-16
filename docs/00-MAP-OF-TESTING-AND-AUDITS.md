@@ -58,7 +58,7 @@ back here via its own `See also` block — no orphaned nodes.
 - [Full-system exhaustive audit](../tests/reports/FULL_SYSTEM_EXHAUSTIVE_AUDIT.md)
 - [JODA schema note](../tests/reports/JODA_SCHEMA_NOTE.md)
 
-## Release snapshots (consolidation candidates per audit — linked until moved)
+## Release snapshots (archived 2026-09-16 — manifest in `archive/README.md`)
 
-- [v1.1 pass 1](../versions/release-v1.1-pass1/CHANGELOG.md) · [pass 2](../versions/release-v1.1-pass2/CHANGELOG.md) · [pass 3](../versions/release-v1.1-pass3/CHANGELOG.md) · [pass 4](../versions/release-v1.1-pass4/CHANGELOG.md) · [pass 5](../versions/release-v1.1-pass5/CHANGELOG.md)
-- [v2.0 pass 1](../versions/release-v2.0-pass1/CHANGELOG.md) · [pass 2](../versions/release-v2.0-pass2/CHANGELOG.md) · [pass 3](../versions/release-v2.0-pass3/CHANGELOG.md) · [pass 4](../versions/release-v2.0-pass4/CHANGELOG.md) · [pass 5](../versions/release-v2.0-pass5/CHANGELOG.md)
+- [v1.1 pass 1](./../archive/legacy_versions/versions/release-v1.1-pass1/CHANGELOG.md) · [pass 2](./../archive/legacy_versions/versions/release-v1.1-pass2/CHANGELOG.md) · [pass 3](./../archive/legacy_versions/versions/release-v1.1-pass3/CHANGELOG.md) · [pass 4](./../archive/legacy_versions/versions/release-v1.1-pass4/CHANGELOG.md) · [pass 5](./../archive/legacy_versions/versions/release-v1.1-pass5/CHANGELOG.md)
+- [v2.0 pass 1](./../archive/legacy_versions/versions/release-v2.0-pass1/CHANGELOG.md) · [pass 2](./../archive/legacy_versions/versions/release-v2.0-pass2/CHANGELOG.md) · [pass 3](./../archive/legacy_versions/versions/release-v2.0-pass3/CHANGELOG.md) · [pass 4](./../archive/legacy_versions/versions/release-v2.0-pass4/CHANGELOG.md) · [pass 5](./../archive/legacy_versions/versions/release-v2.0-pass5/CHANGELOG.md)
