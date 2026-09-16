@@ -117,3 +117,26 @@ printed; one live secret exposure is flagged in §3 without quoting it.
 ```
 
 *End of proposal. No file was created, moved, or deleted except this report.*
+
+## 6. Deep physical reorganization review (2026-09-16 — executed + vetoed)
+
+Executed (all gitignored/untracked, zero suite impact):
+
+| Action | Reclaimed |
+|---|---|
+| `_reference_repo/` (583 KB) → `archive/_reference_repo/` (filesystem move, stays ignored) | decluttered root |
+| Root `__pycache__/`, `.ruff_cache/`, `.coverage` (491 KB), `.ingest/` deleted | ~0.5 MB + dirs |
+| `Untitled.canvas` (2 B Obsidian debris, prior session) deleted | — |
+
+Vetoed (moves would break pinned contracts — evidence):
+
+| Proposed move | Veto evidence |
+|---|---|
+| `04_Resources/` → `vault/` | `src/vault.py:79-80` resolves repo-root `04_Resources/` as mirror SOURCE; `test_rag_vault_sync.py:16` pins `SOURCE = REPO/"04_Resources"`; `test_packaging.py:120` + 6 resilience tests read root-relative paths; `vault/` is gitignored → move = silent deletion from git |
+| `common/` → `src/` | top-level `common.protocol`/`common.consent` imported by `src/bot.py`, `src/bridge_server.py`, `src/pc_actions.py`, `bridge/daemon.py`, ~12 test files |
+| `config/` → `src/` | `config/whitelist.json` hardcoded in `src/bot.py` (×3), `src/app_indexer.py`, `bridge/__main__.py`, `bridge/daemon.py` (×2), `audit_harness.py`, `test_bridge_extensions.py` |
+| `data/` → `src/`/`tests/fixtures/` | runtime paths (`data/app_sessions`, `data/inbox`, `data/joda`) in `bridge/__main__.py` + scripts; `data/` is gitignored runtime state, must stay untracked |
+| `CHANGELOG.md` → `docs/` | `scripts/make_release.py:28` (`REPO/"CHANGELOG.md"`); release tooling + `test_release_metadata.py` pin root |
+| `requirements*.txt` → `requirements/` | `test_packaging.py:119,242`, `test_release_metadata.py:44`, `test_openclaw_core.py:194,196` read root files; `Dockerfile`/`ci.yml`/`Makefile` consume root paths |
+| `CONTRIBUTING.md` / `SECURITY.md` → `.github/` or `docs/` | root is the GitHub-native home; hook allowlists name root files; zero functional gain |
+| `AI-INSTRUCTIONS.md` → `docs/` | `opencode.json` `instructions[]` references the root path; move breaks harness config |
