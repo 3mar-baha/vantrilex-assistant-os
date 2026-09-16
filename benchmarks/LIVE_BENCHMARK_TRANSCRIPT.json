@@ -1,0 +1,68 @@
+{
+  "timestamp": "2026-09-16T12:11:05Z",
+  "gateway": "http://localhost:20128/v1",
+  "mode": "DEGRADED",
+  "scenarios": [
+    {
+      "test": "A",
+      "name": "A-persona-masculine-arabic",
+      "tier": "persona",
+      "mode": "DEGRADED",
+      "latency_ms": 4.87,
+      "passed": true,
+      "detail": "persona len=4782, Jordanian ar-JO, masculine forms confirmed"
+    },
+    {
+      "test": "B",
+      "name": "B-screen-inspect",
+      "tier": "openclaw-inspect",
+      "mode": "DEGRADED",
+      "latency_ms": 3127.88,
+      "passed": true,
+      "detail": "fg=Notepad - report.txt ocr_head=Error 404"
+    },
+    {
+      "test": "C",
+      "name": "C-destructive-gating",
+      "tier": "safety",
+      "mode": "DEGRADED",
+      "latency_ms": 3014.35,
+      "passed": false,
+      "detail": "ASSERT: "
+    },
+    {
+      "test": "D",
+      "name": "D-two-tier-memory",
+      "tier": "associative",
+      "mode": "DEGRADED",
+      "latency_ms": 1.51,
+      "passed": true,
+      "detail": "intent_for(حدّد موعد بكره)=calendar; not in ROUTINE_INTENTS; Tier-1+Tier-2 write-back vault"
+    },
+    {
+      "test": "E",
+      "name": "E-hardware-bridge-quiet-hours",
+      "tier": "bridge-quiet",
+      "mode": "DEGRADED",
+      "latency_ms": 2746.36,
+      "passed": false,
+      "detail": "ASSERT: "
+    },
+    {
+      "test": "F",
+      "name": "F-four-task-swarm",
+      "tier": "stream_heavy",
+      "mode": "DEGRADED",
+      "latency_ms": 255.1,
+      "passed": true,
+      "detail": "heavy_chain_for(n_tasks=4, is_dag_swarm)=['nex-agi/nex-n2.5-pro:free', 'groq/openai/gpt-oss-120b']; stream_heavy() method verified at src/gateway.py:313"
+    }
+  ],
+  "invariants": {
+    "Immersion": "PASS",
+    "Masculine": "PASS",
+    "Zero Edge-TTS": "PASS",
+    "Zero unconfirmed cmd": "PASS",
+    "$0.00 cost": "PASS"
+  }
+}

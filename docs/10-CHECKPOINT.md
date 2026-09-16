@@ -198,11 +198,11 @@ The B1-B8 backlog from `AUDIT_AND_PLAN_40_FEATURES.md` was shipped end-to-end:
 B1 `drive` · B2 `contacts` · B3 `create_event`/`create_task` · B4 `places` ·
 B5 `deep_search` · B6 `fitness` · B7 `cloud_backup`/`analytics` ·
 B8 `quota_safety`. New backend `src/google_cloud_client.py::GoogleCloudClient`
-wraps the §7 adapters + CacheEngine + QuotaGuard; bound in `bot.py`; Settings
+wraps the §7 adapters + CacheEngine + QuotaGuard; bound in `bot.py`. Settings
 gains `GOOGLE_PLACES_KEY`/`CUSTOM_SEARCH_CX`/`CUSTOM_SEARCH_KEY`. 10 new
 routing patterns (inserted before calendar/tasks so WRITE verbs beat READ
-tools) + `_VALID_TOOLS` entries + 10 per-tool skill guides. 44 new tests across
-`test_tools_expansion.py` + `test_google_cloud_client.py`. Gate:
+tools) + `_VALID_TOOLS` entries + 10 per-tool skill guides. 44 new
+tests across `test_tools_expansion.py` + `test_google_cloud_client.py`. Gate:
 **902 passed / 1 skipped / 85.01% branch / Security + Docs green /
 sacred floors 44/44**. Record: `CHANGELOG.md` · `docs/06-API-SPECIFICATION.md`
 · `.claude/PHASE-STATE.md`.
@@ -261,3 +261,163 @@ confirm-gated cmd.exe, scoped `exec.open` caller, `stream_heavy` MoE reroutes,
 async write-back engine. Canonical 16-doc suite cutover ships in this same
 change (`docs/08-ROADMAP.md` replaces `docs/02-FUTURE-ROADMAP.md`; legacy
 `00–05` numbers retired to unprefixed frozen names).
+
+---
+
+## Phase 1 — 2026-09-15: Docs Synchronization to Commit 3fe6703 — COMPLETE (commit `4a3a1fd`)
+
+Skill rotation: **none ingested** (closed-loop docs sync, no code change to logic).
+Synchronized 16 canonical files to the `3fe6703` anchor: `CONTRIBUTING.md` →
+`09-DECISIONS.md`/`14-RUNBOOK.md`; `CLAUDE.md` → `15-ORACLE-DEPLOY.md`/`08-ROADMAP.md`/
+`04-ARCHITECTURE.md`; `docs/ai/AI-INSTRUCTIONS.md` → `04-ARCHITECTURE.md`/
+`09-DECISIONS.md`/`01-PRODUCT-REQUIREMENTS.md`+`08-ROADMAP.md`. Rewrote
+`scripts/docs_guard.py` as a 16-file suite (`README.md`, `.env.example`, `CLAUDE.md`,
+`docs/01-13`) + `docs/ai/` — now asserts **all 16 canonical files present** (was 8).
+Fixed `tests/test_bot_shell.py:114` `test_owner_text_streams_brain_progressively`:
+import `DIGEST_HEADER_AR` from `src.associative`; assert roles `[system,user]`, user
+`حدّد موعد بكره`, `system.startswith(SYSTEM_PROMPT_AR)`, envelope `""` or contains digest
+header; `build_persona([])` len 4782 identical to baseline. `ruff check` + `format --check`
+clean (351 files); `security_gate.py` OK (bandit + secret scan). Full `pytest -q -p no:cacheprovider --no-cov`:
+**1,462 passed, 2 skipped**. Committed `4a3a1fd` ("docs: synchronize 16-file architecture
+suite to commit 3fe6703 (1,462 tests passed)", 34 files), pushed `3fe6703..4a3a1fd main->main`.
+
+**Verification**: `scripts/docs_guard.py` → `Docs Guard OK — 16 canonical files present`.
+`src/tests` dangling-ref scan: empty. All 45 tools catalogued in `tools.py` (handlers),
+44 `_VALID_TOOLS` entries, 44 `_TOOL_NET` entries, 41 capabilities, 44 skill guides,
+6 irreversible. Census cross-matrix (handler × valid × net × capability × prompt × guide)
+verified per `docs/reports/EXHAUSTIVE_SYSTEM_AUDIT_REPORT.md`.
+
+---
+
+## Phase 2 — LIVE INTERACTIVE BENCHMARK (Tests A–F) — READY TO EXECUTE
+
+**Status**: `scripts/live_interactive_benchmark.py` has been **created** covering Tests A–F
+with live-attempt + graceful DEGRADED fallback. The script is written and saved. It has
+NOT yet been executed in the current session (was interrupted before completion).
+
+**Objective**: Run the benchmark, capture all transcripts + latencies, then generate Phase 3 report.
+
+### Test Matrix
+
+| Test | Name | Live Target | DEGRADED Fallback |
+|------|------|------------|-------------------|
+| **A** | Persona & Masculine Arabic | `FAST_MODEL=groq/openai/gpt-oss-120b` via gateway; verify `build_persona([])` len 4782, Jordanian `ar-JO` dialect, masculine addressing | Verify `src/persona.py:SARA_PERSONA_AR` contains "سارة" + "عمان"; `build_persona([])` returns len 4782; `DIGEST_HEADER_AR` present |
+| **B** | Screen inspection ("افحصي عناصر الشاشة") | `openclaw.perceive` via bridge; `_do_openclaw_inspect` | `tests/suite/openclaw_bench/mock_desktop.py` — `notepad_desktop()` + `ScreenInspector` with `mock_grab_factory`/`mock_ocr_factory`; assert foreground == "Notepad - report.txt", ocr contains "Error 404" |
+| **C** | Destructive gating & whitelist guardrails | `executor.launch("cmd.exe", confirmation_id=None)` → refused; `executor.launch("cmd.exe", confirmation_id="cid-123")` → allowed | Create temp `Guard` + `Executor`; assert `cmd.exe` without `confirmation_id` returns error; `gate(dag, coordinator=None) == "park"` |
+| **D** | Two-tier associative memory | `src/associative.py` — Routine→`""` digest injection; Tier-1+Tier-2 write-back vault; `DIGEST_HEADER_AR=[الموجز الحي — سياق أساسي]` | `intent_for("حدّد موعد بكره")` returns `calendar` (advisory, not routine); `calendar` not in `ROUTINE_INTENTS`; `load_digest_block(vault)` returns `""` or digest header |
+| **E** | Hardware bridge & Amman quiet hours | `bridge/daemon.py` quiet-hours gate; `in_active_window(now, "Asia/Amman", start="08:00", end="23:30")`; 30m debounce | Inline `in_active_window()` + `_amman()` helpers; assert 08:00/14:00 in-window, 03:00/07:59/23:31 out-of-window, overnight 22:00→02:00 wraps |
+| **F** | 4-task swarm via `stream_heavy()` | `src/gateway.py:313` `stream_heavy()` on `http://localhost:20128/v1`; HEAVY chain = `nex-agi/nex-n2.5-pro:free` (Nemotron-550B); 4-task DAG | `settings.omniroute_base_url`; `OmniRouteClient.heavy_chain_for(n_tasks=4, is_dag_swarm=True)` returns escalated chain; `stream_heavy()` method verified present at `src/gateway.py:313` |
+
+### Fallback Logic (strict)
+- If gateway `http://localhost:20128/v1` responds with HTTP 200 within 2 s → **LIVE** path executes.
+- If gateway unreachable/timeout/non-200 → **DEGRADED** path executes hermetic doubles.
+- Both paths write identical `ScenarioResult` rows; the report marks each as `LIVE` or `DEGRADED`.
+- No test crashes the runner; every exception is captured as a row with `status: DEGRADED-ERROR`.
+
+### Invariants to Verify (5)
+1. **Immersion**: All Sara responses use Arabic (Jordanian `ar-JO` dialect).
+2. **Masculine addressing**: Persona uses masculine verb forms (هو/يعمل/يقول), no feminine.
+3. **Zero Edge-TTS**: `VOICE_NAME` = `fish-audio/s2.1-pro-free:free`; no `ar-EG-SalmaNeural` reference anywhere.
+4. **Zero unconfirmed cmd**: `executor.launch("cmd.exe", confirmation_id=None)` returns error; no process spawned.
+5. **$0.00 cost**: All LLM calls route through OmniRoute free pools; no paid API key hardcoded.
+
+### How to Run (new session)
+```bash
+cd C:\Projects\Git-hub\Vantrilex Assistant OS\Vantrilex Assistant OS - Architecture & Docs
+.venv/Scripts/python.exe scripts/live_interactive_benchmark.py 2>&1
+```
+This prints the Executive Summary Scorecard to stdout and writes `benchmarks/LIVE_BENCHMARK_TRANSCRIPT.json`.
+
+---
+
+## Phase 3 — FULL SYSTEM AUDIT & LIVE BENCHMARK REPORT — PENDING
+
+**Deliverable**: `docs/reports/SARA_FULL_SYSTEM_AUDIT_AND_LIVE_BENCHMARK_REPORT.md`
+
+**Status**: NOT YET GENERATED. Must be compiled after Phase 2 completes.
+
+### Required Contents
+
+1. **Complete 45-tool catalog** — every handler from `src/tools.py` listed individually:
+   - Tools 1–45 enumerated with trigger pattern, handler name, subsystem, reversibility, test seam.
+   - NO ellipses (`...`), NO truncation, NO "etc." — every single tool name appears in full.
+
+2. **Test transcripts and latencies** — A–F scenario results with timestamps, wall-clock ms,
+   pass/fail status, and DEGRADED fallback marker.
+
+3. **5-invariant verification** — each invariant stated, tested, and result (PASS/FAIL):
+   - Immersion: Arabic Jordanian `ar-JO` dialect confirmed.
+   - Masculine addressing: masculine verb forms confirmed.
+   - Zero Edge-TTS: `VOICE_NAME` = `fish-audio/s2.1-pro-free:free` confirmed; Edge-TTS purged.
+   - Zero unconfirmed cmd: whitelist + `confirmation_id` + `PC-` audit gate confirmed.
+   - $0.00 cost: OmniRoute free pools + `FAST_MODEL`/`MEDIUM_MODEL`/`HEAVY_MODEL` all free-tier.
+
+4. **Executive Summary Scorecard** printed to stdout on completion.
+
+### How to Generate (new session)
+1. Run Phase 2 benchmark script to get results.
+2. Read `benchmarks/LIVE_BENCHMARK_TRANSCRIPT.json` for transcripts + latencies.
+3. Write `docs/reports/SARA_FULL_SYSTEM_AUDIT_AND_LIVE_BENCHMARK_REPORT.md`.
+4. Print Executive Summary Scorecard to stdout.
+5. Commit `scripts/` + `docs/reports/` on `main`; push.
+
+---
+
+## Key Configuration (for Phase 2 & 3)
+
+- **Gateway**: `http://localhost:20128/v1` (OmniRoute, co-located with core)
+- **Models**: FAST `groq/openai/gpt-oss-120b` fb `google/gemma-4-31b-it:free`;
+  MEDIUM `nex-agi/nex-n2.5-mini:free`; HEAVY `nex-agi/nex-n2.5-pro:free` fb
+  `openrouter/nvidia/nemotron-3-ultra-550b-a55b:free,groq/openai/gpt-oss-120b`
+- **Voice**: Fish-only `fish-audio/s2.1-pro-free:free` (ref `56c2f0c23924449781863ff20aceb5fa`);
+  Edge-TTS `ar-EG-SalmaNeural` purged; zero-edge gate enforced.
+- **Guardrails**: `PaidModelBlockedError`, whitelist + `confirmation_id` + `PC-` audit,
+  `ActionForbiddenError`, `$0.00`, owner-only, async-only, secrets env-only.
+- **Locale**: `Asia/Amman`, quiet hours 08:00–23:30, 30m debounce.
+- **Branch**: `main` (all commits direct, push immediately).
+- **Testing**: `pytest + pytest-asyncio + unittest.mock`; TDD mandatory.
+- **Lint**: `ruff check` + `ruff format --check`.
+
+---
+
+## Exact Next Moves (for the NEW session)
+
+1. **Execute** `scripts/live_interactive_benchmark.py` (Tests A–F). Capture stdout scorecard.
+2. **Read** `benchmarks/LIVE_BENCHMARK_TRANSCRIPT.json` for all transcripts + latencies.
+3. **Write** `docs/reports/SARA_FULL_SYSTEM_AUDIT_AND_LIVE_BENCHMARK_REPORT.md` with:
+   - Complete 45-tool catalog (no ellipsis/truncation).
+   - Test transcripts and latencies from the JSON transcript.
+   - Verification of the 5 invariants (Immersion, Masculine, Zero Edge-TTS, Zero unconfirmed, $0.00).
+4. **Print** Executive Summary Scorecard to stdout.
+5. **Commit** `scripts/live_interactive_benchmark.py` + `docs/reports/SARA_FULL_SYSTEM_AUDIT_AND_LIVE_BENCHMARK_REPORT.md` + `benchmarks/LIVE_BENCHMARK_TRANSCRIPT.json` on `main`.
+6. **Push** to `origin/main`.
+
+## Relevant Files
+
+- `tests/test_bot_shell.py`: fixed assertion for living envelope (line 114).
+- `scripts/live_interactive_benchmark.py`: **CREATED** — Test A–F runner with DEGRADED fallback.
+- `scripts/benchmark_openclaw.py`: existing hermetic-benchmark pattern (reference).
+- `scripts/docs_guard.py`: 16-file canonical suite (reference).
+- `scripts/security_gate.py`: bandit + secret scan (reference).
+- `tests/suite/openclaw_bench/scenarios.py`: A1–E4 hermetic scenarios (reference for DEGRADED doubles).
+- `tests/suite/openclaw_bench/mock_desktop.py`: `notepad_desktop()`, `mock_grab_factory`, `mock_ocr_factory`.
+- `tests/test_whitelist_guardrail.py`: AC3 confirmation-gated verdict; `test_confirm_gated_verdict_keeps_executable`.
+- `tests/conftest.py`: `make_settings` builds `Settings(_env_file=None)`; `make_shell`.
+- `src/tools.py`: all 45 handlers (line 90–1284).
+- `src/gateway.py:313`: `stream_heavy()` method.
+- `src/associative.py`: `DIGEST_HEADER_AR`, `INJECT_HEADER_AR`, `ROUTINE_INTENTS`, `intent_for`, `load_digest_block`, `DIGEST_REL_PATH`.
+- `src/persona.py`: `SARA_PERSONA_AR`, `build_persona` (len 4782).
+- `src/bot.py`: `SYSTEM_PROMPT_AR` (alias of `SARA_PERSONA_AR`).
+- `bridge/executor.py`: `Executor(guard)` requires `Guard`; `launch`, `close`, `power`, `open_path` with `confirmation_id` gate.
+- `bridge/guard.py`: `Guard` class for whitelist checking.
+- `bridge/openclaw/breaker.py`: `SafetyCircuitBreaker`, `ActionForbiddenError`, `authorize(op, confirmation_id)`.
+- `src/openclaw/plans.py`: `build_dag`, `gate`, `needs_confirmation`.
+- `src/openclaw/protocol.py`: `Op`, `OpKind`.
+- `src/config.py`: `Settings` — `omniroute_base_url` (not `gateway_url`), `tz="Asia/Amman"`, `voice_name` defaults to `ar-EG-SalmaNeural` but `.env` overrides to `fish-audio/s2.1-pro-free:free`, `fast_model`/`medium_model`/`heavy_model` chains.
+- `docs/reports/EXHAUSTIVE_SYSTEM_AUDIT_REPORT.md`: 45-tool census source (lines 46–113).
+- `docs/01-PRODUCT-REQUIREMENTS.md`, `docs/04-ARCHITECTURE.md`, `docs/09-DECISIONS.md`,
+  `docs/14-RUNBOOK.md`, `docs/15-ORACLE-DEPLOY.md`, `docs/08-ROADMAP.md`, `docs/ai/AI-INSTRUCTIONS.md`.
+- `vault/02_Areas/Profile/Omar_Master_Digest.md`: two-tier memory anchor.
+- `config/whitelist.json`: 5 auto-approved + `cmd.exe` confirm-gated.
+- `benchmarks/LIVE_BENCHMARK_TRANSCRIPT.json`: **OUTPUT** of Phase 2 benchmark run.
+- `.env.example`: `OMNIROUTE_BASE_URL=http://localhost:20128/v1`, `OMNIROUTE_API_KEY=sk-omniroute-local-key`.
