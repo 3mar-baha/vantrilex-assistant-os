@@ -87,7 +87,7 @@ tags: [security]
 
 ## See also (graph links)
 
-- [04 — System Architecture](./04-ARCHITECTURE.md)
-- [12 — Security](./12-SECURITY.md)
-- [Master Roadmap](./MASTER_ROADMAP_AND_REMAINING_WORK.md)
-- [Map of Architecture](./00-MAP-OF-ARCHITECTURE.md)
+- [04 — System Architecture](../04-ARCHITECTURE.md)
+- [12 — Security](../12-SECURITY.md)
+- [Master Roadmap](../MASTER_ROADMAP_AND_REMAINING_WORK.md)
+- [Map of Architecture](../00-MAP-OF-ARCHITECTURE.md)
