@@ -46,3 +46,6 @@ ruff_out.txt
 # Harness config under review — never commit while it carries machine secrets
 opencode.json
 litellm_config.yaml
+
+# Obsidian local UI state (pane layout, open files — machine-specific)
+.obsidian/workspace.json
