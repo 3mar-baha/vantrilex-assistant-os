@@ -1,0 +1,8 @@
+{
+  "plugins": [
+    "claude-plugins-official/code-review",
+    "claude-plugins-official/commit-commands",
+    "claude-plugins-official/typescript-lsp",
+    "claude-plugins-official/pyright-lsp"
+  ]
+}

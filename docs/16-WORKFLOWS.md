@@ -9,28 +9,31 @@ tags: [architecture]
 > [Map of Testing & Audits](./00-MAP-OF-TESTING-AND-AUDITS.md) ·
 > [Checkpoint](./10-CHECKPOINT.md) · [Testing](./11-TESTING.md).
 
-## 0. Activation manifest (verified 2026-09-16; no `VANTRILEX_CATALOG.md` exists in-repo)
+## 0. Activation manifest (100% ACTIVE — ingested 2026-09-16 from `O:\Claude Code\vantrilex\vantrilex-registry`)
 
 Baseline (17) — all present locally:
 
-| # | Component | Location | Status |
+| # | Component | On-disk path | Status |
 |---|---|---|---|
-| 1–5 | Skills `ask-matt`, `code-review`, `find-skills`, `ponytail`, `skill-creator` | `.claude/skills/` | **Active** |
-| 6–10 | MCPs `filesystem`, `fetch`, `memory`, `openrouter`, `sequential-thinking` | `opencode.json` | **Active** (untracked; carries a live key — never commit) |
-| 11 | Plugin `commit-commands` | `.claude/plugins/manifest.json` | **Active** |
-| 12–13 | Plugins `code-review`, `typescript-lsp` (+ `pyright-lsp`) | — | **Missing** (manifest holds `circuit-breaker-guard`, `context-primer` instead) |
+| 1–5 | Skills `ask-matt`, `code-review`, `find-skills`, `ponytail`, `skill-creator` | `.claude/skills/<name>/` | **Active** (full bodies) |
+| 6–10 | MCPs `filesystem`, `fetch`, `memory`, `openrouter`, `sequential-thinking` | `opencode.json` → `mcp` | **Active** (untracked; carries a live key — never commit) |
+| 11–13 | Plugins `code-review`, `commit-commands`, `typescript-lsp` (+ elite `pyright-lsp`) | `.claude/plugins/manifest.json` | **Active** (`claude-plugins-official/*`) |
 | 14–16 | Hooks `session-start`, `pre-compact`, `block-dev-servers-outside-tmux-…` | `.claude/hooks/` + `settings.json` | **Active** |
 | 17 | Agent `architect` | `.claude/agents/architect.md` | **Active** |
 
-Elite additions — ingested from the local toolkit cache (untracked, rotation rule):
+Elite additions — sourced per-component (untracked, rotation rule):
 
-| Component | Source | Status |
+| Component | Source → on-disk path | Status |
 |---|---|---|
-| `clean-code-guard`, `test-guard`, `upstream-docs-guard` | `guard-skills` cache | **Active** (`docs-guard` renamed: repo already owns `scripts/docs_guard.py`) |
-| `securing-agentic-ai-tool-invocation` | `cybersecurity` cache | **Active** |
-| `git-guardrails` | `mattpocock-skills` cache | **Active** (source dir `git-guardrails-claude-code`) |
-| `tdd` | local `tdd-workflow` skill | **Covered** (name differs, contract identical) |
-| `varlock-claude-skill`, `obsidian-knowledge-brain`, `obsidian-tc`, `Knowledge Graph Engineer`, `pytest-skill`, `pyright-lsp`, `block-creation-of-random-md-files`, `session-end` | — | **Pending** (no catalog, no cache, no URLs — owner supplies source) |
+| `clean-code-guard`, `test-guard`, `upstream-docs-guard` | toolkit cache `guard-skills` → `.claude/skills/` | **Active** (full bodies; `docs-guard` renamed — repo already owns `scripts/docs_guard.py`) |
+| `securing-agentic-ai-tool-invocation` | toolkit cache `cybersecurity` → `.claude/skills/` | **Active** (full body) |
+| `git-guardrails` | toolkit cache `mattpocock-skills` → `.claude/skills/` | **Active** (full body; source dir `git-guardrails-claude-code`) |
+| `tdd` | toolkit cache `mattpocock-skills` → `.claude/skills/tdd/` | **Active** (full body; local `tdd-workflow` retained) |
+| `pytest-skill`, `poka-yoke`, `obsidian-knowledge-brain`, `varlock-claude-skill` | registry index cards → `.claude/skills/<name>/SKILL.md` | **Active (indexed)** — intent + workflow + upstream Raw URL; full body fetched on demand |
+| `block-creation-of-random-md-files-…`, `session-end` | upstream `everything-claude-code/hooks.json` + cached `memory-persistence` → `.claude/hooks/` | **Active** (adapted: repo doc-homes `docs/`, `archive/`, `benchmarks/`, `vault/` stay writable so `/sync` works) |
+| `Knowledge Graph Engineer`, `Workflow Architect`, `Application Security Engineer` | toolkit cache `agency-agents` → `.claude/agents/` | **Active** (full bodies; AppSec = `security-appsec-engineer.md`) |
+| MCPs `obsidian-tc` (vault path), `calllint`, `time` | registry cards → `opencode.json` → `mcp` | **Active** |
+| MCP `sqlite` | registry card → `opencode.json` → `mcp` | **Active (dormant)** — `enabled: false` until a target DB exists (`data/sara.db` placeholder) |
 
 Standing rules: `.claude/skills/` is gitignored (sprint rotation + teardown);
 `opencode.json` / `.mcp.json` / `vault/` / `.env` are never committed;
