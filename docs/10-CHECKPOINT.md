@@ -431,4 +431,5 @@ This prints the Executive Summary Scorecard to stdout and writes `benchmarks/LIV
 - [07 — Implementation Plan](./07-IMPLEMENTATION-PLAN.md)
 - [11 — Testing](./11-TESTING.md)
 - [Objectives Ledger](./reports/OBJECTIVES_LEDGER_MET_VS_PENDING.md)
+- [System & Codebase Encyclopedia](./reports/SARA_EXHAUSTIVE_SYSTEM_AND_CODEBASE_ENCYCLOPEDIA.md)
 - [Map of Testing & Audits](./00-MAP-OF-TESTING-AND-AUDITS.md)
