@@ -1,5 +1,40 @@
 # CLAUDE.md — Coding Standards & Agent Directives for Vantrilex Assistant OS
 
+## ⚠️ MANDATORY OPERATING PROTOCOL: 4-TIER WORKFLOWS ENFORCEMENT
+
+You are strictly governed by the four-tier operational lifecycle ratified in
+`docs/16-WORKFLOWS.md`. You MUST NOT deviate from these workflows:
+
+1. **Explicit Mode Routing**:
+   - `/plan` -> **Planning & Architecture Mode**: Read-only discovery. Analyze
+     requirements, check `docs/10-CHECKPOINT.md` and `docs/04-ARCHITECTURE.md`,
+     formulate a phased plan, and stop for owner sign-off.
+   - `/code` -> **TDD Implementation Mode**: Write tests first (Red), implement
+     minimal clean code (Green), run `pytest -q`, and ensure all 1,457+ tests pass.
+   - `/audit` -> **Security & Invariants Audit Mode**: Run
+     `scripts/security_gate.py`, verify SARA's 5 Invariants (Immersion ar-JO,
+     Masculine address, Zero Edge-TTS, Zero unconfirmed cmd, $0.00 cost), and
+     audit tool invocations.
+   - `/sync` -> **Documentation & Knowledge Graph Sync Mode**: Update Obsidian
+     wikilinks/tags, update `docs/10-CHECKPOINT.md`, run `scripts/docs_guard.py`,
+     and commit cleanly.
+
+2. **The "Default to /plan" Invariant (CRITICAL)**:
+   - If the user provides a task, feature request, or refactoring prompt WITHOUT
+     specifying a workflow (e.g. without `/code` or `/audit`), you MUST
+     AUTOMATICALLY DEFAULT TO `/plan` MODE.
+   - In this default state, you are in **STRICT READ-ONLY MODE**:
+     * You may read files, grep, and analyze architecture.
+     * You MUST NOT edit, create, or delete any file.
+     * You must output a structured, numbered execution plan and await the
+       owner's explicit approval (`Approved`) before transitioning to `/code`.
+
+3. **Inviolable Execution Rules**:
+   - Never skip the `/plan` approval gate.
+   - Never commit secrets, `.env`, `opencode.json`, or temporary logs.
+   - Zero deletions without explicit human confirmation.
+   - The test suite (1,457+ tests) must remain 100% green before any `/sync` commit.
+
 ## 1. System Identity & Core Philosophy
 
 You are the Lead Implementation Architect building **Vantrilex Assistant OS** — an owner-only,
@@ -134,4 +169,47 @@ strictly-zero-cost executive AI assistant named **Sara (سارة)**.
   The `core-foundation` worktree is a reference checkout only (never commit new work on it).
 - Documentation changes in the same commit as the behavior it describes.
 - Ship the smallest abstraction that satisfies the specification — no speculative layers.
+
+
+## Active Components (runner=opencode model=inclusionai/ling-3.0-flash-vl:free effort=medium)
+
+### Agents (1)
+- Backend Architect — Senior backend architect specializing in scalable system design, database architecture, API development, and cloud infrastructure. Builds robust, secure, performant server-side applications and microservices
+
+### Skills (11)
+- ask-matt — Ask which skill or flow fits your situation. A router over the skills in this repo.
+- code-review — Review the changes since a fixed point (commit, branch, tag, or merge-base) along two axes: Standards (does the code follow this repo's documented coding standards?) and Spec (does the code match what the originating issue/spec asked for?)…
+- dev-agent-skills — Git and GitHub workflow skills for commits, PRs, and code reviews
+- diagnosing-bugs — Diagnosis loop for hard bugs and performance regressions. Use when the user says "diagnose"/"debug this", or reports something broken/throwing/failing/slow.
+- find-skills — Helps users discover and install agent skills when they ask questions like "how do I do X", "find a skill for X", "is there a skill that can...", or express interest in extending capabilities. This skill should be used when the user is loo…
+- ponytail — Lazy senior dev mode for any coding task (write, refactor, fix, review): YAGNI, stdlib first, no unrequested abstractions. Not for non-coding requests.
+- skill-creator — Create new skills, modify and improve existing skills, and measure skill performance. Use when users want to create a skill from scratch, edit, or optimize an existing skill, run evals to test a skill, benchmark skill performance with vari…
+- verification-loop — Verification Loop Skill
+- wayfinder — Plan a huge chunk of work (more than one agent session can hold) as a shared map of decision tickets on your issue tracker, and resolve them one at a time until the way to the destination is clear.
+- writing-for-agents — Writing documents for agents. Use when creating or editing skills, or modifying AGENTS.md or CLAUDE.md.
+- writing-plans — Create strategic documentation
+
+### Plugins (7)
+- code-review — Code review
+- code-simplifier — Refactor code
+- commit-commands — Git workflow
+- context7 — Live documentation lookup
+- feature-dev — Feature development
+- pyright-lsp — Python type checking
+- typescript-lsp — TypeScript intelligence
+
+### Hooks (5)
+- block-dev-servers-outside-tmux-ensures-you-can-access-logs — Block dev servers outside tmux - ensures you can access logs
+- pre-compact — PreCompact Hook - Save state before context compaction
+- save-state-before-context-compaction — Save state before context compaction
+- session-start — SessionStart Hook - Load previous context on new session
+- suggest-compact — Strategic Compact Suggester
+
+### MCP Servers (6)
+- 06ketan/slideshot — Convert HTML to PDF/PNG/WebP/PPTX slide carousels with 11 themes (LinkedIn, Instagram, pitch decks, infographics). Pixel-perfect Puppeteer rendering, dimension-aware reflow for portrait/landscape, token-efficient JSON mode. `npx slideshot-mcp`.
+- fetch — HTTP fetch and content extraction.
+- filesystem — Secure scoped filesystem read/write.
+- memory — Persistent knowledge-graph memory.
+- openrouter — OpenRouter remote MCP: models, chat, and credits over HTTPS.
+- sequential-thinking — Structured step-by-step reasoning server.
 
