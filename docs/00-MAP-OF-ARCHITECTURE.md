@@ -37,6 +37,10 @@ links back here via its own `See also` block — no orphaned nodes.
 
 - [Map of Testing & Audits](./00-MAP-OF-TESTING-AND-AUDITS.md)
 
+## Capability catalogs
+
+- [Sara's Tools — Uses & Benefits](./reports/SARA_TOOLS_USES_AND_BENEFITS.md)
+
 ## Vault anchors (local working copy, not committed — named, not linked)
 
 - `vault/02_Areas/Profile/Omar_Master_Digest.md` — two-tier memory anchor
