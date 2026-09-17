@@ -43,6 +43,9 @@ vault/
 compile.txt
 ruff_out.txt
 
+# sara.ps1 boot transcripts — local diagnostics, never commit
+logs/
+
 # Harness config under review — never commit while it carries machine secrets
 opencode.json
 litellm_config.yaml

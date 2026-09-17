@@ -513,6 +513,20 @@ Commits: `c1c07e2`/`43311c3` (matrix), `07a5a1c` (overlay), `572f278`
   fail-fast quarantines working as designed); both pass on recovered pools.
 - HALT — master transformation plan P0–P6 complete.
 
+## sara.ps1 full-stack hardening (ops, 2026-09-17)
+
+10-item audit + auto-launch OmniRoute (1-click launcher): port-true teardown
+(`Stop-PortOwner` for `$Port` + `:20128` stale nodes), reactive `Wait-PortFree`
+(200 ms), `.venv`/`.env` preflight + in-repo `--health` JSON gate, real HTTP
+probes (`/v1/models`, `/health` — never bare TCP), titled windows (`[SARA Core
+:PORT]` / `[SARA PC Bridge]` / `[SARA OmniRoute Gateway :20128]`),
+ESTABLISHED-dial bridge proof (`Test-BridgeDial`), stale-variable fix
+(`$stillAlive` in final gate) + `TryParse` port validation, `logs/` transcripts
+(gitignored), pwsh-or-powershell parity + quote-safe paths + occupied-port
+fail-fast. Gateway path: reuse-healthy → clear-squatter → `omniroute` (fallback
+`npx omniroute`) → 20 s `/v1/models` wait → `-Force` override. Verified:
+parser 0 errors, `Get-Command` resolves, `-Port abc` fail-fast pre-teardown.
+
 ## Arsenal sanitization (governance, 2026-09-17)
 
 ## Compliance enforcement (governance, 2026-09-17)
