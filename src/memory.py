@@ -17,6 +17,7 @@ import time as _time_mod
 from collections import defaultdict, deque
 from collections.abc import Sequence
 from datetime import UTC, date, datetime, time
+from typing import Final
 from zoneinfo import ZoneInfo
 
 from loguru import logger
@@ -342,6 +343,38 @@ async def load_long_term(vault, *, today: date, max_chars: int = SECTION_CHAR_CA
     return result
 
 
+JODA_BANK_REL_PATH: Final[str] = "04_Resources/Dialect_Encyclopedia/JODA_Pattern_Bank.md"
+JODA_CUES_HEADER_AR: Final[str] = "[لمحات محكية — JODA]"
+JODA_CUES_MAX_CHARS: Final[int] = 300
+JODA_CUES_PER_ACT: Final[int] = 2
+
+
+def joda_cues_block(
+    bank_text: str, *, per_act: int = JODA_CUES_PER_ACT, max_chars: int = JODA_CUES_MAX_CHARS
+) -> str:
+    """Deterministic conversational cues from the P1 bank: first N bullets per
+    `## act` section in file order, joined and capped. Empty when the bank has
+    no sections (missing/malformed bank degrades to no cues, never a crash)."""
+    current: str | None = None
+    taken: dict[str, int] = {}
+    cues: list[str] = []
+    for line in (bank_text or "").splitlines():
+        if line.startswith("## "):
+            current = line[3:].strip()
+            taken.setdefault(current, 0)
+        elif line.startswith("- ") and current is not None and taken[current] < per_act:
+            pattern = line[2:].strip()
+            if pattern:
+                cues.append(pattern)
+                taken[current] += 1
+    if not cues:
+        return ""
+    return (
+        f"{JODA_CUES_HEADER_AR}\n"
+        + " · ".join(cues)[: max(0, max_chars - len(JODA_CUES_HEADER_AR) - 1)]
+    )
+
+
 async def _load_long_term_uncached(vault, *, today: date, max_chars: int = SECTION_CHAR_CAP) -> str:
     from src.dialect import parse_notes, prompt_block
 
@@ -370,6 +403,19 @@ async def _load_long_term_uncached(vault, *, today: date, max_chars: int = SECTI
             # 2.7 (head-vs-tail flaw): facts append to the END — the cap keeps
             # the NEWEST slice so learned facts are always what the brain sees.
             parts.append(section[-max_chars:])
+    # P2.3: unconditional JODA conversational cues — short greetings carry live
+    # dialect even when associative retrieval skips them. Same best-effort
+    # contract: missing/malformed bank degrades to no cues, never a crash.
+    try:
+        bank_text = await vault.read(JODA_BANK_REL_PATH)
+    except FileNotFoundError:
+        bank_text = ""
+    except Exception as error:  # noqa: BLE001 — context is best-effort, chat is not
+        logger.warning("long-term context read failed for JODA bank: {}", error)
+        bank_text = ""
+    cues = joda_cues_block(bank_text) if bank_text else ""
+    if cues:
+        parts.append(cues)
     # Daily ledger via the nested-first reader (flat legacy still honored).
     try:
         from src.vault import read_daily_log
