@@ -458,6 +458,17 @@ derivation, posture-conditioned wheel); P2.3 JODA cues in `load_long_term`
 prose/voice/PC/network/secrets surface). Suite 1,496/7/0, ruff clean,
 security OK. HALT before P3.
 
+## P3 — Fused router + sliced RAG (master transformation plan, 2026-09-17)
+
+P3.1 `rag_domains` fused verdict field (+0ms) + `repair_verdict()` non-throwing
+layer (fence/trailing-comma/schema); `_parse_router` 5-tuple frozen (zero
+collateral); `front.rag_domains` observed state. P3.2 closed budget slicing
+(60/40, 50/30/20, floor-400) + sentence chunks + quarantine-halved ceiling +
+per-hit path citations + legacy header preserved; wired via deterministic
+intent→domain map (model verdict stays observed pending verdict-first
+reorder). Regression caught and fixed: phase-6 citation/header test.
+Suite 1,514/7/0. HALT before P4.
+
 ## Arsenal sanitization (governance, 2026-09-17)
 
 ## Compliance enforcement (governance, 2026-09-17)
