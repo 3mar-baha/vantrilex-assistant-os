@@ -179,8 +179,6 @@ def test_save_chmod_failure_best_effort(tmp_path, monkeypatch):
 
     from src.google_auth import GoogleTokens, save_tokens
 
-    real_chmod = pathlib.Path.chmod
-
     def _boom(self, *args, **kwargs):
         raise OSError("ro fs")
 
