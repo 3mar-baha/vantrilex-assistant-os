@@ -15,4 +15,6 @@ async def test_catalog_and_quarantine_visible():
     assert isinstance(models, list) and len(models) > 0
     from src.gateway import _429_STREAK, _MODEL_COOLDOWNS
 
-    print(f"\n[LIVE-TPM] models={len(models)} cooldowns={len(_MODEL_COOLDOWNS)} streaks={len(_429_STREAK)}")
+    print(
+        f"\n[LIVE-TPM] models={len(models)} cooldowns={len(_MODEL_COOLDOWNS)} streaks={len(_429_STREAK)}"
+    )

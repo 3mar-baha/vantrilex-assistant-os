@@ -28,10 +28,7 @@ def test_injected_route_outside_vocab_rejected():
 
 
 def test_ack_smuggled_instruction_neutralized():
-    raw = (
-        '{"route": "direct", "tool": "none", '
-        '"ack": "تمام، فتحت الكمبيوتر", "voice_reply": false}'
-    )
+    raw = '{"route": "direct", "tool": "none", "ack": "تمام، فتحت الكمبيوتر", "voice_reply": false}'
     verdict = _parse_router(raw)
     assert verdict is not None
     assert "فتحت" not in verdict[1]
