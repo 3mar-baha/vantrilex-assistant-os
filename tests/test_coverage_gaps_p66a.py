@@ -10,6 +10,7 @@ import json
 from datetime import UTC, datetime
 
 from websockets.asyncio.client import connect
+from websockets.exceptions import ConnectionClosed
 
 from common.protocol import Envelope, Hello, encode, new_envelope
 from src.bridge_server import BridgeOffline, BridgeServer
@@ -58,8 +59,8 @@ async def test_bad_token_rejected_and_capped():
                 async with connect(f"ws://127.0.0.1:{port}") as ws:
                     await ws.send(await _hello("wrong"))
                     await ws.recv()
-            except Exception:
-                pass
+            except ConnectionClosed:
+                pass  # expected: server closes rejected handshakes
         assert server._auth_fails == 7
         assert len(server.security_log) == 5
         assert not server.online()
@@ -75,8 +76,8 @@ async def test_non_hello_first_frame_rejected():
             await ws.send(b"not-json{{{")
             try:
                 await ws.recv()
-            except Exception:
-                pass
+            except ConnectionClosed:
+                pass  # expected: server closes the malformed frame
         assert any("auth rejected" in line for line in server.security_log)
         assert not server.online()
     finally:

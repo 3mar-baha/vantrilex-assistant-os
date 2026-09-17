@@ -84,7 +84,7 @@ strictly-zero-cost executive AI assistant named **Sara (سارة)**.
    ponytail, guard-skills, universal-agentic-os, agency-agents.
 - **Decoupling rule (2026-09-14)**: planned/deferred/unbuilt work lives ONLY in
   `docs/08-ROADMAP.md` — never in operational docs. System census:
-  `docs/reports/EXHAUSTIVE_SYSTEM_AUDIT_REPORT.md`.
+  `docs/reports/TOOLS_AND_API_COMPENDIUM.md`.
 - **SESSION START PROTOCOL (mandatory)**: your very first action in EVERY session is to execute
   the ⚡ SESSION RESUME PROTOCOL at the top of `.claude/PHASE-STATE.md` — prime context files,
   sync the universal-agentic-os framework FROM ITS LOCAL STATE FIRST (that repo often holds

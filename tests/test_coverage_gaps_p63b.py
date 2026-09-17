@@ -55,7 +55,7 @@ def test_live_history_hook_failure_reads_empty():
 def test_guide_malformed_verdict_json_neutral():
     from src.memory import AffectiveStateTracker
 
-    tracker = AffectiveStateTracker(brain=FakeBrain("{oops"))
+    tracker = AffectiveStateTracker(brain=FakeBrain("{oops}"))
     import asyncio as _aio
 
     assert _aio.run(tracker.guide("مرحبا")) == ""

@@ -12,6 +12,12 @@ from types import SimpleNamespace
 import pytest
 
 
+@pytest.fixture(autouse=True)
+def _real_disk(monkeypatch):
+    """Opt out of the conftest hermeticity fence: these tests exercise real disk."""
+    monkeypatch.delenv("SARA_TURN_COUNTER_OFF", raising=False)
+
+
 def test_edge_module_loaded_raises():
     import src.voice_policy as policy
 
