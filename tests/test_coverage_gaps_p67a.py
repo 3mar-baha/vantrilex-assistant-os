@@ -191,3 +191,57 @@ def test_running_processes_live():
 
 def test_categories_shape():
     assert set(CATEGORIES) == {"Games", "Programming", "Study", "Productivity", "Unknown"}
+
+
+def test_save_oserror_is_best_effort(tmp_path, monkeypatch):
+    from pathlib import Path as _Path
+
+    tracker = _tracker(tmp_path)
+    tracker.tick("A", now=_NOW)
+
+    def _boom(self, *args, **kwargs):
+        raise OSError("read-only vault")
+
+    monkeypatch.setattr(_Path, "write_text", _boom)
+    tracker.save(now=_NOW)  # logs loudly, never raises
+
+
+def test_tick_across_midnight_rolls_the_day():
+    tracker = _tracker()
+    day1 = datetime(2026, 9, 16, 23, 59, tzinfo=UTC)
+    day2 = datetime(2026, 9, 17, 0, 1, tzinfo=UTC)
+    tracker.tick("A", now=day1, category="Games")
+    tracker.tick("B", now=day2, category="Study")
+    rep = tracker.report(now=day2)
+    assert rep["total_minutes"] == 1  # yesterday's minutes reset at rollover
+    assert [row["name"] for row in rep["apps"]] == ["B"]
+    assert rep["categories"]["Games"] == 0
+
+
+def test_foreground_probe_none_branches(monkeypatch):
+    import ctypes
+
+    class _User32:
+        def __init__(self, hwnd, length):
+            self._hwnd = hwnd
+            self._length = length
+
+        def GetForegroundWindow(self):
+            return self._hwnd
+
+        def GetWindowTextLengthW(self, _hwnd):
+            return self._length
+
+        def GetWindowTextW(self, _hwnd, _buf, _n):
+            pass  # empty title: locked/idle honest None
+
+    class _Windll:
+        def __init__(self, user32):
+            self.user32 = user32
+
+    monkeypatch.setattr(ctypes, "windll", _Windll(_User32(0, 0)), raising=False)
+    assert windows_foreground_app() is None  # no foreground window
+    monkeypatch.setattr(ctypes, "windll", _Windll(_User32(1234, 0)), raising=False)
+    assert windows_foreground_app() is None  # window without readable title
+    monkeypatch.setattr(ctypes, "windll", _Windll(_User32(1234, 9)), raising=False)
+    assert windows_foreground_app() is None  # empty title buffer
