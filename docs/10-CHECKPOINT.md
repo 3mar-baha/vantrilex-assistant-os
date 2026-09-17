@@ -542,6 +542,19 @@ proven live), and `Stop-PortOwner` also clears Established holders (PID-0
 guarded). Plus: `--health` JSON now parsed for the Google row with the
 `src.google_auth` renewal hint (HTTP 400 expired-grant lesson).
 
+## Windows logon auto-start (ops, 2026-09-17)
+
+`scripts/setup_autostart.ps1` (idempotent, `.\sara.bat -InstallAutoStart` entry):
+Task Scheduler primary (AtLogOn + 30 s delay, working dir = root, calls
+`sara.ps1` directly to dodge the `.bat pause`, Interactive/Highest with
+`-RunLevel` toggle) + minimized Startup-shortcut fallback (`-Mode Shortcut`);
+`-Remove` cleans both modes. Self-elevates only when a task op truly needs it
+(shortcut-only removal stays UAC-free). Silent-boot rule: the Google grant
+must pre-exist (`vault/State/google_token.json.enc` roll call at install;
+interactive `src.google_auth` once). Tested: task objects construct valid
+(`OMAR\OMAR`, PT30S); shortcut install->remove cycle clean, no residue. Live
+Task registration needs one elevated owner run (UAC).
+
 ## Arsenal sanitization (governance, 2026-09-17)
 
 ## Compliance enforcement (governance, 2026-09-17)
