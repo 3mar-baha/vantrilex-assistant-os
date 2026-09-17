@@ -48,11 +48,14 @@ function Stop-Matching([string]$pattern, [string]$label) {
 }
 
 function Stop-PortOwner([int]$portNum, [string]$label) {
-    # port-true teardown: whoever LISTENS dies, whatever its exe name
-    # (stale node.exe gateway, orphaned hosts) — the name filter above misses these
-    $owners = Get-NetTCPConnection -LocalPort $portNum -State Listen `
+    # port-true teardown: whoever touches the port dies, whatever its exe name
+    # or CLI visibility (stale node.exe gateway, blank-CLI worker children —
+    # the 2026-09-17 lesson: socket owners aren't always the named parents).
+    # Listen AND Established: orphaned dial children linger past their parents.
+    $owners = Get-NetTCPConnection -LocalPort $portNum -State Listen, Established `
         -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -Unique
     foreach ($id in $owners) {
+        if ($id -le 0) { continue }  # PID 0 = kernel TimeWait rows, not a process
         Write-Host ("  stopping {0} port-holder PID {1}" -f $label, $id) -ForegroundColor Gray
         Stop-Process -Id $id -Force -ErrorAction SilentlyContinue
     }
@@ -87,36 +90,65 @@ function Wait-Gateway([int]$seconds = 20) {
     return $false
 }
 
+function Test-CoreHealth([int]$portNum) {
+    # Handshake-shaped /health probe (2026-09-17 live lesson): :$Port is a
+    # websockets opening-handshake server — a PLAIN http GET never reaches
+    # process_request and dies as InvalidMessage/EOFError tracebacks in the
+    # core window. A complete Upgrade-handshake request to /health parses
+    # cleanly, hits health_responder (200 {"status":"ok"}), and the server
+    # aborts-after-response with zero log spam. Single attempt, no throw.
+    $client = New-Object Net.Sockets.TcpClient
+    try {
+        $iar = $client.BeginConnect('127.0.0.1', $portNum, $null, $null)
+        if (-not $iar.AsyncWaitHandle.WaitOne(1500)) { return $false }
+        $client.EndConnect($iar)
+        $stream = $client.GetStream()
+        $stream.ReadTimeout = 1500
+        $stream.WriteTimeout = 1500
+        $req = "GET /health HTTP/1.1`r`nHost: 127.0.0.1:$portNum`r`n" +
+            "Upgrade: websocket`r`nConnection: Upgrade`r`n" +
+            "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==`r`n" +
+            "Sec-WebSocket-Version: 13`r`n`r`n"
+        $bytes = [Text.Encoding]::ASCII.GetBytes($req)
+        $stream.Write($bytes, 0, $bytes.Length)
+        $buf = New-Object byte[] 4096
+        $text = ''
+        while ($text.Length -lt 4096) {
+            try { $n = $stream.Read($buf, 0, $buf.Length) } catch { break }
+            if ($n -le 0) { break }  # server closed after its 200 — the clean path
+            $text += [Text.Encoding]::ASCII.GetString($buf, 0, $n)
+            # break only on the FULL match — headers and body may split segments
+            if (($text -match 'HTTP/1\.1 200') -and ($text -match '"status"\s*:\s*"ok"')) { break }
+        }
+        return ($text -match 'HTTP/1\.1 200' -and $text -match '"status"\s*:\s*"ok"')
+    } catch { return $false } finally { $client.Close() }
+}
+
 function Wait-Health([int]$portNum, [int]$seconds = 25) {
-    # the core's /health responder (GET -> {"status":"ok"}) certifies the
-    # WSS+health stack, not just a listening socket
+    # reactive poll over the handshake-shaped probe (200 ms cadence)
     $deadline = (Get-Date).AddSeconds($seconds)
     while ((Get-Date) -lt $deadline) {
-        try {
-            $r = Invoke-RestMethod ("http://localhost:{0}/health" -f $portNum) -TimeoutSec 2
-            if ($r.status -eq 'ok') { return $true }
-        } catch { }
+        if (Test-CoreHealth $portNum) { return $true }
         Start-Sleep -Milliseconds 200
     }
     return $false
 }
 
-function Test-BridgeDial([int]$corePort, [int]$seconds = 15) {
-    # the bridge dials OUT to the core: an ESTABLISHED tuple owned by the
-    # bridge PID against the core port is a live-socket proof of the handshake
-    # path (far stronger than "process still alive")
+function Test-BridgeDial([int]$corePort, [int]$seconds = 30) {
+    # TUPLE-anchored (2026-09-17 live lesson): the ESTABLISHED bridge<->core
+    # pair exists, but both endpoint PIDs are blank-CLI worker children, NOT
+    # the bridge.daemon/src.main parents — PID-anchored matching misses the
+    # real dial. :$corePort serves ONLY bridge WSS + /health, so any
+    # ESTABLISHED loopback tuple touching it IS the live bridge dial.
     $deadline = (Get-Date).AddSeconds($seconds)
     while ((Get-Date) -lt $deadline) {
-        $bridge = Get-CimInstance Win32_Process -Filter "Name like 'python%'" |
-            Where-Object { $_.CommandLine -match 'bridge\.daemon' } | Select-Object -First 1
-        if ($bridge) {
-            $dial = Get-NetTCPConnection -State Established -ErrorAction SilentlyContinue |
-                Where-Object { $_.OwningProcess -eq $bridge.ProcessId -and $_.RemotePort -eq $corePort }
-            if ($dial) { return $bridge.ProcessId }
-        }
-        Start-Sleep -Milliseconds 500
+        $dial = Get-NetTCPConnection -State Established -ErrorAction SilentlyContinue |
+            Where-Object { ($_.RemotePort -eq $corePort -or $_.LocalPort -eq $corePort) -and
+                ($_.LocalAddress -match '^(127\.|::1)') }
+        if ($dial) { return $true }
+        Start-Sleep -Milliseconds 250
     }
-    return $null
+    return $false
 }
 
 function Start-Child([string]$title, [string]$body) {
@@ -177,7 +209,16 @@ if (Test-Gateway) {
 }
 
 # in-repo health probe: gateway/vault/google/ffmpeg/token as JSON, exit 0/1
-& "$Root\.venv\Scripts\python.exe" -m src.main --health
+$healthRaw = & "$Root\.venv\Scripts\python.exe" -m src.main --health 2>&1 | Out-String
+Write-Host $healthRaw.Trim()
+try { $healthJson = $healthRaw | ConvertFrom-Json } catch { $healthJson = $null }
+if ($healthJson -and $healthJson.google -ne 'ok') {
+    # live 2026-09-17: expired refresh grant surfaces as HTTP 400 in core logs.
+    # Test user (omarbaha224@gmail.com) is authorized in Google Cloud Console —
+    # renew with: .venv\Scripts\python.exe -m src.google_auth
+    Write-Host '  Google row not ok — refresh the grant:' -ForegroundColor Yellow
+    Write-Host '    .venv\Scripts\python.exe -m src.google_auth' -ForegroundColor Yellow
+}
 if ($LASTEXITCODE -ne 0 -and -not $Force) {
     Write-Host '  --health degraded (see JSON above) — fix it or rerun with -Force' -ForegroundColor Yellow
     Exit-Sara 1
@@ -205,9 +246,9 @@ if ($coreUp) {
     Write-Host ("  core :{0} NOT healthy — check the [SARA Core] window for errors" -f $p) -ForegroundColor Red
 }
 
-$dialPid = Test-BridgeDial $p 15
-if ($dialPid) {
-    Write-Host ("  bridge daemon PID {0} holds a live dial to core :{1}" -f $dialPid, $p) -ForegroundColor Green
+$dialUp = Test-BridgeDial $p 30
+if ($dialUp) {
+    Write-Host ("  live bridge<->core socket on :{0} (handshake path proven)" -f $p) -ForegroundColor Green
 } else {
     $bridgeAlive = Get-CimInstance Win32_Process -Filter "Name like 'python%'" |
         Where-Object { $_.CommandLine -match 'bridge\.daemon' }
@@ -218,7 +259,7 @@ if ($dialPid) {
     }
 }
 
-if ($coreUp -and $dialPid) {
+if ($coreUp -and $dialUp) {
     Write-Host '=== SARA: cycle OK — test Sara on Telegram now ===' -ForegroundColor Green
     Exit-Sara 0
 } else {

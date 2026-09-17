@@ -527,6 +527,21 @@ fail-fast. Gateway path: reuse-healthy → clear-squatter → `omniroute` (fallb
 `npx omniroute`) → 20 s `/v1/models` wait → `-Force` override. Verified:
 parser 0 errors, `Get-Command` resolves, `-Port abc` fail-fast pre-teardown.
 
+## sara.ps1 handshake-collision fix (ops, 2026-09-17 live)
+
+False-negative boot verdict on a HEALTHY stack (bridge session online, Telegram
+live): plain-HTTP `Invoke-RestMethod /health` never reaches `process_request`
+on the websockets handshake server — it dies as InvalidMessage/EOFError spam
+in the core window, cascading to a missed dial check. Fix: `Test-CoreHealth`
+sends a complete Upgrade-handshake request to /health over raw TcpClient (200
+`{"status":"ok"}` + abort-after-response, zero log spam; proven 45 ms live).
+Deeper finding: ESTABLISHED bridge<->core pair (49512<->8443) exists, but both
+endpoint PIDs are blank-CLI worker children — so `Test-BridgeDial` is now
+TUPLE-anchored (any ESTABLISHED loopback tuple touching :8443, 30 s/250 ms;
+proven live), and `Stop-PortOwner` also clears Established holders (PID-0
+guarded). Plus: `--health` JSON now parsed for the Google row with the
+`src.google_auth` renewal hint (HTTP 400 expired-grant lesson).
+
 ## Arsenal sanitization (governance, 2026-09-17)
 
 ## Compliance enforcement (governance, 2026-09-17)
