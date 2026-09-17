@@ -448,6 +448,13 @@ git). Deviation on record: competitive top-1 recall hits only 287/500
 (gated by `tests/test_joda_bank_p1.py`: quotas, dedupe, shape, section parse).
 Suite 1,474/7/0. HALT before P2.
 
+## Arsenal sanitization (governance, 2026-09-17)
+
+Bloat premise falsified (none of the 16 alleged skills on disk); 9 unlisted
+residual dirs quarantined restorable; MCP `fetch`/`time` removed as dead
+(404/unresolvable), `sqlite` fixed dormant; sequential-thinking launch-proven;
+`16-WORKFLOWS.md` §0 realigned + Mandatory Invocation Rule bound from P2.
+
 - [07 — Implementation Plan](./07-IMPLEMENTATION-PLAN.md)
 - [11 — Testing](./11-TESTING.md)
 - [Objectives Ledger](./reports/OBJECTIVES_LEDGER_MET_VS_PENDING.md)

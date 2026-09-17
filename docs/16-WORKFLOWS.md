@@ -9,31 +9,53 @@ tags: [architecture]
 > [Map of Testing & Audits](./00-MAP-OF-TESTING-AND-AUDITS.md) ·
 > [Checkpoint](./10-CHECKPOINT.md) · [Testing](./11-TESTING.md).
 
-## 0. Activation manifest (100% ACTIVE — ingested 2026-09-16 from `O:\Claude Code\vantrilex\vantrilex-registry`)
+## 0. Activation manifest (sanitized 2026-09-17 — verified against disk)
 
-Baseline (17) — all present locally:
+> Audit 2026-09-17 found ZERO of the alleged bloat skills
+> (`nextjs-turbopack`, `bun-runtime`, `video-editing`, `x-api`, `crosspost`,
+> `article-writing`, `investor-*`, `market-research`, `frontend-*`,
+> `api-design`, `e2e-testing`, `fal-ai-media`, `dmux-workflows`, `agent-sort`)
+> on disk — that premise was false; no such purge was needed. Nine unlisted
+> residual dirs were quarantined to `C:\Users\omarb\.vantrilex\
+> quarantine-20260917\` (restorable): `code-review`, `dev-agent-skills`,
+> `mattpocock-typescript`, `security-review`, `starter`, `verification-loop`,
+> `wayfinder`, `writing-for-agents`, `writing-plans`.
+
+Baseline — verified present locally:
 
 | # | Component | On-disk path | Status |
 |---|---|---|---|
-| 1–5 | Skills `ask-matt`, `code-review`, `find-skills`, `ponytail`, `skill-creator` | `.claude/skills/<name>/` | **Active** (full bodies) |
-| 6–10 | MCPs `filesystem`, `fetch`, `memory`, `openrouter`, `sequential-thinking` | `opencode.json` → `mcp` | **Active** (untracked; carries a live key — never commit) |
-| 11–13 | Plugins `code-review`, `commit-commands`, `typescript-lsp` (+ elite `pyright-lsp`) | `.claude/plugins/manifest.json` | **Active** (`claude-plugins-official/*`) |
-| 14–16 | Hooks `session-start`, `pre-compact`, `block-dev-servers-outside-tmux-…` | `.claude/hooks/` + `settings.json` | **Active** |
-| 17 | Agent `architect` | `.claude/agents/architect.md` | **Active** |
+| 1–5 | Skills `ask-matt`, `find-skills`, `ponytail` (+`ponytail-core`), `skill-creator` | `.claude/skills/<name>/` | **Active** (full bodies) |
+| 6–9 | MCPs `filesystem`, `memory`, `openrouter`, `sequential-thinking` | `opencode.json` → `mcp` | **Active** (untracked; live key — never commit; sequential-thinking launch-proven via stdio handshake) |
+| 10 | MCP `fetch` | — (removed 2026-09-17) | **Dead** (`@modelcontextprotocol/server-fetch` 404s on npm; no trustworthy successor) |
+| 11 | MCP `time` | — (removed 2026-09-17) | **Dead** (no resolvable package found) |
+| 12–15 | Plugins `code-review`, `commit-commands`, `typescript-lsp`, `pyright-lsp` | `.claude/plugins/manifest.json` | **Active** (`claude-plugins-official/*`, committed) |
+| 16–18 | Hooks `session-start`, `pre-compact`, `block-dev-servers-outside-tmux-…` (+ 9 more local templates) | `.claude/hooks/` + `settings.json` | **Active** |
+| 19 | Agent `architect` (+ backend/planner/lead present) | `.claude/agents/architect.md` | **Active** |
 
 Elite additions — sourced per-component (untracked, rotation rule):
 
 | Component | Source → on-disk path | Status |
 |---|---|---|
-| `clean-code-guard`, `test-guard`, `upstream-docs-guard` | toolkit cache `guard-skills` → `.claude/skills/` | **Active** (full bodies; `docs-guard` renamed — repo already owns `scripts/docs_guard.py`) |
+| `clean-code-guard`, `test-guard`, `upstream-docs-guard`, `diagnosing-bugs` | toolkit cache `guard-skills` + local → `.claude/skills/` | **Active** (full bodies) |
 | `securing-agentic-ai-tool-invocation` | toolkit cache `cybersecurity` → `.claude/skills/` | **Active** (full body) |
-| `git-guardrails` | toolkit cache `mattpocock-skills` → `.claude/skills/` | **Active** (full body; source dir `git-guardrails-claude-code`) |
-| `tdd` | toolkit cache `mattpocock-skills` → `.claude/skills/tdd/` | **Active** (full body; local `tdd-workflow` retained) |
-| `pytest-skill`, `poka-yoke`, `obsidian-knowledge-brain`, `varlock-claude-skill` | registry index cards → `.claude/skills/<name>/SKILL.md` | **Active (indexed)** — intent + workflow + upstream Raw URL; full body fetched on demand |
-| `block-creation-of-random-md-files-…`, `session-end` | upstream `everything-claude-code/hooks.json` + cached `memory-persistence` → `.claude/hooks/` | **Active** (adapted: repo doc-homes `docs/`, `archive/`, `benchmarks/`, `vault/` stay writable so `/sync` works) |
-| `Knowledge Graph Engineer`, `Workflow Architect`, `Application Security Engineer` | toolkit cache `agency-agents` → `.claude/agents/` | **Active** (full bodies; AppSec = `security-appsec-engineer.md`) |
-| MCPs `obsidian-tc` (vault path), `calllint`, `time` | registry cards → `opencode.json` → `mcp` | **Active** |
-| MCP `sqlite` | registry card → `opencode.json` → `mcp` | **Active (dormant)** — `enabled: false` until a target DB exists (`data/sara.db` placeholder) |
+| `git-guardrails` | toolkit cache `mattpocock-skills` → `.claude/skills/` | **Active** (source dir `git-guardrails-claude-code`) |
+| `tdd`, `tdd-workflow`, `pytest-skill`, `poka-yoke` | cache + registry cards → `.claude/skills/` | **Active** (`tdd` full body; others indexed with Raw URLs) |
+| `obsidian-knowledge-brain`, `varlock-claude-skill` | registry cards → `.claude/skills/<name>/SKILL.md` | **Active (indexed)** |
+| `block-creation-of-random-md-files-…`, `session-end` | upstream hooks + cached `memory-persistence` → `.claude/hooks/` | **Active** (adapted: doc-homes stay writable for `/sync`) |
+| `Knowledge Graph Engineer`, `Workflow Architect`, `Application Security Engineer` | toolkit cache `agency-agents` → `.claude/agents/` | **Active** (full bodies) |
+| MCPs `obsidian-tc` (vault path), `calllint` | registry cards → `opencode.json` → `mcp` | **Active** (packages resolve: 1.30.1 / 0.2.0) |
+| MCP `sqlite` | fixed package → `opencode.json` → `mcp` | **Active (dormant)** — `mcp-server-sqlite`, `enabled: false` |
+| MCP `06ketan-slideshot` | `opencode.json` → `mcp` | **Active** (resolves 4.4.0; out of Sara scope, retained) |
+
+### Mandatory Invocation Rule (binding from P2 on)
+
+The Implementer MUST physically invoke required skills via the skill-loader
+tool with the invocation visible in the turn transcript — doctrine-by-memory
+no longer suffices. Minimums: P-phase entry invokes the phase's skill
+(`tdd`/`tdd-workflow` for `/code`, `clean-code-guard` + `test-guard` for
+`/audit` gates, phase-appropriate guards for `/sync`). A phase worked without
+a visible skill invocation is procedurally incomplete.
 
 Standing rules: `.claude/skills/` is gitignored (sprint rotation + teardown);
 `opencode.json` / `.mcp.json` / `vault/` / `.env` are never committed;
