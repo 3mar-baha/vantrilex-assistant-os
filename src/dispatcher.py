@@ -41,7 +41,8 @@ _ROUTER_PROMPT_AR: Final[str] = (
     '|"network_status"|"read_page"|"drive"|"contacts"|"create_event"'
     '|"create_task"|"places"|"deep_search"|"fitness"|"openclaw_browse"'
     '|"openclaw_desktop"|"openclaw_fetch"|"openclaw_inspect"|"open_path", "arg": "...", '
-    '"ack": "...", "voice_reply": true|false}\n'
+    '"ack": "...", "voice_reply": true|false, '
+    '"rag_domains": ["dialect"|"humor"|"grace"|"kb"|"personal"|"none"]}\n'
     "- اكتشف الأداة من القصد الظرفي والمعنى الكامل للطلب — لا تعتمد على كلمات "
     "مفتاحية حرفية: الصياغات العامية المتنوعة لنفس القصد (ارفع/وطّي/اكتم/علي "
     "الصوت؛ شغّلي/حطي أغنية؛ اقرئيلي/استخرج النص) تصنَّف للأداة نفسها.\n"
@@ -99,7 +100,10 @@ _ROUTER_PROMPT_AR: Final[str] = (
     "المالك طلب الصوت صراحةً أو بنيته (بدي اسمعك، حابب صوتك، احكيلي عن حالك) أو الجو "
     "حميمي/عاطفي يستدعي الصوت؛ false للدردشة العادية والأوامر والمعلومات العملية.\n"
     "لا تكتب أي شيء خارج الـ JSON."
+    '- "rag_domains": قائمة من المفردات المغلقة فقط (dialect|humor|grace|kb|'
+    'personal|none) — أي قيمة خارجها تُهمل؛ اتركها ["none"] للدردشة الصرفة.\n'
 )
+
 
 _ROUTES: Final[dict[str, Tier]] = {
     "direct": Tier.FAST,
@@ -155,6 +159,43 @@ _VALID_TOOLS: Final = (
     *VALID_OPENCLAW_TOOLS,
 )
 _JSON_RE: Final = re.compile(r"\{.*\}", re.DOTALL)
+_FENCE_RE: Final = re.compile(r"```(?:json)?\s*([\s\S]*?)\s*```", re.IGNORECASE)
+_TRAILING_COMMA_RE: Final = re.compile(r",(\s*[}\]])")
+
+# P3 fused verdict: domain selection rides the same FAST call (+0ms).
+RAG_DOMAINS: Final[tuple[str, ...]] = ("dialect", "humor", "grace", "kb", "personal", "none")
+
+
+def repair_verdict(reply: str) -> dict | None:
+    """Non-throwing JSON repair: fence-strip, balanced-brace scan, trailing-
+    comma repair, schema-validated dict. None only on total failure (the
+    caller falls back to deduce/net, loudly)."""
+    text = (reply or "").strip()
+    if not text:
+        return None
+    fenced = _FENCE_RE.search(text)
+    if fenced:
+        text = fenced.group(1).strip()
+    match = _JSON_RE.search(text)
+    if not match:
+        return None
+    try:
+        verdict = json.loads(_TRAILING_COMMA_RE.sub(r"\1", match.group()))
+    except (json.JSONDecodeError, ValueError):
+        return None
+    return verdict if isinstance(verdict, dict) else None
+
+
+def parse_rag_domains(reply: str) -> tuple[str, ...]:
+    """Closed-vocabulary domain selection; unknown/missing degrades to none."""
+    verdict = repair_verdict(reply)
+    if verdict is None:
+        return ("none",)
+    raw = verdict.get("rag_domains", "none")
+    items = raw if isinstance(raw, list) else [raw]
+    kept = tuple(d for d in (str(d).strip().lower() for d in items) if d in RAG_DOMAINS)
+    return kept or ("none",)
+
 
 # Remediation 2.1 (owner directive 2026-09-03, audit C-1): deterministic
 # anti-hallucination keyword net — a defense line BEHIND the router. When the
@@ -668,13 +709,9 @@ def _keyword_net(text: str) -> tuple[str, str]:
 
 def _parse_router(reply: str) -> tuple[str, str, str, str, bool] | None:
     """Extract the {route, tool, arg, ack, voice_reply} verdict; None when not a
-    valid routing."""
-    match = _JSON_RE.search(reply)
-    if not match:
-        return None
-    try:
-        verdict = json.loads(match.group())
-    except json.JSONDecodeError:
+    valid routing. Repair-first (P3): fenced/trailing-comma JSON heals here."""
+    verdict = repair_verdict(reply)
+    if verdict is None:
         return None
     route = verdict.get("route")
     ack = str(verdict.get("ack") or "").strip()
@@ -710,6 +747,9 @@ class FrontDoorDispatcher:
         # shell reads this after the first yield. Explicit owner patterns in
         # reply_modality still override (the owner's word is the highest law).
         self.voice_hint: bool = False
+        # P3 fused verdict: domain selection rides the same FAST call and is
+        # read by the envelope path exactly like voice_hint. Defaults to none.
+        self.rag_domains: tuple[str, ...] = ("none",)
         # Principles-over-Rules (2026-09-12): cognition trace per turn for the
         # Tier-3 shadow tracer; the keyword net stays as final safety fallback.
         self.last_cognition: dict | None = None
@@ -730,6 +770,7 @@ class FrontDoorDispatcher:
         media: list[dict] | None = None,
     ) -> AsyncIterator[str]:
         self.voice_hint = False
+        self.rag_domains = ("none",)
         if media:
             # Media turns (owner directive 2026-09-03): the conversation lane
             # SEES the image/video natively — no tool routing, the answer flows
@@ -767,6 +808,7 @@ class FrontDoorDispatcher:
             else:
                 route, ack, tool, arg, voice = parsed
                 self.voice_hint = voice
+                self.rag_domains = parse_rag_domains(reply)
         if tool == "none":
             # Principles-over-Rules first: scored intent deduction with full
             # situational envelope (history + reflective friction). The
