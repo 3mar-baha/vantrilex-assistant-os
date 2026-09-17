@@ -428,6 +428,15 @@ This prints the Executive Summary Scorecard to stdout and writes `benchmarks/LIV
 
 ## See also (graph links)
 
+## P0 — Shape contracts (master transformation plan, 2026-09-17)
+
+AST enumeration: 23 Arabic-literal equality asserts (13 streamer plumbing echoes
+excluded with rationale — fixture-in/out mechanics, not presentation).
+8 additive `_shape` twins in `tests/test_shape_contracts_p0.py` (dispatcher ack
+clean/drift, shell ack replacement, voice-fallback frozen shape, triage card +
+voice slots, brief + journaler sections). Denylist byte-identical, persona
+4,782, suite 1,469/7/0. HALT before P1.
+
 - [07 — Implementation Plan](./07-IMPLEMENTATION-PLAN.md)
 - [11 — Testing](./11-TESTING.md)
 - [Objectives Ledger](./reports/OBJECTIVES_LEDGER_MET_VS_PENDING.md)
