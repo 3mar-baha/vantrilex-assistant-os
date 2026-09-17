@@ -80,7 +80,10 @@ async def test_medium_429_cascades_to_fallback():
         transport=script.transport(),
     )
     async with client:
-        deltas = [d async for d in client.stream_chat([{"role": "user", "content": "hi"}], tier=Tier.MEDIUM)]
+        deltas = [
+            d
+            async for d in client.stream_chat([{"role": "user", "content": "hi"}], tier=Tier.MEDIUM)
+        ]
     assert deltas == ["تم"]
     assert script.models() == ["m1:free", "m2:free"]
     assert _model_hot("m1:free") is not None
@@ -110,9 +113,7 @@ async def test_launch_missing_binary_arabic_line(tmp_path):
     wl.write_text(
         _json.dumps(
             {
-                "allowed_apps": [
-                    {"name": "calc", "executable": "calc.exe", "auto_approve": True}
-                ],
+                "allowed_apps": [{"name": "calc", "executable": "calc.exe", "auto_approve": True}],
                 "restricted_actions": [],
             }
         ),
