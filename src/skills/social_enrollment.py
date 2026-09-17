@@ -69,7 +69,7 @@ class VoiceprintRegistry:
 
     async def match(self, ogg_opus: bytes) -> Verdict:
         vector = await self._bio.embed(ogg_opus)
-        return self.match_vector(vector)
+        return await self.match_vector(vector)
 
     async def match_vector(self, vector: list[float]) -> Verdict:
         owner_vector = self._bio.owner_vector
