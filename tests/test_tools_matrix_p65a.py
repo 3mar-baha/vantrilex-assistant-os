@@ -365,7 +365,7 @@ def test_drive_contacts_create_variants():
     suite = _Suite(drive=drive, contacts=contacts)
     reg = ToolRegistry(suite=suite, tz=TZ, now_fn=lambda: NOW)
     assert "تقرير" in _aio.run(reg.call("drive", "ملاحظات"))
-    assert not _aio.run(reg.call("drive", "x")).strip() == ""
+    assert "تقرير" in _aio.run(reg.call("drive", "x"))
     out = _aio.run(reg.call("contacts", "أحمد"))
     assert "أحمد" in out and "079" in out and "a@b.c" in out
     assert "اسم الشخص" in _aio.run(reg.call("contacts", "   "))
