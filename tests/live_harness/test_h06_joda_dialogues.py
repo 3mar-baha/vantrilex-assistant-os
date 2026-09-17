@@ -17,7 +17,9 @@ def _bank_sample(n: int = 10) -> list[str]:
     bank = Path("04_Resources/Dialect_Encyclopedia/JODA_Pattern_Bank.md")
     if not bank.exists():
         pytest.skip("pattern bank absent")
-    patterns = [l[2:].strip() for l in bank.read_text(encoding="utf-8").splitlines() if l.startswith("- ")]
+    patterns = [
+        l[2:].strip() for l in bank.read_text(encoding="utf-8").splitlines() if l.startswith("- ")
+    ]
     return patterns[:n]
 
 
