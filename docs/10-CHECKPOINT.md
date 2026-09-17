@@ -448,6 +448,16 @@ git). Deviation on record: competitive top-1 recall hits only 287/500
 (gated by `tests/test_joda_bank_p1.py`: quotas, dedupe, shape, section parse).
 Suite 1,474/7/0. HALT before P2.
 
+## P2 — Counter, cadence, cues (master transformation plan, 2026-09-17)
+
+P2.1 `src/turn_counter.py` (atomic tmp+fsync+replace, corrupt-rename→0,
+human-turn-only via transport hooks + ReAct-import ban, pytest hermeticity
+fence); P2.2 `src/cadence.py` (10-turn trigger, starvation guard, MOBILE
+derivation, posture-conditioned wheel); P2.3 JODA cues in `load_long_term`
+(capped 300, deterministic sections). P2.4 audit: 5 invariants clean (no
+prose/voice/PC/network/secrets surface). Suite 1,496/7/0, ruff clean,
+security OK. HALT before P3.
+
 ## Arsenal sanitization (governance, 2026-09-17)
 
 ## Compliance enforcement (governance, 2026-09-17)
