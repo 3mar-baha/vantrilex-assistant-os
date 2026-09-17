@@ -10,7 +10,7 @@ from src.dispatcher import (
     repair_verdict,
 )
 from tests.test_dispatcher import FakeRegistry, _collect, _gateway, _tool_router
-from tests.test_omniroute_gateway import _Scripted, _chunk, _sse
+from tests.test_omniroute_gateway import _chunk, _Scripted, _sse
 
 
 def test_repair_decode_failure_returns_none():
@@ -39,9 +39,7 @@ async def test_net_disagreement_keeps_cognition_tool(make_settings, monkeypatch)
     from src.cognition import IntentHypothesis
 
     def _gmail_only(text, trace=None):
-        return IntentHypothesis(
-            tool="gmail", arg="", confidence=0.9, rationale="t", root_goal="g"
-        )
+        return IntentHypothesis(tool="gmail", arg="", confidence=0.9, rationale="t", root_goal="g")
 
     monkeypatch.setattr(src.cognition, "deduce", _gmail_only)
     registry = FakeRegistry(result="بريدك فاضي")
@@ -68,7 +66,6 @@ def test_parse_thought_malformed_json_returns_none():
 async def test_thought_gateway_error_breaks_to_summary():
     from src.decision_loop import SUMMARY_HEAD_AR, run_decision_loop
     from src.gateway import GatewayError
-
     from tests.suite.tier1_resilience.test_decision_loop import (
         FakeCoordinator,
         FakeFront,
@@ -107,7 +104,6 @@ async def test_thought_gateway_error_breaks_to_summary():
 
 async def test_tool_call_cap_breaks_to_summary():
     from src.decision_loop import SUMMARY_HEAD_AR, LoopBudget, run_decision_loop
-
     from tests.suite.tier1_resilience.test_decision_loop import (
         FakeCoordinator,
         FakeFront,
@@ -143,8 +139,7 @@ async def test_tool_call_cap_breaks_to_summary():
 
 
 async def test_tool_raise_belt_records_failed_observation():
-    from src.decision_loop import SUMMARY_HEAD_AR, run_decision_loop
-
+    from src.decision_loop import run_decision_loop
     from tests.suite.tier1_resilience.test_decision_loop import (
         FakeCoordinator,
         FakeFront,
