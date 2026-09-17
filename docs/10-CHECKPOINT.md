@@ -435,7 +435,7 @@ excluded with rationale — fixture-in/out mechanics, not presentation).
 8 additive `_shape` twins in `tests/test_shape_contracts_p0.py` (dispatcher ack
 clean/drift, shell ack replacement, voice-fallback frozen shape, triage card +
 voice slots, brief + journaler sections). Denylist byte-identical, persona
-4,782, suite 1,469/7/0. HALT before P1.
+4,782, suite 1,469/7/0. Commits: `1b7c368`. HALT before P1.
 
 ## P1 — Pattern bank (master transformation plan, 2026-09-17)
 
@@ -446,7 +446,7 @@ gitignored `data/joda/*.xlsx`): 5 acts × 80 floors + 100 rarity wildcards =
 git). Deviation on record: competitive top-1 recall hits only 287/500
 (shared dialect vocabulary) — bank is consumed by DIRECT section read instead
 (gated by `tests/test_joda_bank_p1.py`: quotas, dedupe, shape, section parse).
-Suite 1,474/7/0. HALT before P2.
+Suite 1,474/7/0. Commits: `f519bc3` (+ `0c8af40` cue integration). HALT before P2.
 
 ## P2 — Counter, cadence, cues (master transformation plan, 2026-09-17)
 
@@ -456,7 +456,8 @@ fence); P2.2 `src/cadence.py` (10-turn trigger, starvation guard, MOBILE
 derivation, posture-conditioned wheel); P2.3 JODA cues in `load_long_term`
 (capped 300, deterministic sections). P2.4 audit: 5 invariants clean (no
 prose/voice/PC/network/secrets surface). Suite 1,496/7/0, ruff clean,
-security OK. HALT before P3.
+security OK. Commits: `d2a1633` (counter), `a28025c` (cadence), `0c8af40`
+(cues). HALT before P3.
 
 ## P3 — Fused router + sliced RAG (master transformation plan, 2026-09-17)
 
@@ -467,7 +468,8 @@ collateral); `front.rag_domains` observed state. P3.2 closed budget slicing
 per-hit path citations + legacy header preserved; wired via deterministic
 intent→domain map (model verdict stays observed pending verdict-first
 reorder). Regression caught and fixed: phase-6 citation/header test.
-Suite 1,514/7/0. HALT before P4.
+Suite 1,514/7/0. Commits: `5e4da96` (fused router), `6a4d8f5` (slicing).
+HALT before P4.
 
 ## P4 — Token/prose split + single-pass synthesis (master plan, 2026-09-17)
 
@@ -478,7 +480,8 @@ execution target comes from pending state (reply naming another app still
 fires the original), refusal clears clean, park warning single-pass shaped
 with static floor. P4.2 pins: direct turn = exactly 2 model touches,
 placeholder/ack never reach memory (full-turn variant). Suite 1,521/7/0,
-ruff clean, security OK. HALT before P5.
+ruff clean, security OK. Commits: `98d2180` (token/prose), `805fc3b`
+(single-pass). HALT before P5.
 
 ## P5 — Fault matrix, overlay, live harnesses (master plan, 2026-09-17)
 
@@ -487,13 +490,19 @@ P5.1 audited the 30-seam registry: 27 covered, 3 genuine gaps pinned
 P5.2 `tests/live_harness/overlay.py` OverlayVault (shadow writes, fallback
 reads, diary pristine). P5.3 ten live harnesses (skip-soft, pacing, diary
 fence; 6 pass hermetic legs, 7 skip without backends). Suite 1,536/14/0.
-HALT before P6.
+Commits: `c1c07e2`/`43311c3` (matrix), `07a5a1c` (overlay), `572f278`
+(harnesses). HALT before P6.
 
 ## P6 — Tiered coverage 98/90 (master plan, 2026-09-17) — COMPLETE
 
 - **Batches**: 1–5 + 3a/3b/3c + 4a/4b + 5 + 6a + 7a–7g (`test_coverage_gaps_p6*.py`,
   `p64*.py`, `p65*.py`, `p66a`, `p67a–p67g`); `scripts/check_tiered_coverage.py`
   (22 core modules ≥98 + TOTAL ≥90, live files included).
+- **Commit range**: `94d53da` (batch 1) … `3e52802` (checkpoint) — batches
+  `94d53da`, `0ff7c91`, `726902c`, `621bc81`, `9e88b79`, `aa06c7e`,
+  `03ea7d5`, `73f8b60`, `b03d7f8`, `c5f68ec`, `918ae84`, `d48496d`,
+  `98c97c2`, `b92cd8f`, `5e5f86f`, `decd87c`, `c82f6b7`, `32ba3d6`,
+  `d48041d`, `162b4ac`, `843f825` (+ lint/format fixes interleaved).
 - **Verdict**: TIERED COVERAGE GATE PASSED — 22/22 core OK (3 at 100, lows 98.2
   associative / 98.5 executor), TOTAL 91.8%; full suite 1,798 passed, 7 skipped.
 - **Production fixes found by pins (2)**: `VaultClient._migrate_studies` guard

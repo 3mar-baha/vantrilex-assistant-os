@@ -109,6 +109,30 @@ Daily_Logs/YYYY/MM/YYYY-MM-DD.md` (flat legacy read-fallback) `State/`
 (skipped by index). Transport: GitHub Contents API (`Bearer
 VAULT_GITHUB_TOKEN`, `?ref=VAULT_BRANCH`); local mirror is disposable.
 
+## 6. Master transformation deltas (P0–P6, 2026-09-17)
+
+- **JODA speech-act bank (P1)**: 500 mined Ammani patterns (5 acts × 80 +
+  100 wildcards) in `04_Resources/Dialect_Encyclopedia/JODA_Pattern_Bank.md`,
+  consumed by direct section read; unconditional cues ride `load_long_term`
+  (capped 300, deterministic sections).
+- **Fused FAST router (P3)**: `rag_domains` verdict field (+0ms, closed
+  vocabulary) + non-throwing `repair_verdict()` (fence/trailing-comma/schema);
+  RAG budget slicing (60/40, 50/30/20, floor-400) with quarantine-halved
+  ceiling, sentence chunks, per-hit path citations.
+- **Atomic turn counter (P2)**: `<vault>/State/turn_counter.txt`
+  (`src/turn_counter.py`) — `.tmp` + fsync + `os.replace`, corrupt-rename→0,
+  never raises; bumped only at the transport boundary (`on_text`/`on_voice`),
+  ReAct internals banned by test; pytest hermeticity via
+  `SARA_TURN_COUNTER_OFF`.
+- **Cadence refresh (P2)**: 10-turn memory trigger (`src/cadence.py`) with
+  starvation guard + situational conditioning (`MOBILE` concise vs `FOCUS`
+  technical lane, humor/grace suppressed).
+- **Single-pass synthesis (P4)**: direct turn = exactly 2 model touches (one
+  verdict call + one answer stream); placeholder/ack transient, never in
+  memory. `confirmation_id` is server-minted post-affirmation
+  (`src/pc_actions.py`), persisted pre-execution, machine-to-machine only —
+  never in prose or model I/O.
+
 ## See also (graph links)
 
 - [01 — Product Requirements](./01-PRODUCT-REQUIREMENTS.md)
