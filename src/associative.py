@@ -10,6 +10,7 @@ must never block the reply (any failure degrades to "").
 from __future__ import annotations
 
 import os
+import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -271,6 +272,129 @@ DIGEST_REL_PATH: Final[str] = "02_Areas/Profile/Omar_Master_Digest.md"
 DIGEST_HEADER_AR: Final[str] = "[الموجز الحي — سياق أساسي]"
 DIGEST_MAX_CHARS: Final[int] = 1500
 
+# P3 sliced assembly: vault path areas mapped to RAG domains. Order matters —
+# specific files precede their parent directories (Ammani humor lives under
+# Dialect_Encyclopedia but selects humor, not dialect).
+BLOCK_CEILING_CHARS: Final[int] = 3000
+DOMAIN_FLOOR_CHARS: Final[int] = 400
+DOMAIN_AREAS: Final[tuple[tuple[str, str], ...]] = (
+    ("Ammani_Urban_Humor", "humor"),
+    ("Expressive_Feminine", "grace"),
+    ("Feminine_Grace", "grace"),
+    ("Style_Guides", "grace"),
+    ("Knowledge_Bases", "kb"),
+    ("Dialect_Encyclopedia", "dialect"),
+    ("JODA", "dialect"),
+    ("02_Areas", "personal"),
+    ("Contacts", "personal"),
+    ("Personal_Context", "personal"),
+    ("Omar", "personal"),
+)
+
+
+def slice_budgets(
+    domains: tuple[str, ...], *, ceiling: int = BLOCK_CEILING_CHARS
+) -> list[tuple[str, int]]:
+    """Closed shares over ordered domains: 1→full, 2→60/40, 3→50/30/20,
+    4+→equal with sub-floor domains dropped. Sums never exceed the ceiling."""
+    names = [d for d in dict.fromkeys(domains) if d and d != "none"]
+    if not names:
+        return []
+    if len(names) == 1:
+        return [(names[0], ceiling)]
+    if len(names) == 2:
+        return [(names[0], ceiling * 60 // 100), (names[1], ceiling - ceiling * 60 // 100)]
+    if len(names) == 3:
+        first, second = ceiling * 50 // 100, ceiling * 30 // 100
+        return [(names[0], first), (names[1], second), (names[2], ceiling - first - second)]
+    share = ceiling // len(names)
+    if share < DOMAIN_FLOOR_CHARS:
+        return []
+    return [(name, share) for name in names]
+
+
+def sentence_chunks(text: str, *, budget: int) -> str:
+    """Whole sentences only, in order, fitting the budget. Never mid-sentence
+    cuts: an over-budget leading sentence yields "" (other domains still fill)."""
+    kept: list[str] = []
+    used = 0
+    for sentence in re.split(r"(?<=[.!?؟。\n])", text or ""):
+        piece = sentence.strip()
+        if not piece:
+            continue
+        cost = len(piece) + (1 if kept else 0)
+        if used + cost > budget:
+            break
+        kept.append(piece)
+        used += cost
+    return " ".join(kept)
+
+
+# P3 intent→domain wiring: deterministic, zero extra calls. The fused model
+# verdict (front.rag_domains) stays observed state for the shadow tracer and
+# future verdict-first orchestration; this map drives today's slicing.
+INTENT_DOMAINS: Final[dict[str, tuple[str, ...]]] = {
+    "knowledge_graph": ("kb", "personal"),
+    "calendar": ("personal",),
+    "tasks": ("personal",),
+    "schedule": ("personal",),
+    "brief": ("personal",),
+    "web_search": ("kb",),
+    "deep_search": ("kb",),
+    "read_page": ("kb",),
+    "youtube": ("kb",),
+    "tech_trending": ("kb",),
+}
+
+
+def domains_for_intent(intent: str | None) -> tuple[str, ...]:
+    """Ordered RAG domains for an intent; chat/defaults take dialect+personal."""
+    if intent is None:
+        return ("dialect", "personal")
+    return INTENT_DOMAINS.get(intent.strip().casefold(), ("dialect", "personal"))
+
+
+def domain_of(path: str) -> str | None:
+    """Vault path → RAG domain via the area map; None when unmapped."""
+    lowered = (path or "").replace("\\", "/")
+    for area, domain in DOMAIN_AREAS:
+        if area.casefold() in lowered.casefold():
+            return domain
+    return None
+
+
+def compose_rag_block(
+    sections: list[tuple[str, str]],
+    *,
+    domains: tuple[str, ...],
+    quarantined: bool = False,
+) -> str:
+    """Assemble per-domain sections under sliced shares; unmapped hits ride a
+    residual tail (no recall regression); ceiling halves under quarantine."""
+    ceiling = BLOCK_CEILING_CHARS // 2 if quarantined else BLOCK_CEILING_CHARS
+    shares = slice_budgets(domains, ceiling=ceiling)
+    funded = {name for name, _ in shares}
+    by_domain: dict[str, list[str]] = {name: [] for name, _ in shares}
+    residual: list[str] = []
+    for path, body in sections:
+        domain = domain_of(path)
+        if domain in funded:
+            by_domain[domain].append(body)
+        else:
+            residual.append(body)
+    lines: list[str] = []
+    used = 0
+    for name, share in shares:
+        chunk = sentence_chunks(" ".join(by_domain[name]), budget=share)
+        if chunk:
+            lines.append(f"[{name}] {chunk}")
+            used += len(lines[-1])
+    tail = sentence_chunks(" ".join(residual), budget=max(0, ceiling - used))
+    if tail:
+        lines.append(tail)
+    return "\n".join(lines)
+
+
 # Intent-gated injection (durability ratification 2026-09-14): routine
 # device/utility turns spend ZERO memory tokens — their narration needs no
 # personal context. Everything else (advisory chat, tool turns with
@@ -333,6 +457,8 @@ def inject(
     top_k: int = INJECT_TOP_K,
     max_chars: int = INJECT_MAX_CHARS,
     intent: str | None = None,
+    domains: tuple[str, ...] | None = None,
+    quarantined: bool = False,
 ) -> str:
     """Ambient retrieval for the pre-generation envelope. Sync + total: any
     failure (missing root, unreadable vault, short greeting) returns "" —
@@ -341,7 +467,9 @@ def inject(
     Intent gating: a routine intent returns "" before any retrieval (zero
     memory tokens); advisory turns prepend the Tier-1 digest block, then
     the top-k hits. intent=None preserves the legacy path (token check +
-    top-k only) for callers without a verdict.
+    top-k only) for callers without a verdict. domains=None preserves the
+    legacy single block byte-for-byte; a domain tuple switches to P3 sliced
+    assembly (closed shares, sentence chunks, quarantine-halved ceiling).
     """
     try:
         if intent is not None and intent.strip().casefold() in ROUTINE_INTENTS:
@@ -352,7 +480,14 @@ def inject(
         idx = index if index is not None else VaultIndex(vault_root)
         idx.refresh_if_stale()
         hits = idx.query(user_text, top_k=top_k)
-        block = build_injection_block(hits, max_chars=max_chars)
+        if domains is None:
+            block = build_injection_block(hits, max_chars=max_chars)
+        else:
+            block = compose_rag_block(
+                [(h.doc.path, h.doc.body) for h in hits],
+                domains=domains,
+                quarantined=quarantined,
+            )
         if intent is None:
             return block
         digest = load_digest_block(vault_root)

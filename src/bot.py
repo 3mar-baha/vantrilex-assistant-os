@@ -643,10 +643,17 @@ async def _stream_answer(
         # rides along so routine device turns spend zero memory tokens while
         # advisory turns carry the Tier-1 digest + top-k.
         if assoc_index is not None:
-            from src.associative import inject, intent_for
+            from src.associative import domains_for_intent, inject, intent_for
+            from src.gateway import any_quarantined
 
+            purpose = intent_for(text)
             assoc = inject(
-                text, settings.vault_local_path, index=assoc_index, intent=intent_for(text)
+                text,
+                settings.vault_local_path,
+                index=assoc_index,
+                intent=purpose,
+                domains=domains_for_intent(purpose),
+                quarantined=any_quarantined(),
             )
             if assoc:
                 system = f"{system}\n\n{assoc}"

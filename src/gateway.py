@@ -226,6 +226,13 @@ def _model_hot(model: str) -> float | None:
     return until - time.time()
 
 
+def any_quarantined() -> bool:
+    """True while any model sits in cooldown (P3 budget coupling reads this to
+    halve the RAG block ceiling instead of feeding a throttled turn)."""
+    now = time.time()
+    return any(until > now for until in _MODEL_COOLDOWNS.values())
+
+
 def _classify(
     status_code: int, body_snippet: str
 ) -> Literal["fatal", "quota", "transient", "window", "unavailable"]:
