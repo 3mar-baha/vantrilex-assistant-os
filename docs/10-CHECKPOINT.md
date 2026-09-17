@@ -450,6 +450,16 @@ Suite 1,474/7/0. HALT before P2.
 
 ## Arsenal sanitization (governance, 2026-09-17)
 
+## Compliance enforcement (governance, 2026-09-17)
+
+`docs/16-WORKFLOWS.md` verified byte-identical (untouched). MCP surgery:
+`fetch` + `time` removed (npm 404, re-probed), `sqlite` fixed dormant,
+`filesystem` gained the project-root arg, `instructions[]` repointed off
+quarantined skills (all 7 targets exist). `tdd` + `test-guard` invoked via
+skill loader (visible transcript); test-guard self-review of P0/P1 test files:
+no violations. Agents (8, incl. the 4 mandated), plugins manifest (4
+official), key hooks — all present on disk. HALT before P2.
+
 Bloat premise falsified (none of the 16 alleged skills on disk); 9 unlisted
 residual dirs quarantined restorable; MCP `fetch`/`time` removed as dead
 (404/unresolvable), `sqlite` fixed dormant; sequential-thinking launch-proven;
