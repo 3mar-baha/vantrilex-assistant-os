@@ -53,10 +53,7 @@ def test_resolve_absolute_oserror_refuses(monkeypatch):
         raise OSError("unresolvable")
 
     monkeypatch.setattr(pathlib.Path, "resolve", _boom)
-    try:
-        assert resolve_in_roots("C:\\Windows\\x.txt", (Path("C:\\root"),)) is None
-    finally:
-        real_resolve  # documented: restore handled by monkeypatch
+    assert resolve_in_roots("C:\\Windows\\x.txt", (Path("C:\\root"),)) is None
 
 
 def test_volume_up_presses_five_times(monkeypatch):
