@@ -41,7 +41,7 @@ def test_stage_guest_note_variants(tmp_path):
 
     from src.skills.voice_biometric_auth import stage_guest_note
 
-    moment = datetime(2026, 9, 17, 12, 0)
+    moment = datetime(2026, 9, 17, 12, 0, tzinfo=UTC)
     first = stage_guest_note(tmp_path, [0.1] * 4, enc_key=KEY, transcript="hi", now=moment)
     second = stage_guest_note(tmp_path, [0.1] * 4, enc_key=KEY, transcript="hi", now=moment)
     assert first != second  # same-minute collision suffixes
@@ -189,7 +189,6 @@ def test_save_chmod_failure_best_effort(tmp_path, monkeypatch):
         access_token="a", refresh_token="r", expires_at=9999999999.0, scopes=["x"]
     )
     save_tokens(tmp_path / "tok.enc", tokens, enc_key=KEY)
-    real_chmod  # documented: restore handled by monkeypatch
 
 
 def test_exchange_and_refresh_grants():
