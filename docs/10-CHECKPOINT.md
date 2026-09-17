@@ -437,6 +437,17 @@ clean/drift, shell ack replacement, voice-fallback frozen shape, triage card +
 voice slots, brief + journaler sections). Denylist byte-identical, persona
 4,782, suite 1,469/7/0. HALT before P1.
 
+## P1 — Pattern bank (master transformation plan, 2026-09-17)
+
+Miner `scripts/mine_joda_bank.py` (dev-layer, openpyxl read-only over local
+gitignored `data/joda/*.xlsx`): 5 acts × 80 floors + 100 rarity wildcards =
+500 patterns, first-act-wins dedupe, generic cap 5, into
+`04_Resources/Dialect_Encyclopedia/JODA_Pattern_Bank.md` (raw xlsx never in
+git). Deviation on record: competitive top-1 recall hits only 287/500
+(shared dialect vocabulary) — bank is consumed by DIRECT section read instead
+(gated by `tests/test_joda_bank_p1.py`: quotas, dedupe, shape, section parse).
+Suite 1,474/7/0. HALT before P2.
+
 - [07 — Implementation Plan](./07-IMPLEMENTATION-PLAN.md)
 - [11 — Testing](./11-TESTING.md)
 - [Objectives Ledger](./reports/OBJECTIVES_LEDGER_MET_VS_PENDING.md)
