@@ -374,25 +374,36 @@ def compose_rag_block(
     ceiling = BLOCK_CEILING_CHARS // 2 if quarantined else BLOCK_CEILING_CHARS
     shares = slice_budgets(domains, ceiling=ceiling)
     funded = {name for name, _ in shares}
-    by_domain: dict[str, list[str]] = {name: [] for name, _ in shares}
-    residual: list[str] = []
-    for path, body in sections:
-        domain = domain_of(path)
-        if domain in funded:
-            by_domain[domain].append(body)
-        else:
-            residual.append(body)
     lines: list[str] = []
     used = 0
+    spent: dict[str, int] = {name: 0 for name, _ in shares}
     for name, share in shares:
-        chunk = sentence_chunks(" ".join(by_domain[name]), budget=share)
-        if chunk:
-            lines.append(f"[{name}] {chunk}")
-            used += len(lines[-1])
-    tail = sentence_chunks(" ".join(residual), budget=max(0, ceiling - used))
-    if tail:
-        lines.append(tail)
-    return "\n".join(lines)
+        for hit_path, body in sections:
+            if domain_of(hit_path) != name:
+                continue
+            chunk = sentence_chunks(body, budget=max(0, share - spent[name]))
+            if not chunk:
+                continue
+            line = f"[{name}] {hit_path}: {chunk}"
+            if used + len(line) > ceiling:
+                break
+            lines.append(line)
+            used += len(line)
+            spent[name] += len(line)
+    for hit_path, body in sections:
+        if domain_of(hit_path) in funded:
+            continue
+        chunk = sentence_chunks(body, budget=max(0, ceiling - used))
+        if not chunk:
+            continue
+        line = f"{hit_path}: {chunk}"
+        if used + len(line) > ceiling:
+            break
+        lines.append(line)
+        used += len(line)
+    if not lines:
+        return ""
+    return INJECT_HEADER_AR + "\n" + "\n".join(lines)
 
 
 # Intent-gated injection (durability ratification 2026-09-14): routine
