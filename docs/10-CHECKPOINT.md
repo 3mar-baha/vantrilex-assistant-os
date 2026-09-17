@@ -480,6 +480,15 @@ with static floor. P4.2 pins: direct turn = exactly 2 model touches,
 placeholder/ack never reach memory (full-turn variant). Suite 1,521/7/0,
 ruff clean, security OK. HALT before P5.
 
+## P5 — Fault matrix, overlay, live harnesses (master plan, 2026-09-17)
+
+P5.1 audited the 30-seam registry: 27 covered, 3 genuine gaps pinned
+(MEDIUM 429 cascade, dead-coordinator park, missing-binary Arabic line).
+P5.2 `tests/live_harness/overlay.py` OverlayVault (shadow writes, fallback
+reads, diary pristine). P5.3 ten live harnesses (skip-soft, pacing, diary
+fence; 6 pass hermetic legs, 7 skip without backends). Suite 1,536/14/0.
+HALT before P6.
+
 ## Arsenal sanitization (governance, 2026-09-17)
 
 ## Compliance enforcement (governance, 2026-09-17)
