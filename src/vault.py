@@ -600,10 +600,12 @@ class VaultClient:
             return
         response.raise_for_status()
         data = response.json()
+        if not isinstance(data, list):
+            return
         notes = [
             item for item in data if item.get("type") == "file" and item["name"].endswith(".md")
         ]
-        if not isinstance(data, list) or not notes:
+        if not notes:
             return
         changes: dict[str, str | None] = {}
         for item in notes:
