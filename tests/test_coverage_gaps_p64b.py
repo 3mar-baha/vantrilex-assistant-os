@@ -113,7 +113,7 @@ def test_gateway_empty_attempt_quarantines(monkeypatch):
 
     async def _empty(self, model, payload):
         return
-        yield  # pragma: no cover - never reached, marks generator
+        yield  # pragma: no cover -- never reached, marks generator
 
     client = OmniRouteClient(
         "http://gw.test/v1",
@@ -141,7 +141,7 @@ def test_gateway_transport_exhausted_after_retries(monkeypatch):
     async def _down(self, model, payload):
         calls["n"] += 1
         raise httpx.ConnectError("down")
-        yield  # pragma: no cover - marks async generator; never reached
+        yield  # pragma: no cover -- marks async generator; never reached
 
     async def _instant(delay):
         return None

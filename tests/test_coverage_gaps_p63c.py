@@ -278,6 +278,47 @@ def test_sanitize_and_mint_shapes():
     assert mint_audit_code().startswith("PC-")
 
 
+def test_spawn_real_existing_binary_spawns_nothing_real(monkeypatch, tmp_path):
+    import asyncio as _aio
+    import sys
+
+    import bridge.executor as executor_mod
+
+    calls = []
+
+    async def _fake_spawn(*args, **kwargs):
+        calls.append(args)
+
+    monkeypatch.setattr(executor_mod.asyncio, "create_subprocess_exec", _fake_spawn)
+    executor = Executor(_guard(tmp_path))
+    _aio.run(executor._spawn_real([sys.executable, "-c", "pass"]))
+    assert calls and calls[0][0] == sys.executable
+
+
+def test_open_real_delegates_to_startfile(monkeypatch, tmp_path):
+    import asyncio as _aio
+    import os as _os
+
+    seen = []
+    monkeypatch.setattr(_os, "startfile", lambda path: seen.append(path), raising=False)
+    executor = Executor(_guard(tmp_path))
+    _aio.run(executor._open_real("C:\\note.txt"))
+    assert seen == ["C:\\note.txt"]
+
+
+def test_volume_key_failure_honest(monkeypatch, tmp_path):
+    import asyncio as _aio
+
+    import bridge.executor as executor_mod
+
+    async def _boom(vk, times=1):
+        raise RuntimeError("keys dead")
+
+    monkeypatch.setattr(executor_mod, "_press_vk", _boom)
+    out = _aio.run(Executor(_guard(tmp_path)).volume("up"))
+    assert out.status == "error" and "key injection failed" in out.detail
+
+
 def test_resolve_relative_and_bare_names(tmp_path):
     root = tmp_path / "r"
     root.mkdir()
