@@ -52,6 +52,7 @@ from src.skills.voice_biometric_auth import VoiceBiometrics, owner_voice_gate
 from src.skills.voice_to_vault_transcriber import _DEFAULT_PROMPT_TERMS, VoiceToVault
 from src.telemetry import TelemetryClient
 from src.tools import ToolRegistry
+from src.turn_counter import bump_turn_counter
 from src.vault import (
     VaultClient,
     ensure_master_digest,
@@ -449,6 +450,7 @@ def build_dispatcher(
         from src.skills.acoustic_nuance import ogg_paralinguistic_block
 
         acoustic = ogg_paralinguistic_block(ogg)
+        bump_turn_counter(Path(settings.vault_local_path))  # P2: human turn tally
         _spawn_stream(message, bot, text, voice_origin=True, acoustic=acoustic)
 
     @dp.message(F.text)
@@ -468,6 +470,7 @@ def build_dispatcher(
             quoted_label = quoted_text.strip()[:120]
             if quoted_label:
                 text = f"{text}\n\n[عمر ردّ على رسالة سابقة: «{quoted_label}» — خديها بالحسبان]"
+        bump_turn_counter(Path(settings.vault_local_path))  # P2: human turn tally
         _spawn_stream(message, bot, text)
 
     @dp.message(F.photo)

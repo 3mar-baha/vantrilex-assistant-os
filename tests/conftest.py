@@ -9,6 +9,7 @@ never trips on test fixtures.
 import asyncio
 import dataclasses
 import datetime
+import os
 from time import perf_counter
 from types import SimpleNamespace
 
@@ -34,6 +35,10 @@ from src.config import Settings
 OWNER_ID = 123456789  # mirrors AUTHORIZED_USER_ID in ENV_EXAMPLE
 
 REMOVE = "__REMOVE__"  # sentinel: factory deletes this key instead of setting it
+
+os.environ.setdefault("SARA_TURN_COUNTER_OFF", "1")  # suite hermeticity: the
+# P2 transport hook never touches real vault State during tests; unit tests
+# opt back into real disk via monkeypatch.delenv.
 
 ENV_EXAMPLE: dict[str, str] = {
     "OMNIROUTE_BASE_URL": "http://localhost:20128/v1",
