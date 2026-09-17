@@ -47,8 +47,6 @@ def test_count_running_psutil_failure_reads_zero(monkeypatch):
 def test_resolve_absolute_oserror_refuses(monkeypatch):
     import pathlib
 
-    real_resolve = pathlib.Path.resolve
-
     def _boom(self, *args, **kwargs):
         raise OSError("unresolvable")
 
