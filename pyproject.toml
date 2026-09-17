@@ -15,7 +15,7 @@ extend-exclude = [".claude", "archive"]
 asyncio_mode = "auto"
 testpaths = ["tests"]
 addopts = "--cov=src --cov=bridge --cov=common --cov-branch --cov-report=term-missing --cov-fail-under=85"
-markers = ["live_probe: live infrastructure probes (fail-soft)", "shadow: Tier-3 shadow tracer"]
+markers = ["live_probe: live infrastructure probes (fail-soft)", "live_harness: Phase-5 operational harnesses (fail-soft, never in CI)", "shadow: Tier-3 shadow tracer"]
 
 [tool.coverage.run]
 branch = true
