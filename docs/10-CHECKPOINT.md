@@ -489,6 +489,21 @@ reads, diary pristine). P5.3 ten live harnesses (skip-soft, pacing, diary
 fence; 6 pass hermetic legs, 7 skip without backends). Suite 1,536/14/0.
 HALT before P6.
 
+## P6 — Tiered coverage 98/90 (master plan, 2026-09-17) — COMPLETE
+
+- **Batches**: 1–5 + 3a/3b/3c + 4a/4b + 5 + 6a + 7a–7g (`test_coverage_gaps_p6*.py`,
+  `p64*.py`, `p65*.py`, `p66a`, `p67a–p67g`); `scripts/check_tiered_coverage.py`
+  (22 core modules ≥98 + TOTAL ≥90, live files included).
+- **Verdict**: TIERED COVERAGE GATE PASSED — 22/22 core OK (3 at 100, lows 98.2
+  associative / 98.5 executor), TOTAL 91.8%; full suite 1,798 passed, 7 skipped.
+- **Production fixes found by pins (2)**: `VaultClient._migrate_studies` guard
+  reorder (non-list payload crashed with AttributeError); `VoiceprintRegistry.match`
+  missing `await` on `match_vector` (returned an unawaited coroutine).
+- **Known environmental**: `h04 TTFT` + `h06 JODA dialogues` fail only while the
+  free pools are rate-limited (groq cooldown + gemma first-token timeout —
+  fail-fast quarantines working as designed); both pass on recovered pools.
+- HALT — master transformation plan P0–P6 complete.
+
 ## Arsenal sanitization (governance, 2026-09-17)
 
 ## Compliance enforcement (governance, 2026-09-17)
