@@ -469,6 +469,17 @@ intent→domain map (model verdict stays observed pending verdict-first
 reorder). Regression caught and fixed: phase-6 citation/header test.
 Suite 1,514/7/0. HALT before P4.
 
+## P4 — Token/prose split + single-pass synthesis (master plan, 2026-09-17)
+
+Forensic result: confirmation_id is minted server-side post-affirmation,
+persisted pre-execution, machine-to-machine only — never in prose or model
+I/O. P4.1 pins: challenges carry no auth token (audit receipt stays),
+execution target comes from pending state (reply naming another app still
+fires the original), refusal clears clean, park warning single-pass shaped
+with static floor. P4.2 pins: direct turn = exactly 2 model touches,
+placeholder/ack never reach memory (full-turn variant). Suite 1,521/7/0,
+ruff clean, security OK. HALT before P5.
+
 ## Arsenal sanitization (governance, 2026-09-17)
 
 ## Compliance enforcement (governance, 2026-09-17)
