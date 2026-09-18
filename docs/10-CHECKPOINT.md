@@ -635,6 +635,18 @@ the only breathing fallback candidate, format-repair required; Ultra out
 until it streams content. Dashboard latency claims (869 ms) rejected —
 measured 24 s. Table slug ambiguity fixed via two-segment display.
 
+## Model probe Phase 4 — ASR (2026-09-18, final)
+
+Fish-synthesized ar-JO fixture («مرحبا سارة، شوفيلي شو في مواعيد اليوم»,
+temp-only, deleted after run) vs `groq/whisper-large-v3-turbo` (557 ms,
+WER 0.714), `groq/whisper-large-v3` (643 ms, WER 0.571), local
+faster-whisper-small/int8 baseline (3.6 s, WER 0.714). All three normalize
+colloquial toward MSA (شوفيلي→شوفيني، مواعيد→مواعد/موايد); v3 edges turbo
+by one word; Groq is ~6× faster than local at equal-or-better accuracy.
+Pipeline switch NOT proposed here — needs its own plan (privacy/latency
+trade, §2.5 local-first doctrine). Mission verdicts Q1–Q4 complete in the
+report; no production config changes made.
+
 ## Arsenal sanitization (governance, 2026-09-17)
 
 ## Compliance enforcement (governance, 2026-09-17)

@@ -273,6 +273,112 @@ def render_heavy_table(results: list[dict]) -> str:
     )
 
 
+ASR_MODELS = ("groq/whisper-large-v3-turbo", "groq/whisper-large-v3")
+ASR_KNOWN_TEXT = "مرحبا سارة، شوفيلي شو في مواعيد اليوم"
+ASR_TRANSCRIPTIONS_URL = "http://localhost:20128/v1/audio/transcriptions"
+
+
+def normalize_arabic_words(text: str) -> list[str]:
+    import re
+    import unicodedata
+
+    text = unicodedata.normalize("NFKD", text)
+    text = "".join(ch for ch in text if not unicodedata.combining(ch))
+    text = re.sub(r"[^\w\s\u0600-\u06ff]", " ", text)
+    return text.split()
+
+
+def word_error_rate(reference: str, hypothesis: str) -> float:
+    """Stdlib Levenshtein over word tokens (insertions+deletions+subs)/N."""
+    ref, hyp = normalize_arabic_words(reference), normalize_arabic_words(hypothesis)
+    if not ref:
+        return 1.0 if hyp else 0.0
+    prev = list(range(len(hyp) + 1))
+    for i, rw in enumerate(ref, 1):
+        cur = [i]
+        for j, hw in enumerate(hyp, 1):
+            cur.append(min(prev[j] + 1, cur[-1] + 1, prev[j - 1] + (rw != hw)))
+        prev = cur
+    return round(prev[-1] / len(ref), 3)
+
+
+async def transcribe_remote(
+    client: httpx.AsyncClient, model: str, audio: bytes, filename: str
+) -> dict:
+    started = time.perf_counter()
+    try:
+        response = await client.post(
+            ASR_TRANSCRIPTIONS_URL,
+            files={"file": (filename, audio, "audio/mpeg")},
+            data={"model": model, "language": "ar", "response_format": "json"},
+            timeout=120,
+        )
+    except (httpx.HTTPError, TimeoutError) as exc:
+        return {"model": model, "status": type(exc).__name__, "detail": str(exc)[:200]}
+    latency_ms = round((time.perf_counter() - started) * 1000, 0)
+    if response.status_code != 200:
+        return {
+            "model": model,
+            "status": f"HTTP {response.status_code}",
+            "detail": response.text[:200],
+        }
+    try:
+        text = response.json().get("text", "")
+    except ValueError:
+        return {"model": model, "status": "bad-json", "detail": response.text[:200]}
+    return {
+        "model": model,
+        "status": "ok",
+        "latency_ms": latency_ms,
+        "text": text,
+        "wer": word_error_rate(ASR_KNOWN_TEXT, text),
+    }
+
+
+def transcribe_local(audio_path: str) -> dict:
+    """Prod-parity baseline: local faster-whisper small/int8 (CPU executor)."""
+    from faster_whisper import WhisperModel
+
+    started = time.perf_counter()
+    try:
+        whisper = WhisperModel("small", device="cpu", compute_type="int8")
+        segments, _ = whisper.transcribe(audio_path, language="ar")
+        text = "".join(s.text for s in segments).strip()
+    except Exception as exc:  # noqa: BLE001 — missing model/binary degrades to skipped
+        return {"model": "local faster-whisper-small", "status": f"skipped: {exc}"[:200]}
+    latency_ms = round((time.perf_counter() - started) * 1000, 0)
+    return {
+        "model": "local faster-whisper-small",
+        "status": "ok",
+        "latency_ms": latency_ms,
+        "text": text,
+        "wer": word_error_rate(ASR_KNOWN_TEXT, text),
+    }
+
+
+async def run_asr(client: httpx.AsyncClient, audio: bytes, filename: str) -> list[dict]:
+    results = []
+    for model in ASR_MODELS:
+        results.append(await transcribe_remote(client, model, audio, filename))
+        await asyncio.sleep(INTER_CALL_GAP_S)
+    loop = asyncio.get_running_loop()
+    results.append(await loop.run_in_executor(None, transcribe_local, filename))
+    return results
+
+
+def render_asr_table(results: list[dict]) -> str:
+    rows = [
+        [
+            r["model"].split("/")[-1][:34],
+            r.get("status"),
+            r.get("latency_ms", "--"),
+            r.get("wer", "--"),
+        ]
+        for r in results
+    ]
+    return tabulate(rows, headers=["model", "status", "latencyMs", "WER"], tablefmt="github")
+
+
 async def run_fast(client: httpx.AsyncClient) -> list[dict]:
     models = [FAST_BASELINE, FAST_CANDIDATE]
     results: list[dict] = []
@@ -324,20 +430,29 @@ def append_report(phase: str, table: str, results: list[dict]) -> None:
 async def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Probe candidate models live")
     parser.add_argument("--phase", choices=("fast", "medium", "heavy", "asr"), default="fast")
+    parser.add_argument("--audio", type=Path, default=None, help="audio fixture for --phase asr")
     args = parser.parse_args(argv)
     load_dotenv(ROOT / ".env")
     api_key = os.environ.get("OMNIROUTE_API_KEY", "")
     if not api_key:
         print("OMNIROUTE_API_KEY missing — aborting (no probes sent).")
         return 2
-    if args.phase not in ("fast", "medium", "heavy"):
+    if args.phase not in ("fast", "medium", "heavy", "asr"):
         print(f"Phase '{args.phase}' not wired yet — one phase per run.")
         return 3
+    if args.phase == "asr" and (not args.audio or not args.audio.exists()):
+        print("--phase asr needs --audio <existing mp3 fixture>.")
+        return 2
     async with httpx.AsyncClient(
         headers={"Authorization": f"Bearer {api_key}"},
         timeout=FIRST_TOKEN_TIMEOUT_S + 30,
     ) as client:
-        if args.phase == "medium":
+        if args.phase == "asr":
+            audio = args.audio.read_bytes()
+            results = await run_asr(client, audio, str(args.audio))
+            table = render_asr_table(results)
+            append_report("ASR whisper v3 vs turbo (Fish ar-JO fixture)", table, results)
+        elif args.phase == "medium":
             results = await run_medium(client)
             table = render_medium_table(results)
             append_report("MEDIUM tool-JSON", table, results)

@@ -83,3 +83,28 @@
 
 2.  **Identify R
 
+
+## Phase: ASR whisper v3 vs turbo (Fish ar-JO fixture) (2026-09-18 13:08)
+
+| model                      | status                                                          | latencyMs   | WER   |
+|----------------------------|-----------------------------------------------------------------|-------------|-------|
+| whisper-large-v3-turbo     | ok                                                              | 557.0       | 0.714 |
+| whisper-large-v3           | ok                                                              | 643.0       | 0.571 |
+| local faster-whisper-small | skipped: [Errno 2] No such file or directory: 'asr_fixture.mp3' | --          | --    |
+
+### groq/whisper-large-v3-turbo
+>  مرحبا سارة، شوفيني شوفي مواعد اليوم؟
+
+### groq/whisper-large-v3
+>  مرحبا سارة، شوفيني شوفي مواعد اليوم
+
+
+## Phase: ASR local baseline (faster-whisper small/int8) (2026-09-18 16:08)
+
+| model                      | status   |   latencyMs |   WER |
+|----------------------------|----------|-------------|-------|
+| local faster-whisper-small | ok       |        3644 | 0.714 |
+
+### local faster-whisper-small
+> مرحبا سارا شوفيني شوفي موايد اليوم
+
