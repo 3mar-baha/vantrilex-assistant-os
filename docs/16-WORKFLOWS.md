@@ -2,90 +2,116 @@
 tags: [architecture]
 ---
 
-# 16 — Operational Workflows (4-tier lifecycle playbook)
+# 16 — Operational Workflows (Sovereign 4-Tier Lifecycle Playbook)
 
 > Binding procedure for every implementation session. Companion maps:
 > [Map of Architecture](./00-MAP-OF-ARCHITECTURE.md) ·
 > [Map of Testing & Audits](./00-MAP-OF-TESTING-AND-AUDITS.md) ·
 > [Checkpoint](./10-CHECKPOINT.md) · [Testing](./11-TESTING.md).
 
-## 0. Activation manifest (sanitized 2026-09-17 — verified against disk)
+## 0. Activation Manifest & Provisioning Matrix
 
-> Audit 2026-09-17 found ZERO of the alleged bloat skills
-> (`nextjs-turbopack`, `bun-runtime`, `video-editing`, `x-api`, `crosspost`,
-> `article-writing`, `investor-*`, `market-research`, `frontend-*`,
-> `api-design`, `e2e-testing`, `fal-ai-media`, `dmux-workflows`, `agent-sort`)
-> on disk — that premise was false; no such purge was needed. Nine unlisted
-> residual dirs were quarantined to `C:\Users\omarb\.vantrilex\
-> quarantine-20260917\` (restorable): `code-review`, `dev-agent-skills`,
-> `mattpocock-typescript`, `security-review`, `starter`, `verification-loop`,
-> `wayfinder`, `writing-for-agents`, `writing-plans`.
+Sourced by deep scan 2026-09-18 of `O:\Claude Code\vantrilex\vantrilex-registry\`
+(1,486 skills / 283 agents / 903 MCPs / 13 plugins / 19 hooks;
+`VANTRILEX_CATALOG.md` 2,743 lines, 18 ✅ defaults — all defaults retained).
+Selection rule: load-bearing for the Windows/Telegram/Obsidian/OmniRoute
+runtime only. Rejected fluff is logged with cause — no silent omission.
 
-Baseline — verified present locally:
-
-| # | Component | On-disk path | Status |
+| Component | Type | Registry source | Target role in Sara |
 |---|---|---|---|
-| 1–5 | Skills `ask-matt`, `find-skills`, `ponytail` (+`ponytail-core`), `skill-creator` | `.claude/skills/<name>/` | **Active** (full bodies) |
-| 6–9 | MCPs `filesystem`, `memory`, `openrouter`, `sequential-thinking` | `opencode.json` → `mcp` | **Active** (untracked; live key — never commit; sequential-thinking launch-proven via stdio handshake) |
-| 10 | MCP `fetch` | — (removed 2026-09-17) | **Dead** (`@modelcontextprotocol/server-fetch` 404s on npm; no trustworthy successor) |
-| 11 | MCP `time` | — (removed 2026-09-17) | **Dead** (no resolvable package found) |
-| 12–15 | Plugins `code-review`, `commit-commands`, `typescript-lsp`, `pyright-lsp` | `.claude/plugins/manifest.json` | **Active** (`claude-plugins-official/*`, committed) |
-| 16–18 | Hooks `session-start`, `pre-compact`, `block-dev-servers-outside-tmux-…` (+ 9 more local templates) | `.claude/hooks/` + `settings.json` | **Active** |
-| 19 | Agent `architect` (+ backend/planner/lead present) | `.claude/agents/architect.md` | **Active** |
+| `tdd` | Skill | `skills/tdd.md` | Tier 2 Red→Green loop discipline |
+| `tdd-workflow` | Skill | `skills/tdd-workflow.md` | Tier 2 coverage workflow (80%+ floor) |
+| `tdd-guide` | Agent | `agents/tdd-guide.md` | Proactive write-tests-first enforcement |
+| `pytest` (direct) | Runner | project-local `pytest-skill` (NOT in registry — local only) | Suite execution; registry has no pytest entry |
+| `ponytail` | Skill | `skills/ponytail.md` | YAGNI/stdlib-first ladder, shortest diff |
+| `diagnosing-bugs` / `systematic-debugging` | Skills | `skills/diagnosing-bugs.md`, `skills/systematic-debugging.md` | Incident forensics (14:54–57 storm precedent) |
+| `pyright-lsp` | Plugin | `plugins/pyright-lsp.md` | Type intelligence; executable gate stays `ruff` |
+| `skill-creator` + `skill-authoring-workflow` + `writing-skills` | Skills | `skills/skill-creator.md`, `skills/skill-authoring-workflow.md`, `skills/writing-skills.md` | Self-expansion authoring path |
+| `skill-evolution` + `skill-optimizer` + `skills-janitor` | Skills | `skills/skill-evolution.md`, `skills/skill-optimizer.md`, `skills/skills-janitor.md` | Propose → optimize → prune lifecycle |
+| `skills-library` | Skill | `skills/skills-library.md` | Owner-taught skill discovery interview |
+| `tool-design` | Skill | `skills/tool-design.md` | `ToolRegistry` (`src/tools.py:90`) addition discipline |
+| `mcp-builder` + `MCP Builder` agent | Skill + Agent | `skills/mcp-builder.md`, `agents/MCP Builder.md` | MCP authoring when owner supplies one |
+| `auditing-mcp-servers-for-tool-poisoning` | Skill | `skills/auditing-mcp-servers-for-tool-poisoning.md` | Admission gate: every owner-supplied MCP scanned before wiring |
+| `memory-systems` + `session-memory` | Skills | `skills/memory-systems.md`, `skills/session-memory.md` | Memory-OS architecture (upsert triples) |
+| `obsidian-knowledge-brain` + `Knowledge Graph Engineer` agent | Skill + Agent | `skills/obsidian-knowledge-brain.md`, `agents/Knowledge Graph Engineer.md` | Vault rule evolution, Tier 4 graph sync |
+| `RAG Pipeline Engineer` agent | Agent | `agents/RAG Pipeline Engineer.md` | Hybrid retrieval quality (aliases → TF-IDF → residual embeddings) |
+| `context-fundamentals` + `context-optimization` | Skills | `skills/context-fundamentals.md`, `skills/context-optimization.md` | 60/40 memory budget + compaction discipline |
+| `reflexion` | Skill | `skills/reflexion.md` | Nightly-worker reflection ONLY — banned from hot path (4 s guillotine) |
+| `verification-before-completion` | Skill | `skills/verification-before-completion.md` | Pre-commit proof gate |
+| `eval-harness` | Skill | `skills/eval-harness.md` | Nightly prompt-regression evals (23:40 window) |
+| `clean-code-guard` + `test-guard` + `upstream-docs-guard` | Skills | `skills/clean-code-guard.md`, `skills/test-guard.md`, `skills/docs-guard.md` | Tier 3 guard passes (note: registry file is `docs-guard.md`) |
+| `securing-agentic-ai-tool-invocation` + `Application Security Engineer` agent | Skill + Agent | `skills/securing-agentic-ai-tool-invocation.md`, `agents/Application Security Engineer.md` | Tool-boundary threat model (AML.T0053) |
+| `git-guardrails` (registry file `git-guardrails-claude-code.md`) + `commit-commands` + `code-review` | Skill + Plugins | `skills/git-guardrails-claude-code.md`, `plugins/commit-commands.md`, `plugins/code-review.md` | Tier 4 safe ship |
+| `poka-yoke` + `varlock-claude-skill` | Skills | `skills/poka-yoke.md`, `skills/varlock-claude-skill.md` | Mistake-proofing + secrets hygiene (`.env`/`vault/` never staged) |
+| `architect` + `planner` + `Workflow Architect` agent | Agents | `agents/architect.md`, `agents/planner.md`, `agents/Workflow Architect.md` | Tier 1 discovery |
+| `multi-agent-patterns` + `Multi-Agent Systems Architect` agent | Skill + Agent | `skills/multi-agent-patterns.md`, `agents/Multi-Agent Systems Architect.md` | **P3-DEFERRED**: fleet design only, no production fan-out (TTFT/429 math) |
+| `dispatching-parallel-agents` + `subagent-driven-development` | Skills | (registry) | Harness coordination only — never production orchestration |
+| MCPs `filesystem`, `memory`, `openrouter`, `sequential-thinking`, `obsidian-tc` (The-40-Thieves), `calllint`, `sqlite` (dormant) | MCP | `mcp/*.md` | Scoped IO, reasoning, vault path, lint surface |
+| Hooks `session-start`, `pre-compact`, `save-state-before-context-compaction`, `session-end`, `block-creation-of-random-md-files-…`, `block-dev-servers-outside-tmux-…`, `reminder-before-git-push-…`, `evaluate-session-for-extractable-patterns`, `suggest-compact` | Hooks | `hooks/*.md` + project-local `dangerous-command-guard.json` | Session integrity, doc-home hygiene, skill-evolution feed |
 
-Elite additions — sourced per-component (untracked, rotation rule):
-
-| Component | Source → on-disk path | Status |
-|---|---|---|
-| `clean-code-guard`, `test-guard`, `upstream-docs-guard`, `diagnosing-bugs` | toolkit cache `guard-skills` + local → `.claude/skills/` | **Active** (full bodies) |
-| `securing-agentic-ai-tool-invocation` | toolkit cache `cybersecurity` → `.claude/skills/` | **Active** (full body) |
-| `git-guardrails` | toolkit cache `mattpocock-skills` → `.claude/skills/` | **Active** (source dir `git-guardrails-claude-code`) |
-| `tdd`, `tdd-workflow`, `pytest-skill`, `poka-yoke` | cache + registry cards → `.claude/skills/` | **Active** (`tdd` full body; others indexed with Raw URLs) |
-| `obsidian-knowledge-brain`, `varlock-claude-skill` | registry cards → `.claude/skills/<name>/SKILL.md` | **Active (indexed)** |
-| `block-creation-of-random-md-files-…`, `session-end` | upstream hooks + cached `memory-persistence` → `.claude/hooks/` | **Active** (adapted: doc-homes stay writable for `/sync`) |
-| `Knowledge Graph Engineer`, `Workflow Architect`, `Application Security Engineer` | toolkit cache `agency-agents` → `.claude/agents/` | **Active** (full bodies) |
-| MCPs `obsidian-tc` (vault path), `calllint` | registry cards → `opencode.json` → `mcp` | **Active** (packages resolve: 1.30.1 / 0.2.0) |
-| MCP `sqlite` | fixed package → `opencode.json` → `mcp` | **Active (dormant)** — `mcp-server-sqlite`, `enabled: false` |
-| MCP `06ketan-slideshot` | `opencode.json` → `mcp` | **Active** (resolves 4.4.0; out of Sara scope, retained) |
-
-### Mandatory Invocation Rule (binding from P2 on)
-
-The Implementer MUST physically invoke required skills via the skill-loader
-tool with the invocation visible in the turn transcript — doctrine-by-memory
-no longer suffices. Minimums: P-phase entry invokes the phase's skill
-(`tdd`/`tdd-workflow` for `/code`, `clean-code-guard` + `test-guard` for
-`/audit` gates, phase-appropriate guards for `/sync`). A phase worked without
-a visible skill invocation is procedurally incomplete.
+REJECTED with cause: `rag-blueprint` (NVIDIA GPU-deploy doctrine vs API-first
+$0.00 — pattern carried by RAG Pipeline Engineer instead); cloud-vision MCPs
+(full-screen exfil vs bbox-ROI doctrine); `fetch`/`time` (dead upstream, per
+prior audit); local-weight / vector-DB MCPs (disposable-filesystem violation).
 
 Standing rules: `.claude/skills/` is gitignored (sprint rotation + teardown);
 `opencode.json` / `.mcp.json` / `vault/` / `.env` are never committed;
 `src/persona.py` is reformat-locked (4,782-byte invariant).
 
-## Tier 1 — `/plan` (Architectural Discovery)
+### 0.1 The Mandatory Skill Lock (The Iron Rule)
 
-Tooling: `architect` + `sequential-thinking` + `ask-matt`.
-Protocol:
+BINDING: no file is written, edited, or tested unless that phase's designated
+skill is physically loaded via the skill-loader with the invocation visible in
+the transcript. Doctrine-by-memory is procedurally incomplete. Zero bare-metal
+execution — a phase worked without a visible skill invocation is void and
+re-run. Minimums: Tier 1 `architect`+`sequential-thinking`; Tier 2
+`tdd`+`tdd-workflow`; Tier 3 `clean-code-guard`+`test-guard`+
+`securing-agentic-ai-tool-invocation`; Tier 4 `upstream-docs-guard`.
 
-1. Read `docs/10-CHECKPOINT.md` + the relevant `docs/01–15` notes.
-2. Formulate a phased plan (files, acceptance criteria, verification gates).
-3. **HALT — await owner sign-off** (`"التالي"`/`"next"`) before any code.
+## 1. Tier 1 — /plan (Architectural Discovery & Consensus)
 
-## Tier 2 — `/code` (TDD Implementation)
+Active stack: `architect` + `sequential-thinking` + `Workflow Architect`.
+Protocol: read `docs/10-CHECKPOINT.md` + relevant `docs/01–15`; formulate
+phased plan (files, acceptance criteria, gates); HALT for owner sign-off
+(`"التالي"`/`"next"`). Default-to-/plan: any task without an explicit tier
+lands here, read-only.
 
-Tooling: `ponytail` + `tdd-workflow` + `pytest-skill`→`pytest` + `pyright-lsp`→`ruff`.
-Protocol: Red → Green → Refactor; smallest abstraction that satisfies the spec;
-no speculative layers. Verify:
+## 2. Tier 2 — /code (TDD & Autonomous Engineering)
+
+Active stack: `tdd` + `tdd-workflow` + `ponytail` + direct `pytest` +
+`pyright-lsp`→`ruff`. Red → Green → Refactor; smallest abstraction.
+Suite command and floor:
 
 ```powershell
 .venv/Scripts/python.exe -m pytest -q -p no:cacheprovider --no-cov
-# target: 1,798+ passed, 0 failed (floor ratified 2026-09-18; pre-existing
-# live/free-pool exceptions carried explicitly per checkpoint)
+# floor ratified 2026-09-18: 1,819 passed; tiered gate 22 core ≥98%, total ≥90%
 ```
 
-## Tier 3 — `/audit` (Security & Invariant Gate)
+Codified execution paths (all ratified consensus, all tested):
 
-Tooling: `clean-code-guard` + `test-guard` + `securing-agentic-ai-tool-invocation`.
-Protocol — all five invariants plus the gates:
+- **In-turn scratchpad healing & tool-lane isolation.** Tool exceptions die
+  at `dispatcher.py:951` (`_tool_lane` try/except → plain-tier2 narration;
+  tested `test_registry_failure_degrades_to_plain_tier2`). Deterministic
+  parameter repair bounded at 2 attempts, zero LLM calls, FAST ack untouched.
+- **`memory_upsert` conflict resolution.** Memories normalize to
+  (entity, slot, value) via `_normalize`; collisions mark the old row
+  `superseded:` (auditable, hidden from RAG). Storage stays append-only.
+- **Dynamic MCP self-installation & Ephemeral Composition Cache.** Owner
+  MCP → `auditing-mcp-servers-for-tool-poisoning` scan →
+  `mcp-builder`/`MCP Builder` wiring → handshake validation →
+  `ToolRegistry` promotion. Read-only chains cache ephemerally (session
+  scope); PC-effecting skills distill at 23:40 (`ast.parse` allowlist:
+  stdlib + `src.*`), OverlayVault-tested, owner-promoted.
+- **Gmail quota diet + pool sanitization.** `PEEK_DEFAULT_MAX=10`
+  (`src/gmail.py`), `FETCH_BURST_CAP=25` with cursor hold-back (overflow
+  redelivers, never lost). MEDIUM/HEAVY primaries are nex-agi slugs: a 404
+  `No active credentials` parks the tier — verify the OmniRoute credential
+  before blaming the code.
+
+## 3. Tier 3 — /audit (Security, Invariants & Real-World Validation)
+
+Active stack: `clean-code-guard` + `test-guard` +
+`securing-agentic-ai-tool-invocation`. Gates:
 
 | Invariant | Check |
 |---|---|
@@ -101,15 +127,21 @@ Protocol — all five invariants plus the gates:
 # target: 6/6 scenarios + 5/5 invariants, DEGRADED or LIVE
 ```
 
-## Tier 4 — `/sync` (Obsidian Graph & Checkpoint Sync)
+10-prompt Telegram validation vs `@Sara_Vantrilex_bot` observed through
+`.\sara.bat -Trace` (shadow console: `vault/State/SARA_SHADOW_COGNITION_LOG.jsonl`).
+Live-pool failures (429/404/quarantine) are carried explicitly per checkpoint,
+never fixed by weakening tests.
 
-Tooling: vault MOC + `docs-guard` + `commit-commands` (+ pending `session-end`).
-Protocol:
+## 4. Tier 4 — /sync (Knowledge Graph MOC, Checkpoint & Release)
 
-1. Wikilinks/tags: `[[…]]` only inside `vault/`; portable relative links in `docs/`.
-2. Every touched behavior updates `docs/10-CHECKPOINT.md` in the same commit.
-3. Commit directly to `main`, push immediately (branch directive 2026-08-31).
-4. Never stage: `.env`, `vault/`, `opencode.json`, dumps, harness UI state.
+Active stack: `upstream-docs-guard` + `commit-commands` +
+`obsidian-knowledge-brain` (+ `Knowledge Graph Engineer` for graph moves).
+Protocol: `[[…]]` only inside `vault/`; portable relative links in `docs/`;
+every touched behavior updates `docs/10-CHECKPOINT.md` in the same commit;
+commit directly to `main`, push immediately (branch directive 2026-08-31);
+never stage `.env`, `vault/`, `opencode.json`, dumps, harness UI state.
+`scripts/docs_guard.py` 16/16 before every commit. Post ≤5-line proof report →
+HALT until `"التالي"`/`"next"`.
 
 ## See also (graph links)
 

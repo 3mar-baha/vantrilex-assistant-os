@@ -590,6 +590,19 @@ served). Gates: suite 1,819 passed (3 live storm fails re-passed post-recovery;
 p63b carried pre-existing); tiered coverage PASSED (91.8%); ruff clean;
 security gate OK; docs guard 16/16.
 
+## Sovereign rewrite of docs/16-WORKFLOWS.md (2026-09-18)
+
+Wholesale replacement from deep scan of
+`O:\Claude Code\vantrilex\vantrilex-registry\` (1,486 skills / 283 agents /
+903 MCPs / 13 plugins / 19 hooks; catalog 2,743 lines, 18 ✅ defaults
+retained). Curated provisioning matrix with rejection causes (rag-blueprint,
+cloud-vision, fetch/time, local-weight MCPs); Skill Lock codified §0.1; five
+consensus pillars operationalized (ephemeral cache, scratchpad healing,
+memory_upsert, hybrid RAG, ROI vision); live floors (1,819 passed, Gmail
+10/25, guides 45). Registry gaps recorded: no pytest entry (local-only),
+git-guardrails file named `git-guardrails-claude-code.md`, docs-guard file
+named `docs-guard.md`.
+
 ## Arsenal sanitization (governance, 2026-09-17)
 
 ## Compliance enforcement (governance, 2026-09-17)
