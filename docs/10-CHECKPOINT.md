@@ -624,6 +624,17 @@ TTFT 4.9 s, strict `{"tool":"calendar","arg":"…"}` with zero hallucinated keys
 >100 t/s dashboard claim; that target is rejected as pool-fiction. JSON
 discipline itself is sound; the slug prefix is the entire problem.
 
+## Model probe Phase 3 — HEAVY (2026-09-18)
+
+Bare `nex-agi`/`nvidia` slugs dead; all HEAVY rows are `openrouter/` forms:
+pro → empty stream ([DONE], zero deltas); Ultra-550b → empty in 869 ms
+(incident signature); Lightning → ok 24.3 s but English chain-of-thought
+prose, ignoring the JSON-only instruction (steps=0 — needs the house
+`repair_verdict` post-pass). Verdict: neither displaces pro; Lightning is
+the only breathing fallback candidate, format-repair required; Ultra out
+until it streams content. Dashboard latency claims (869 ms) rejected —
+measured 24 s. Table slug ambiguity fixed via two-segment display.
+
 ## Arsenal sanitization (governance, 2026-09-17)
 
 ## Compliance enforcement (governance, 2026-09-17)

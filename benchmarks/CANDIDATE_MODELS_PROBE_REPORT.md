@@ -64,3 +64,22 @@
 ### openrouter/nex-agi/nex-n2.5-mini:free
 > {"tool":"calendar","arg":"\u0633\u062c\u0651\u0644 \u0645\u0648\u0639\u062f\u0627 \u063a\u062f\u0627 \u0627\u0644\u0633\u0627\u0639\u0629 5:00 \u0645\u0633\u0627\u0621\u064b: \u0645\u062d\u0627\u0636\u0631\u0629 \u0645\u0639 \u0627\u0644\u0634\u0628\u0627\u0628"}
 
+
+## Phase: HEAVY DAG decomposition (2026-09-18 13:03)
+
+| model                           | status   |   TTFTms |   totalMs | steps   | tools?   | acyclic?   |
+|---------------------------------|----------|----------|-----------|---------|----------|------------|
+| nex-n2.5-pro:free               | empty    |          |      6956 | --      | --       | --         |
+| nemotron-3-ultra-550b-a55b:free | empty    |          |       869 | --      | --       | --         |
+| nemotron-3.5-lightning:free     | ok       |    24315 |     24329 | 0       | False    | False      |
+
+### openrouter/nvidia/nemotron-3.5-lightning:free
+> Here's a thinking process:
+
+1.  **Analyze User Input:**
+   - User speaks Arabic: "جهز موجز المسا: شوف الإيميلات المهمة، مواعيد بكرة، وحالة الجهاز"
+   - Translation: "Prepare a morning briefing: Check important emails, tomorrow's appointments, and device status"
+   - The user wants a task plan with specific steps involving checking emails, calendar/appointments, and device status.
+
+2.  **Identify R
+

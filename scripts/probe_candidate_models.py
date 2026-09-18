@@ -193,6 +193,86 @@ def render_medium_table(results: list[dict]) -> str:
     )
 
 
+HEAVY_BASELINE = "nex-agi/nex-n2.5-pro:free"
+HEAVY_ULTRA = "nvidia/nemotron-3-ultra:free"
+HEAVY_ULTRA_ALT = "openrouter/nvidia/nemotron-3-ultra-550b-a55b:free"
+HEAVY_LIGHTNING = "nvidia/nemotron-3.5-lightning:free"
+HEAVY_LIGHTNING_ALT = "openrouter/nvidia/nemotron-3.5-lightning:free"
+
+HEAVY_SYSTEM = (
+    "You are a task planner. Output ONLY one JSON object, no prose: "
+    '{"steps": [{"tool": "<name>", "arg": "<string>", "after": [<indices>]}]}. '
+    "Allowed tools: gmail, calendar, tasks, telemetry, running_apps. "
+    "`after` lists zero-based indices of prerequisite steps (empty for first steps)."
+)
+HEAVY_PROMPT = "جهز موجز المسا: شوف الإيميلات المهمة، مواعيد بكرة، وحالة الجهاز"
+HEAVY_ALLOWED_TOOLS = ("gmail", "calendar", "tasks", "telemetry", "running_apps")
+
+
+def score_dag(text: str) -> dict:
+    """Depth rubric: parseable plan, valid tools, acyclic dependencies."""
+    try:
+        payload = json.loads(text.strip())
+    except (ValueError, AttributeError):
+        return {"valid_json": False, "steps": 0, "valid_tools": False, "acyclic": False}
+    steps = payload.get("steps") if isinstance(payload, dict) else None
+    if not isinstance(steps, list) or not steps:
+        return {"valid_json": True, "steps": 0, "valid_tools": False, "acyclic": False}
+    tools_ok = all(isinstance(s, dict) and s.get("tool") in HEAVY_ALLOWED_TOOLS for s in steps)
+    try:
+        order = [sorted(s.get("after", [])) for s in steps]
+        acyclic = all(
+            isinstance(deps, list) and all(0 <= d < i for d in deps) for i, deps in enumerate(order)
+        )
+    except (AttributeError, TypeError):
+        acyclic = False
+    return {"valid_json": True, "steps": len(steps), "valid_tools": tools_ok, "acyclic": acyclic}
+
+
+async def _probe_once_with_fallback(client: httpx.AsyncClient, model: str, alt: str | None) -> dict:
+    record = await stream_probe(client, model, HEAVY_PROMPT, max_tokens=300, system=HEAVY_SYSTEM)
+    await asyncio.sleep(INTER_CALL_GAP_S)
+    if record["status"] != "ok" and alt:
+        record = await stream_probe(client, alt, HEAVY_PROMPT, max_tokens=300, system=HEAVY_SYSTEM)
+        await asyncio.sleep(INTER_CALL_GAP_S)
+    if record.get("text"):
+        record.update(score_dag(record["text"]))
+    return record
+
+
+async def run_heavy(client: httpx.AsyncClient) -> list[dict]:
+    return [
+        await _probe_once_with_fallback(client, HEAVY_BASELINE, "openrouter/" + HEAVY_BASELINE),
+        await _probe_once_with_fallback(client, HEAVY_ULTRA, HEAVY_ULTRA_ALT),
+        await _probe_once_with_fallback(client, HEAVY_LIGHTNING, HEAVY_LIGHTNING_ALT),
+    ]
+
+
+def short_slug(model: str) -> str:
+    """Last two slug segments — bare vs openrouter/ forms stay distinguishable."""
+    return "/".join(model.split("/")[-2:])[:40]
+
+
+def render_heavy_table(results: list[dict]) -> str:
+    rows = [
+        [
+            short_slug(r["model"]),
+            r.get("status"),
+            r.get("ttft_ms", "--"),
+            r.get("total_ms", "--"),
+            r.get("steps", "--"),
+            r.get("valid_tools", "--"),
+            r.get("acyclic", "--"),
+        ]
+        for r in results
+    ]
+    return tabulate(
+        rows,
+        headers=["model", "status", "TTFTms", "totalMs", "steps", "tools?", "acyclic?"],
+        tablefmt="github",
+    )
+
+
 async def run_fast(client: httpx.AsyncClient) -> list[dict]:
     models = [FAST_BASELINE, FAST_CANDIDATE]
     results: list[dict] = []
@@ -250,7 +330,7 @@ async def main(argv: list[str] | None = None) -> int:
     if not api_key:
         print("OMNIROUTE_API_KEY missing — aborting (no probes sent).")
         return 2
-    if args.phase not in ("fast", "medium"):
+    if args.phase not in ("fast", "medium", "heavy"):
         print(f"Phase '{args.phase}' not wired yet — one phase per run.")
         return 3
     async with httpx.AsyncClient(
@@ -261,6 +341,10 @@ async def main(argv: list[str] | None = None) -> int:
             results = await run_medium(client)
             table = render_medium_table(results)
             append_report("MEDIUM tool-JSON", table, results)
+        elif args.phase == "heavy":
+            results = await run_heavy(client)
+            table = render_heavy_table(results)
+            append_report("HEAVY DAG decomposition", table, results)
         else:
             results = await run_fast(client)
             table = render_table(results)
