@@ -6,7 +6,7 @@ The LLM triple-emission side stays P2; here only storage + resolution land.
 
 from __future__ import annotations
 
-from src.memory import resolve_current_facts, upsert_fact
+from src.memory import filter_superseded_rows, resolve_current_facts, upsert_fact
 
 NOTE = """## معلومة 2026-09-10 08:00
 slot: owner/workout
@@ -46,3 +46,20 @@ def test_unrelated_slots_survive_upsert() -> None:
     )
     current = resolve_current_facts(body)
     assert current == {"owner/workout": "07:00", "owner/wake": "06:00"}
+
+
+def test_envelope_filter_drops_dead_rows_keeps_prose() -> None:
+    """RAG sees live facts + free prose, never superseded rows or markers."""
+    body = upsert_fact(
+        "عمر يحب الكنافة\n" + NOTE, "owner", "workout", "07:00", "2026-09-18 09:00"
+    )
+    filtered = filter_superseded_rows(body)
+    assert "عمر يحب الكنافة" in filtered
+    assert "value: 07:00" in filtered
+    assert "value: 18:00" not in filtered
+    assert "superseded:" not in filtered
+
+
+def test_envelope_filter_passthrough_without_markers() -> None:
+    body = "عمر يحب الكنافة\n## معلومة 2026-09-10\nslot: owner/wake\nvalue: 06:00\n"
+    assert filter_superseded_rows(body) == body
