@@ -70,7 +70,7 @@ async def test_owner_account_never_gusted_across_devices(tmp_path, monkeypatch, 
     notes = sorted((vault / "Voice_Memos" / "Pending_Speakers").glob("*.json"))
     assert len(notes) == 1
     sealed = Fernet(KEY.encode()).decrypt(
-        json.loads(notes[0].read_text())["voiceprint_enc"].encode()
+        json.loads(notes[0].read_text(encoding="utf-8"))["voiceprint_enc"].encode()
     )
     assert json.loads(sealed) == GUEST_VEC
 

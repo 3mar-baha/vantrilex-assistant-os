@@ -635,6 +635,15 @@ no self-registration, ever. Suite 1,855 passed (h04/h06 live only);
 coverage 91.9% PASSED; ruff/security/quality green. Guards: clean/test-guard
 clean. P3 next: sandbox execution, promotion gates, cache TTL/invalidation.
 
+## CI closure — last Windows failure (2026-09-18)
+
+Triage run fell 21 → 1: `test_owner_account_never_gusted_across_devices`
+read a sealed Arabic JSON note with bare `read_text()` → cp1252
+UnicodeDecodeError on the Windows runner. One-line fix
+(`encoding="utf-8"`); sibling sweep: only ASCII marker reads remain
+(cp1252-safe); production `src/` fully pinned (15/15 reads explicit).
+Expected state: main 100% green in CI.
+
 ## Model probe Phase 1 — FAST (2026-09-18)
 
 `scripts/probe_candidate_models.py` (`--phase fast`; tabulate present,
