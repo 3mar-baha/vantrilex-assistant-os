@@ -603,6 +603,18 @@ memory_upsert, hybrid RAG, ROI vision); live floors (1,819 passed, Gmail
 git-guardrails file named `git-guardrails-claude-code.md`, docs-guard file
 named `docs-guard.md`.
 
+## Model probe Phase 1 — FAST (2026-09-18)
+
+`scripts/probe_candidate_models.py` (`--phase fast`; tabulate present,
+storm etiquette: sequential, 6 s gaps, fail-soft). Live: baseline
+`google/gemma-4-31b-it:free` TTFT 29.3 s / 51.7 s @1.5–2.2 tok/s;
+mission slug `google/gemma-4-26b-a4b:free` is HTTP 404 (does not exist —
+real slug carries `-it`); `openrouter/google/gemma-4-26b-a4b-it:free`
+TTFT 23.5 s @3.1 tok/s with cleaner masculine markers (طمني، أهلا),
+zero feminine hits both. Pool-wide TTFTs ~30–50× SLA during the window —
+comparative verdict only. Report:
+`benchmarks/CANDIDATE_MODELS_PROBE_REPORT.md` (+ JSONL records).
+
 ## Arsenal sanitization (governance, 2026-09-17)
 
 ## Compliance enforcement (governance, 2026-09-17)
