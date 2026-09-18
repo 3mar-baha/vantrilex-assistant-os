@@ -6,7 +6,15 @@ Proposals are owner-promoted markdown — nothing self-registers, ever.
 
 from __future__ import annotations
 
-from src.evolution import distill_chains, format_proposal, verify_proposal_code
+from src.evolution import (
+    PROMOTABLE_TOOLS,
+    PromotionReport,
+    distill_chains,
+    evaluate_proposal,
+    format_proposal,
+    promotion_decision,
+    verify_proposal_code,
+)
 
 CHAIN = [("gmail", ""), ("calendar", "بكرة")]
 
@@ -48,3 +56,66 @@ def test_proposal_format_carries_chain_and_counts() -> None:
         {"chain": [["gmail", ""], ["calendar", "بكرة"]], "occurrences": 4}, "2026-09-18"
     )
     assert "2026-09-18" in text and "gmail" in text and "4" in text
+
+
+def _overlay(tmp_path):
+    import sys
+
+    sys.path.insert(0, "tests/live_harness")
+    from overlay import OverlayVault
+
+    real = tmp_path / "real"
+    real.mkdir()
+    return OverlayVault(real, tmp_path / "shadow")
+
+
+def test_evaluate_clean_proposal_passes(tmp_path) -> None:
+    overlay = _overlay(tmp_path)
+    proposal = {
+        "chain": [["gmail", ""], ["calendar", "بكرة"]],
+        "occurrences": 4,
+        "code": "import re\nx = re.sub('a', 'b', 'a')",
+    }
+    report = evaluate_proposal(proposal, overlay)
+    assert isinstance(report, PromotionReport)
+    assert report.passed is True and report.reasons == []
+
+
+def test_evaluate_rejects_irreversible_tool(tmp_path) -> None:
+    overlay = _overlay(tmp_path)
+    report = evaluate_proposal({"chain": [["launch", "الحاسبة"]], "occurrences": 5}, overlay)
+    assert report.passed is False
+    assert any("confirmation" in reason for reason in report.reasons)
+
+
+def test_evaluate_rejects_unsafe_code(tmp_path) -> None:
+    overlay = _overlay(tmp_path)
+    report = evaluate_proposal(
+        {"chain": [["gmail", ""]], "occurrences": 3, "code": "import os"},
+        overlay,
+    )
+    assert report.passed is False
+
+
+def test_evaluate_rejects_missing_vault_note(tmp_path) -> None:
+    overlay = _overlay(tmp_path)
+    report = evaluate_proposal(
+        {"chain": [["gmail", ""]], "occurrences": 3, "notes": ["Studies/Nope.md"]},
+        overlay,
+    )
+    assert report.passed is False
+
+
+def test_promotable_set_never_contains_irreversible() -> None:
+    from src.skills.capabilities import IRREVERSIBLE_TOOLS
+
+    assert PROMOTABLE_TOOLS.isdisjoint(IRREVERSIBLE_TOOLS)
+
+
+def test_promotion_decision_requires_report_owner_and_suite() -> None:
+    good = PromotionReport(passed=True, reasons=[])
+    assert promotion_decision(good, owner_approved=True, suite_green=True) is True
+    assert promotion_decision(good, owner_approved=False, suite_green=True) is False
+    assert promotion_decision(good, owner_approved=True, suite_green=False) is False
+    bad = PromotionReport(passed=False, reasons=["unsafe"])
+    assert promotion_decision(bad, owner_approved=True, suite_green=True) is False

@@ -635,6 +635,21 @@ no self-registration, ever. Suite 1,855 passed (h04/h06 live only);
 coverage 91.9% PASSED; ruff/security/quality green. Guards: clean/test-guard
 clean. P3 next: sandbox execution, promotion gates, cache TTL/invalidation.
 
+## P3 sandbox + promotion gates + cache TTL (2026-09-18)
+
+CI closure: triage run fell 21 → 1; last failure was a bare
+`read_text()` on a sealed Arabic note (cp1252 on the Windows runner) —
+one-line utf-8 pin; sibling sweep + production audit (15/15 pinned):
+test-only bug class. Evolution: src/evolution.py gains evaluate_proposal
+(chain/tools/AST/vault-notes structural checks against OverlayVault —
+no code executes), PromotionReport, promotion_decision (report + owner
+word + green suite, all three), PROMOTABLE_TOOLS pinned disjoint from
+IRREVERSIBLE_TOOLS by test. Cache TTL: CompositionCache ttl_s with
+expiry sweep on lookup; dispatcher verdicts TTL 1800 s (relative-date
+staleness bound). Suite 1,864 passed (h06 live only); coverage 91.9%
+PASSED; ruff/security/quality/docs guards green. Guards: clean (evaluate
+split) / test-guard clean.
+
 ## CI closure — last Windows failure (2026-09-18)
 
 Triage run fell 21 → 1: `test_owner_account_never_gusted_across_devices`

@@ -10,7 +10,10 @@ gates are P3 (OverlayVault harness).
 from __future__ import annotations
 
 import ast
+from dataclasses import dataclass, field
 from typing import Any, Final
+
+from src.skills.capabilities import IRREVERSIBLE_TOOLS, TOOL_CAPABILITIES
 
 ALLOWED_IMPORTS: Final[frozenset[str]] = frozenset(
     {"re", "math", "json", "datetime", "collections", "itertools", "functools", "pathlib"}
@@ -73,3 +76,78 @@ def format_proposal(proposal: dict[str, Any], day_iso: str) -> str:
         "التفعيل بيد المالك فقط — لا تسجيل تلقائي.",
     ]
     return "\n".join(lines) + "\n"
+
+
+# P3: promotion surface. Side-effect tools stay in the confirmation-gated
+# tier forever — the structural test below pins PROMOTABLE disjoint from
+# the capabilities registry's irreversible set.
+PROMOTABLE_TOOLS: Final[frozenset[str]] = frozenset(
+    {
+        "gmail",
+        "calendar",
+        "tasks",
+        "telemetry",
+        "running_apps",
+        "brief",
+        "knowledge_graph",
+        "read_page",
+    }
+)
+
+
+@dataclass
+class PromotionReport:
+    passed: bool
+    reasons: list[str] = field(default_factory=list)
+
+
+def _check_chain_tools(chain: list) -> list[str]:
+    tools = [str(step[0]) for step in chain if step]
+    reasons: list[str] = []
+    unknown = [tool for tool in tools if tool not in TOOL_CAPABILITIES]
+    if unknown:
+        reasons.append(f"unknown tools: {','.join(sorted(set(unknown)))}")
+    irreversible = [tool for tool in tools if tool in IRREVERSIBLE_TOOLS]
+    if irreversible:
+        reasons.append(
+            f"confirmation-gated tools never promote: {','.join(sorted(set(irreversible)))}"
+        )
+    unpromotable = [tool for tool in tools if tool not in PROMOTABLE_TOOLS]
+    if unpromotable:
+        reasons.append(
+            "outside promotable set (stays confirmation-gated): "
+            + ",".join(sorted(set(unpromotable)))
+        )
+    return reasons
+
+
+def _check_vault_notes(paths: list, overlay) -> list[str]:
+    reasons: list[str] = []
+    for relpath in paths:
+        try:
+            if not overlay.resolve(relpath).is_file():
+                reasons.append(f"vault note missing: {relpath}")
+        except (ValueError, OSError) as exc:
+            reasons.append(f"vault note unreadable: {relpath} ({exc})")
+    return reasons
+
+
+def evaluate_proposal(proposal: dict[str, Any], overlay) -> PromotionReport:
+    """Sandbox verdict: known tools + promotable chain + clean AST + live notes.
+
+    `overlay` is an OverlayVault (shadow-first reads, real vault untouched).
+    No code executes here — verification is structural only.
+    """
+    reasons = _check_chain_tools(proposal.get("chain") or [])
+    code = proposal.get("code")
+    if code:
+        ok, reason = verify_proposal_code(code)
+        if not ok:
+            reasons.append(f"AST gate: {reason}")
+    reasons += _check_vault_notes(proposal.get("notes", []), overlay)
+    return PromotionReport(passed=not reasons, reasons=reasons)
+
+
+def promotion_decision(report: PromotionReport, *, owner_approved: bool, suite_green: bool) -> bool:
+    """The gate itself: structural pass + owner word + green suite. All three."""
+    return report.passed and owner_approved and suite_green

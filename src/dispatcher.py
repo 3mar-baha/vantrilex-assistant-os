@@ -768,7 +768,11 @@ class FrontDoorDispatcher:
         from src.decision_loop import HealingBudget
 
         self._heal_budget = HealingBudget()
-        self._verdict_cache: CompositionCache = CompositionCache(read_only_tools=_CACHEABLE_TOOLS)
+        # 30-minute verdict TTL: relative-date args ("مواعيد اليوم") go stale
+        # intraday; a restart or clear() is a full reset regardless.
+        self._verdict_cache: CompositionCache = CompositionCache(
+            read_only_tools=_CACHEABLE_TOOLS, ttl_s=1800.0
+        )
 
     @property
     def gateway(self) -> OmniRouteClient:

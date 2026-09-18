@@ -212,8 +212,10 @@ class CompositionCache:
     """
 
     read_only_tools: frozenset[str] = frozenset()
+    ttl_s: float | None = None
     _chains: dict[str, tuple[tuple[str, str], ...]] = field(default_factory=dict)
     _meta: dict[str, tuple] = field(default_factory=dict)
+    _expiry: dict[str, float] = field(default_factory=dict)
 
     def store(
         self, request: str, chain: tuple[tuple[str, str], ...], meta: tuple | None = None
@@ -224,17 +226,39 @@ class CompositionCache:
         self._chains[key] = chain
         if meta is not None:
             self._meta[key] = meta
+        if self.ttl_s is not None:
+            import time as _time
+
+            self._expiry[key] = _time.monotonic() + self.ttl_s
+
+    def _live(self, key: str) -> bool:
+        if key not in self._chains:
+            return False
+        expiry = self._expiry.get(key)
+        if expiry is None:
+            return True
+        import time as _time
+
+        if _time.monotonic() >= expiry:
+            self._chains.pop(key, None)
+            self._meta.pop(key, None)
+            self._expiry.pop(key, None)
+            return False
+        return True
 
     def lookup(self, request: str) -> tuple[tuple[str, str], ...] | None:
-        return self._chains.get(_normalize(request))
+        key = _normalize(request)
+        return self._chains.get(key) if self._live(key) else None
 
     def lookup_meta(self, request: str) -> tuple | None:
         """Companion verdict data (ack/voice/domains) stored alongside a chain."""
-        return self._meta.get(_normalize(request))
+        key = _normalize(request)
+        return self._meta.get(key) if self._live(key) else None
 
     def clear(self) -> None:
         self._chains.clear()
         self._meta.clear()
+        self._expiry.clear()
 
 
 def _normalize(text: str) -> str:
