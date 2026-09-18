@@ -82,6 +82,20 @@ class HealingBudget:
         return self._failures.get(tool, 0) < self._max
 
 
+def is_transient_tool_error(error: Exception) -> bool:
+    """Retry-worthy without an LLM: stalls and overloaded backends only.
+
+    Quota denials (403/402), schema errors, and auth failures are permanent
+    verdicts — retrying them burns budget for nothing.
+    """
+    if isinstance(error, TimeoutError):
+        return True
+    status = getattr(error, "status", None) or getattr(error, "status_code", None)
+    if isinstance(status, int) and status in (429, 500, 502, 503, 504):
+        return True
+    return "timed out" in str(error).lower() or "timeout" in str(error).lower()
+
+
 # Information-seeking tools: the only family eligible for the one-shot pivot
 # (a dead read may still answer via live web search; actions never pivot).
 INFORMATION_TOOLS: Final[frozenset[str]] = frozenset(

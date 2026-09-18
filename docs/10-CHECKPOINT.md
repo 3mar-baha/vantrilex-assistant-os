@@ -619,6 +619,22 @@ normalize_tool_arg, CompositionCache (explicit read-only gate). Suite 1,838
 passed, only h04/h06 live-pool fails; coverage 91.8% PASSED; ruff + security
 + quality gates green. Guards: clean/test-guard clean.
 
+## P2 wiring + evolution loop (2026-09-18)
+
+Dispatcher: arg healing at lane entry (quotes/Indic digits), single retry
+iff transient-shaped (stall/429/5xx — quota/auth never retried) via
+HealingBudget, outcomes recorded into the friction ledger, verdict cache
+for read-only tools (router call skipped; هسا/هسه/الحين bypass; launch-class
+never cached). Adjacent fix disclosed: unparsable router replies crashed on
+unbound `voice_hint` — scoped into the parsed branch + regression test.
+Envelope: superseded rows filtered from User_Info reads (vault keeps audit).
+Nightly: DailySummarizer(trace=) appends the friction block as a second
+section. Evolution: src/evolution.py distill (≥3 repeats) + AST gate
+(allowlisted stdlib, no eval/exec/open/socket) + owner-proposal markdown —
+no self-registration, ever. Suite 1,855 passed (h04/h06 live only);
+coverage 91.9% PASSED; ruff/security/quality green. Guards: clean/test-guard
+clean. P3 next: sandbox execution, promotion gates, cache TTL/invalidation.
+
 ## Model probe Phase 1 — FAST (2026-09-18)
 
 `scripts/probe_candidate_models.py` (`--phase fast`; tabulate present,

@@ -213,17 +213,28 @@ class CompositionCache:
 
     read_only_tools: frozenset[str] = frozenset()
     _chains: dict[str, tuple[tuple[str, str], ...]] = field(default_factory=dict)
+    _meta: dict[str, tuple] = field(default_factory=dict)
 
-    def store(self, request: str, chain: tuple[tuple[str, str], ...]) -> None:
+    def store(
+        self, request: str, chain: tuple[tuple[str, str], ...], meta: tuple | None = None
+    ) -> None:
         if not chain or any(tool not in self.read_only_tools for tool, _ in chain):
             return
-        self._chains[_normalize(request)] = chain
+        key = _normalize(request)
+        self._chains[key] = chain
+        if meta is not None:
+            self._meta[key] = meta
 
     def lookup(self, request: str) -> tuple[tuple[str, str], ...] | None:
         return self._chains.get(_normalize(request))
 
+    def lookup_meta(self, request: str) -> tuple | None:
+        """Companion verdict data (ack/voice/domains) stored alongside a chain."""
+        return self._meta.get(_normalize(request))
+
     def clear(self) -> None:
         self._chains.clear()
+        self._meta.clear()
 
 
 def _normalize(text: str) -> str:

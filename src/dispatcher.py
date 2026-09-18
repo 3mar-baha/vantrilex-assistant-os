@@ -18,6 +18,7 @@ from typing import Any, Final
 
 from loguru import logger
 
+from src.cognition import CompositionCache, ReflectiveTrace
 from src.config import Settings
 from src.gateway import GatewayError, OmniRouteClient, Tier
 from src.openclaw.intents import INTENT_PATTERNS, ROUTER_TOOL_LINES, VALID_OPENCLAW_TOOLS
@@ -111,6 +112,14 @@ _ROUTES: Final[dict[str, Tier]] = {
     "tier3": Tier.HEAVY,
 }
 _VALID_ROUTES: Final = ("direct", "tier2", "tier3")
+
+# P2 verdict cache: read-only resolutions replay without a router call.
+# Write/side-effect tools are excluded structurally (store() refuses them);
+# immediacy markers always force a fresh verdict (stale beats tokens).
+_CACHEABLE_TOOLS: Final[frozenset[str]] = frozenset(
+    {"gmail", "calendar", "tasks", "telemetry", "running_apps", "brief"}
+)
+_FRESH_MARKERS: Final[tuple[str, ...]] = ("هسا", "هسه", "الحين")
 _VALID_TOOLS: Final = (
     "none",
     "gmail",
@@ -754,11 +763,59 @@ class FrontDoorDispatcher:
         # Tier-3 shadow tracer; the keyword net stays as final safety fallback.
         self.last_cognition: dict | None = None
         self._cog_trace = None
+        # P2: in-turn healing budget + verdict cache (session scope; a
+        # restart resets both — no durable state, no stale cross-day reads).
+        from src.decision_loop import HealingBudget
+
+        self._heal_budget = HealingBudget()
+        self._verdict_cache: CompositionCache = CompositionCache(read_only_tools=_CACHEABLE_TOOLS)
 
     @property
     def gateway(self) -> OmniRouteClient:
         """Phase-1 ReAct seam: read-only gateway handle for the decision loop."""
         return self._gateway
+
+    def _cached_verdict(self, user_text: str) -> tuple | None:
+        """Replay a read-only verdict without spending a router call."""
+        if any(marker in (user_text or "") for marker in _FRESH_MARKERS):
+            return None
+        chain = self._verdict_cache.lookup(user_text or "")
+        meta = self._verdict_cache.lookup_meta(user_text or "")
+        if not chain or meta is None:
+            return None
+        (tool, arg) = chain[0]
+        route, ack, voice, rag = meta
+        return (route, ack, tool, arg, voice, rag)
+
+    def _store_verdict(
+        self,
+        user_text: str,
+        route: str,
+        ack: str,
+        tool: str,
+        arg: str,
+    ) -> None:
+        if tool not in _CACHEABLE_TOOLS:
+            return
+        self._verdict_cache.store(
+            user_text,
+            ((tool, arg),),
+            meta=(route, ack, self.voice_hint, self.rag_domains),
+        )
+
+    def _note_tool_outcome(self, tool: str, ok: bool, note: str = "") -> None:
+        """Feed the friction ledger: next-turn penalties + nightly block."""
+        if self._cog_trace is None:
+            self._cog_trace = ReflectiveTrace()
+        self._cog_trace.record_outcome(tool, ok, note)
+
+    async def _plain_fallback(
+        self, system: str | None, history: Sequence[dict] | None, user_text: str, tier: Tier
+    ) -> AsyncIterator[str]:
+        async for delta in self._gateway.stream_chat(
+            self._plain_messages(system, history, user_text), tier=tier
+        ):
+            yield delta
 
     async def handle(
         self,
@@ -787,28 +844,33 @@ class FrontDoorDispatcher:
                 yield delta
             return
         route, ack, tool, arg = "tier2", DEFAULT_ACK_AR, "none", ""  # safe degraded default
-        try:
-            reply = await self._gateway.chat(
-                [
-                    {"role": "system", "content": _ROUTER_PROMPT_AR},
-                    {"role": "user", "content": user_text},
-                ],
-                tier=Tier.FAST,
-                temperature=0.0,
-                max_tokens=1024,
-            )
-            parsed = _parse_router(reply)
-        except GatewayError as exc:
-            logger.warning("dispatcher router failed -> default tier2: {}", exc)
+        verdict_hit = self._cached_verdict(user_text)
+        if verdict_hit is not None:
+            route, ack, tool, arg, self.voice_hint, self.rag_domains = verdict_hit
         else:
-            if parsed is None:
-                logger.warning(
-                    "dispatcher unparsable router reply -> default tier2: {!r}", reply[:200]
+            try:
+                reply = await self._gateway.chat(
+                    [
+                        {"role": "system", "content": _ROUTER_PROMPT_AR},
+                        {"role": "user", "content": user_text},
+                    ],
+                    tier=Tier.FAST,
+                    temperature=0.0,
+                    max_tokens=1024,
                 )
+                parsed = _parse_router(reply)
+            except GatewayError as exc:
+                logger.warning("dispatcher router failed -> default tier2: {}", exc)
+                parsed = None
             else:
-                route, ack, tool, arg, voice = parsed
-                self.voice_hint = voice
-                self.rag_domains = parse_rag_domains(reply)
+                if parsed is None:
+                    logger.warning(
+                        "dispatcher unparsable router reply -> default tier2: {!r}", reply[:200]
+                    )
+                else:
+                    route, ack, tool, arg, voice = parsed
+                    self.voice_hint = voice
+                    self.rag_domains = parse_rag_domains(reply)
         if tool == "none":
             # Principles-over-Rules first: scored intent deduction with full
             # situational envelope (history + reflective friction). The
@@ -871,6 +933,8 @@ class FrontDoorDispatcher:
                         "dispatcher keyword net confirmed cognition -> tool={!r}",
                         net_tool,
                     )
+        if verdict_hit is None:
+            self._store_verdict(user_text, route, ack, tool, arg)
         yield ack
         if tool != "none":
             async for delta in self._tool_lane(tool, arg, route, user_text, system, history, tools):
@@ -937,11 +1001,15 @@ class FrontDoorDispatcher:
         tier = _ROUTES.get(route, Tier.MEDIUM)
         if tools is None:
             logger.warning("dispatcher tool verdict {!r} without registry -> plain tier2", tool)
-            async for delta in self._gateway.stream_chat(
-                self._plain_messages(system, history, user_text), tier=tier
-            ):
+            async for delta in self._plain_fallback(system, history, user_text, tier):
                 yield delta
             return
+        from src.decision_loop import is_transient_tool_error, normalize_tool_arg
+
+        healed_arg = normalize_tool_arg(arg)
+        if healed_arg != arg:
+            logger.warning("dispatcher healed tool arg -> tool={!r} arg={!r}", tool, healed_arg)
+            arg = healed_arg
         try:
             # Live-5: the screenshot negation lives HERE — the full user text
             # exists only at this seam, whichever surface (router/net) chose
@@ -950,12 +1018,27 @@ class FrontDoorDispatcher:
                 arg = (arg + " no-send").strip()
             result = await tools.call(tool, arg)
         except Exception as error:  # noqa: BLE001 — a dead tool never hangs the chat
-            logger.exception("dispatcher tool {!r} failed -> plain tier2: {}", tool, error)
-            async for delta in self._gateway.stream_chat(
-                self._plain_messages(system, history, user_text), tier=tier
-            ):
-                yield delta
-            return
+            if is_transient_tool_error(error) and self._heal_budget.may_retry(tool):
+                self._heal_budget.note_failure(tool)
+                logger.warning("dispatcher tool {!r} transient failure -> one healed retry", tool)
+                try:
+                    result = await tools.call(tool, arg)
+                except Exception as retry_error:  # noqa: BLE001 — retry spent
+                    error = retry_error
+                    result = None
+                    self._note_tool_outcome(tool, False, str(retry_error)[:120])
+                else:
+                    self._note_tool_outcome(tool, True)
+                    error = None
+            else:
+                self._note_tool_outcome(tool, False, str(error)[:120])
+            if error is not None:
+                logger.exception("dispatcher tool {!r} failed -> plain tier2: {}", tool, error)
+                async for delta in self._plain_fallback(system, history, user_text, tier):
+                    yield delta
+                return
+        else:
+            self._note_tool_outcome(tool, True)
         if result is None:  # launch: the coordinator already notified the owner
             return
         # Gap-ب (owner 2026-09-05): multi_task results stream AS-IS — the

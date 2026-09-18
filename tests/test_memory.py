@@ -410,3 +410,26 @@ async def test_summarize_day_multi_paragraph_summary_kept_verbatim():
     vault2 = vault
     await _summarizer(vault2, FakeBrain(summary)).summarize_day(NOW.date(), now=NOW)
     assert vault2.appends[0][2] == ("الفقرة الأولى.", "", "الفقرة الثانية.")
+
+
+async def test_summarize_day_appends_friction_block_when_trace_has_failures():
+    """P2 nightly wiring: the day's tool friction lands as a second section."""
+    from src.cognition import ReflectiveTrace
+
+    vault = FakeVault({"Daily_Logs/2026-09-01.md": NOTE})
+    trace = ReflectiveTrace()
+    trace.record_outcome("gmail", False, "403 quota")
+    summarizer = DailySummarizer(vault, FakeBrain("ملخص"), tz=TZ, trace=trace)
+    await summarizer.summarize_day(NOW.date(), now=NOW)
+    assert len(vault.appends) == 2
+    assert "تأمل" in vault.appends[1][1]
+    assert "gmail" in "\n".join(vault.appends[1][2])
+
+
+async def test_summarize_day_skips_friction_block_when_trace_clean():
+    from src.cognition import ReflectiveTrace
+
+    vault = FakeVault({"Daily_Logs/2026-09-01.md": NOTE})
+    summarizer = DailySummarizer(vault, FakeBrain("ملخص"), tz=TZ, trace=ReflectiveTrace())
+    await summarizer.summarize_day(NOW.date(), now=NOW)
+    assert len(vault.appends) == 1

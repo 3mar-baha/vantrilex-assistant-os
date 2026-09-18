@@ -394,6 +394,10 @@ async def _load_long_term_uncached(vault, *, today: date, max_chars: int = SECTI
             )
             continue
         body = split_frontmatter(text)[1].strip()
+        if path == PROFILE_USER_INFO:
+            # Superseded slot rows stay in the vault (audit) but never ride
+            # the envelope — RAG resolves live facts only.
+            body = filter_superseded_rows(body).strip()
         section = body
         if path.endswith("Dialect_Notes.md"):
             header = prompt_block(parse_notes(text)).strip()
@@ -540,6 +544,32 @@ def resolve_current_facts(note_body: str) -> dict[str, str]:
     return current
 
 
+def filter_superseded_rows(note_body: str) -> str:
+    """Envelope view: drop superseded markers and the single row each kills.
+
+    Free prose and live slot/value rows pass through byte-identical;
+    a body without markers returns unchanged.
+    """
+    lines = (note_body or "").splitlines()
+    if not any(line.strip().startswith("superseded: ") for line in lines):
+        return note_body or ""
+    out: list[str] = []
+    skip_pair = False
+    for line in lines:
+        stripped = line.strip()
+        if stripped.startswith("superseded: "):
+            skip_pair = True
+            continue
+        if skip_pair and stripped.startswith("slot: "):
+            continue
+        if skip_pair and stripped.startswith("value: "):
+            skip_pair = False
+            continue
+        skip_pair = False
+        out.append(line)
+    return "\n".join(out) + ("\n" if out else "")
+
+
 def day_chat_lines(note_body: str, *, max_messages: int = SUMMARY_MAX_MESSAGES) -> list[str]:
     """The day's chat turns (**المالك:** / **سارة:** lines) from a Daily_Logs body,
     oldest first, capped to the LAST ``max_messages`` turns."""
@@ -567,12 +597,14 @@ class DailySummarizer:
         tz: ZoneInfo,
         summary_time: time = SUMMARY_TIME,
         poll_seconds: float = 30.0,
+        trace=None,
     ) -> None:
         self._vault = vault
         self._brain = brain
         self._tz = tz
         self._at = summary_time
         self._poll = poll_seconds
+        self._trace = trace  # P2: day-session ReflectiveTrace; friction block iff failures
 
     def due(self, now: datetime) -> bool:
         local = now.astimezone(self._tz)
@@ -617,6 +649,16 @@ class DailySummarizer:
         await self._vault.append_section(
             path, heading, summary.splitlines(), commit_prefix="sara: daily chat summary"
         )
+        if self._trace is not None:
+            block = self._trace.render_ledger_block(day.isoformat())
+            if block:
+                block_lines = block.splitlines()
+                await self._vault.append_section(
+                    path,
+                    block_lines[0].lstrip("# ").strip(),
+                    block_lines[1:],
+                    commit_prefix="sara: nightly reflection",
+                )
         return summary
 
     async def run_forever(self, *, now_fn=None) -> None:
