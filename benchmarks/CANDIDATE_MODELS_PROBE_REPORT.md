@@ -108,3 +108,91 @@
 ### local faster-whisper-small
 > مرحبا سارا شوفيني شوفي موايد اليوم
 
+
+## Phase: FAST conversational (2026-09-18 13:23)
+
+| model                   | status   | TTFTms   | totalMs   | tok/s~   | masc✓   | fem✗   |
+|-------------------------|----------|----------|-----------|----------|---------|--------|
+| gemma-4-31b-it:free     | ok       | 53033.0  | 55463.0   | 1.1      | --      | --     |
+| gemma-4-31b-it:free     | ok       | 102095.0 | 104986.0  | 0.8      | قلي     | --     |
+| gemma-4-26b-a4b:free    | HTTP 404 | --       | --        | --       | --      | --     |
+| gemma-4-26b-a4b:free    | HTTP 404 | --       | --        | --       | --      | --     |
+| gemma-4-26b-a4b-it:free | ok       | 47284.0  | 50066.0   | 1.0      | طمني    | --     |
+
+### google/gemma-4-31b-it:free
+> أهلين! أنا بخير الحمد لله، شكراً لسؤالك. 😊
+
+بما أني ذكاء اصطناعي، "يومي" عبارة عن معالجة معلومات ومساعدة الناس. حالياً أنا موجودة هنا، جاهزة ومستعدة لأي سؤال، أو مساعدة في كتابة شيء، أو حتى مجرد دردشة لطيفة معك.
+
+أنت كيف يومك؟ شو أخبارك وشو مخططاتك اليوم؟
+
+### google/gemma-4-31b-it:free
+> بما أنك لم تحدد دولة معينة، سأعطيك الصورة العامة والدارجة حالياً:
+
+**بشكل عام:**
+الوضع مستقر تقنياً، لكن هناك توجه عالمي نحو **الرقمنة** (البريد الإلكتروني والتطبيقات) وتقليل الاعتماد على البريد الورقي التقليدي.
+
+**إذا كنت تقصد (البريد السعودي - سبل):**
+الوضع ممتاز جداً، تحولوا إلى نظام لوجستي متطور (العنوان الوطني)، وسرعة الت
+
+### google/gemma-4-26b-a4b:free
+> {"error":{"message":"No active credentials for provider: google","type":"invalid_request_error","code":"model_not_found"}}
+
+### google/gemma-4-26b-a4b:free
+> {"error":{"message":"No active credentials for provider: google","type":"invalid_request_error","code":"model_not_found"}}
+
+### openrouter/google/gemma-4-26b-a4b-it:free
+> أهلين! أنا تمام الحمد لله، كلي حماس ومستعدة لأي شي بتحب نحكيه أو نعمله. 😊
+
+أنا دائماً هون، عم بستنى الأسئلة والأفكار الجديدة لحتى ندردش فيها أو نشتغل عليها. 
+
+أنت طمني عنك؟ كيف كان يومك؟ وشو في ببالك اليوم؟
+
+
+## Phase: MEDIUM tool-JSON (2026-09-18 13:23)
+
+| model              | status   | TTFTms   | tok/s~   | json?   | schema?   | extra_keys   |
+|--------------------|----------|----------|----------|---------|-----------|--------------|
+| nex-n2.5-mini:free | HTTP 404 | --       | --       | --      | --        | --           |
+| nex-n2.5-mini:free | HTTP 404 | --       | --       | --      | --        | --           |
+| nex-n2.5-mini:free | HTTP 404 | --       | --       | --      | --        | --           |
+
+### nex-agi/nex-n2.5-mini:free
+> {"error":{"message":"No active credentials for provider: nex-agi","type":"invalid_request_error","code":"model_not_found"}}
+
+### nex-agi/nex-n2.5-mini:free
+> {"error":{"message":"No active credentials for provider: nex-agi","type":"invalid_request_error","code":"model_not_found"}}
+
+### nex-agi/nex-n2.5-mini:free
+> {"error":{"message":"No active credentials for provider: nex-agi","type":"invalid_request_error","code":"model_not_found"}}
+
+
+## Phase: HEAVY DAG decomposition (2026-09-18 13:25)
+
+| model                                  | status   |   TTFTms |   totalMs | steps   | tools?   | acyclic?   |
+|----------------------------------------|----------|----------|-----------|---------|----------|------------|
+| nex-agi/nex-n2.5-pro:free              | empty    |          |      7615 | --      | --       | --         |
+| nvidia/nemotron-3-ultra-550b-a55b:free | ok       |     3582 |      5389 | 3       | True     | True       |
+| nvidia/nemotron-3.5-lightning:free     | empty    |          |     83877 | --      | --       | --         |
+
+### openrouter/nvidia/nemotron-3-ultra-550b-a55b:free
+> {
+  "steps": [
+    {
+      "tool": "gmail",
+      "arg": "list important emails from today",
+      "after": []
+    },
+    {
+      "tool": "calendar",
+      "arg": "show events for tomorrow",
+      "after": []
+    },
+    {
+      "tool": "telemetry",
+      "arg": "get device status summary",
+      "after": []
+    }
+  ]
+}
+

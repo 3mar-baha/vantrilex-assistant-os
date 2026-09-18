@@ -413,9 +413,10 @@ def render_table(results: list[dict]) -> str:
 
 def append_report(phase: str, table: str, results: list[dict]) -> None:
     RECORDS_PATH.parent.mkdir(parents=True, exist_ok=True)
+    run_ts = time.strftime("%Y-%m-%d %H:%M")
     with RECORDS_PATH.open("a", encoding="utf-8") as fh:
         for record in results:
-            fh.write(json.dumps(record, ensure_ascii=False) + "\n")
+            fh.write(json.dumps({**record, "run_ts": run_ts}, ensure_ascii=False) + "\n")
     if not REPORT_PATH.exists():
         REPORT_PATH.write_text("# Candidate Models Probe Report\n", encoding="utf-8")
     texts = "\n".join(

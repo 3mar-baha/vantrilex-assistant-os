@@ -647,6 +647,20 @@ Pipeline switch NOT proposed here — needs its own plan (privacy/latency
 trade, §2.5 local-first doctrine). Mission verdicts Q1–Q4 complete in the
 report; no production config changes made.
 
+## Pool re-probe — key rotation verdict (2026-09-18 13:25)
+
+Re-ran fast/medium/heavy on the current pool. Degraded → now: FAST 31b
+29/52 s → 53/102 s TTFT (WORSE); 26b 23.5 s → 47 s (worse); bare nex-agi
+slugs still 404; pro still empty; Ultra empty → OK (3.6 s TTFT, valid
+3-step gmail/calendar/telemetry DAG); Lightning ok → empty (84 s).
+Models flap ok↔empty between runs minutes apart. Rotation unverifiable
+from here: OmniRoute exposes no admin API (only a Next.js /status
+dashboard), and `.env` holds single GROQ/OPENROUTER keys — the 5+5 pool
+is server-side. VERDICT: pool NOT stable enough to pin; keep all
+baselines; owner action = OmniRoute /status inspection + provider
+credential audit. Ultra validated capable-when-streaming (fallback with
+repair, never primary).
+
 ## Arsenal sanitization (governance, 2026-09-17)
 
 ## Compliance enforcement (governance, 2026-09-17)
