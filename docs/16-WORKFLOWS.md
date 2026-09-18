@@ -78,7 +78,8 @@ no speculative layers. Verify:
 
 ```powershell
 .venv/Scripts/python.exe -m pytest -q -p no:cacheprovider --no-cov
-# target: 1,457+ passed, 0 failed
+# target: 1,798+ passed, 0 failed (floor ratified 2026-09-18; pre-existing
+# live/free-pool exceptions carried explicitly per checkpoint)
 ```
 
 ## Tier 3 — `/audit` (Security & Invariant Gate)

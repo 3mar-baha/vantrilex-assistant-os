@@ -555,6 +555,22 @@ interactive `src.google_auth` once). Tested: task objects construct valid
 (`OMAR\OMAR`, PT30S); shortcut install->remove cycle clean, no residue. Live
 Task registration needs one elevated owner run (UAC).
 
+## Live shadow tracer console (telemetry, 2026-09-18)
+
+`feat(telemetry)`: opt-in serialized JSONL sink in `src/logsetup.py`
+(`SARA_SHADOW_JSONL`, default-ON from `sara.ps1` into
+`vault/State/SARA_SHADOW_COGNITION_LOG.jsonl`; unset = historical behavior) +
+`scripts/live_shadow_tracer.py` (rich console: vitals CORE_HEALTH/BRIDGE_DIAL/
+gateway/turn-counter + rotation-safe 7-domain classified feed, `--once` mode;
+missing fields render `--`, never fabricated) + `sara.bat -Trace` launcher.
+Tests `tests/test_shadow_sink.py` + `tests/test_shadow_tracer.py` (16 new).
+Gates: suite 1,813 passed / 2 pre-existing fails proven unrelated via
+`git stash` (p63b summarizer + h06 free-pool live); tiered coverage PASSED
+(91.7% total); ruff clean; security gate OK; live benchmark 6/6 LIVE + 5/5
+invariants. Launch: `.\sara.bat -Trace` (full cognition stream after next
+core boot). Pre-existing fails carried, not fixed: p63b run_forever +
+h06 joda live.
+
 ## Arsenal sanitization (governance, 2026-09-17)
 
 ## Compliance enforcement (governance, 2026-09-17)

@@ -230,7 +230,7 @@ if (Get-NetTCPConnection -LocalPort $p -State Listen -ErrorAction SilentlyContin
 }
 
 Write-Host '=== SARA: launching windows ===' -ForegroundColor Cyan
-$coreProc = Start-Child "[SARA Core :$p]" ("Set-Location -LiteralPath '{0}'; `$env:PORT='{1}'; .venv\Scripts\python.exe -m src.main" -f $RootEsc, $p)
+$coreProc = Start-Child "[SARA Core :$p]" ("Set-Location -LiteralPath '{0}'; `$env:PORT='{1}'; `$env:SARA_SHADOW_JSONL='vault/State/SARA_SHADOW_COGNITION_LOG.jsonl'; .venv\Scripts\python.exe -m src.main" -f $RootEsc, $p)
 $bridgeProc = Start-Child '[SARA PC Bridge]' ("Set-Location -LiteralPath '{0}'; .venv\Scripts\python.exe -m bridge.daemon" -f $RootEsc)
 
 Write-Host ("  core window (PID {0}, PORT={1}) launched — direct venv python (no make shell)" -f $coreProc.Id, $p)
