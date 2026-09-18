@@ -64,12 +64,19 @@ def score_arabic_masculine(text: str) -> dict:
 
 
 async def stream_probe(
-    client: httpx.AsyncClient, model: str, prompt: str, max_tokens: int = 120
+    client: httpx.AsyncClient,
+    model: str,
+    prompt: str,
+    max_tokens: int = 120,
+    system: str | None = None,
 ) -> dict:
     """One streamed completion; returns timing + text (never raises)."""
+    messages = ([{"role": "system", "content": system}] if system else []) + [
+        {"role": "user", "content": prompt}
+    ]
     payload = {
         "model": model,
-        "messages": [{"role": "user", "content": prompt}],
+        "messages": messages,
         "max_tokens": max_tokens,
         "stream": True,
     }
@@ -121,6 +128,69 @@ async def stream_probe(
         "text": text,
         **score_arabic_masculine(text),
     }
+
+
+MEDIUM_MODEL = "nex-agi/nex-n2.5-mini:free"
+MEDIUM_REPS = 3
+
+MEDIUM_SYSTEM = (
+    "You are a tool router. Output ONLY one JSON object, no prose: "
+    '{"tool": "<name>", "arg": "<string>"}. '
+    "Allowed tools: calendar, gmail, tasks, telemetry."
+)
+MEDIUM_PROMPT = "سجليلي موعد بكرة الساعة 5 المسا: محاضرة مع الشباب"
+MEDIUM_ALLOWED_TOOLS = ("calendar", "gmail", "tasks", "telemetry")
+
+
+def score_tool_json(text: str) -> dict:
+    """Strict verdict on a tool-call payload (Pydantic-shaped, no prose)."""
+    try:
+        payload = json.loads(text.strip())
+    except (ValueError, AttributeError):
+        return {"valid_json": False, "schema_ok": False, "hallucinated_keys": ["<unparseable>"]}
+    if not isinstance(payload, dict):
+        return {"valid_json": True, "schema_ok": False, "hallucinated_keys": ["<non-object>"]}
+    extra = sorted(set(payload) - {"tool", "arg"})
+    ok = (
+        payload.get("tool") in MEDIUM_ALLOWED_TOOLS
+        and isinstance(payload.get("arg"), str)
+        and len(payload.get("arg", "")) > 0
+        and not extra
+    )
+    return {"valid_json": True, "schema_ok": ok, "hallucinated_keys": extra}
+
+
+async def run_medium(client: httpx.AsyncClient) -> list[dict]:
+    results: list[dict] = []
+    for _ in range(MEDIUM_REPS):
+        record = await stream_probe(
+            client, MEDIUM_MODEL, MEDIUM_PROMPT, max_tokens=150, system=MEDIUM_SYSTEM
+        )
+        if record.get("text"):
+            record.update(score_tool_json(record["text"]))
+        results.append(record)
+        await asyncio.sleep(INTER_CALL_GAP_S)
+    return results
+
+
+def render_medium_table(results: list[dict]) -> str:
+    rows = [
+        [
+            r["model"].split("/")[-1][:34],
+            r.get("status"),
+            r.get("ttft_ms", "--"),
+            r.get("tok_per_s", "--"),
+            r.get("valid_json", "--"),
+            r.get("schema_ok", "--"),
+            ",".join(r.get("hallucinated_keys", [])) or "--",
+        ]
+        for r in results
+    ]
+    return tabulate(
+        rows,
+        headers=["model", "status", "TTFTms", "tok/s~", "json?", "schema?", "extra_keys"],
+        tablefmt="github",
+    )
 
 
 async def run_fast(client: httpx.AsyncClient) -> list[dict]:
@@ -180,17 +250,22 @@ async def main(argv: list[str] | None = None) -> int:
     if not api_key:
         print("OMNIROUTE_API_KEY missing — aborting (no probes sent).")
         return 2
-    if args.phase != "fast":
+    if args.phase not in ("fast", "medium"):
         print(f"Phase '{args.phase}' not wired yet — one phase per run.")
         return 3
     async with httpx.AsyncClient(
         headers={"Authorization": f"Bearer {api_key}"},
         timeout=FIRST_TOKEN_TIMEOUT_S + 30,
     ) as client:
-        results = await run_fast(client)
-    table = render_table(results)
+        if args.phase == "medium":
+            results = await run_medium(client)
+            table = render_medium_table(results)
+            append_report("MEDIUM tool-JSON", table, results)
+        else:
+            results = await run_fast(client)
+            table = render_table(results)
+            append_report("FAST conversational", table, results)
     print(table)
-    append_report("FAST conversational", table, results)
     print(f"\nReport: {REPORT_PATH}")
     return 0
 

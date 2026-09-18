@@ -36,3 +36,31 @@
 
 أنت طمني عنك؟ كيف كان يومك؟ وهل هناك أي شيء يمكنني مساعدتك به اليوم؟ سواء كان موضوعاً للنقاش، مساعدة في عمل،
 
+
+## Phase: MEDIUM tool-JSON (2026-09-18 12:58)
+
+| model              | status   | TTFTms   | tok/s~   | json?   | schema?   | extra_keys   |
+|--------------------|----------|----------|----------|---------|-----------|--------------|
+| nex-n2.5-mini:free | HTTP 404 | --       | --       | --      | --        | --           |
+| nex-n2.5-mini:free | HTTP 404 | --       | --       | --      | --        | --           |
+| nex-n2.5-mini:free | HTTP 404 | --       | --       | --      | --        | --           |
+
+### nex-agi/nex-n2.5-mini:free
+> {"error":{"message":"No active credentials for provider: nex-agi","type":"invalid_request_error","code":"model_not_found"}}
+
+### nex-agi/nex-n2.5-mini:free
+> {"error":{"message":"No active credentials for provider: nex-agi","type":"invalid_request_error","code":"model_not_found"}}
+
+### nex-agi/nex-n2.5-mini:free
+> {"error":{"message":"No active credentials for provider: nex-agi","type":"invalid_request_error","code":"model_not_found"}}
+
+
+## Phase: MEDIUM tool-JSON (openrouter slug, single confirmatory call) (2026-09-18 15:59)
+
+| model              | status   |   TTFTms |   tok/s~ | json?   | schema?   | extra_keys   |
+|--------------------|----------|----------|----------|---------|-----------|--------------|
+| nex-n2.5-mini:free | ok       |     4926 |        4 | True    | True      | --           |
+
+### openrouter/nex-agi/nex-n2.5-mini:free
+> {"tool":"calendar","arg":"\u0633\u062c\u0651\u0644 \u0645\u0648\u0639\u062f\u0627 \u063a\u062f\u0627 \u0627\u0644\u0633\u0627\u0639\u0629 5:00 \u0645\u0633\u0627\u0621\u064b: \u0645\u062d\u0627\u0636\u0631\u0629 \u0645\u0639 \u0627\u0644\u0634\u0628\u0627\u0628"}
+

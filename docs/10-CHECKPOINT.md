@@ -615,6 +615,15 @@ zero feminine hits both. Pool-wide TTFTs ~30–50× SLA during the window —
 comparative verdict only. Report:
 `benchmarks/CANDIDATE_MODELS_PROBE_REPORT.md` (+ JSONL records).
 
+## Model probe Phase 2 — MEDIUM (2026-09-18)
+
+Mission slug `nex-agi/nex-n2.5-mini:free` is HTTP 404 ×3 (same provider-credential
+gap as the 14:54 storm). `openrouter/`-prefixed slug works first try:
+TTFT 4.9 s, strict `{"tool":"calendar","arg":"…"}` with zero hallucinated keys
+(`valid_json` + `schema_ok` true). Throughput ~4 tok/s — nowhere near the
+>100 t/s dashboard claim; that target is rejected as pool-fiction. JSON
+discipline itself is sound; the slug prefix is the entire problem.
+
 ## Arsenal sanitization (governance, 2026-09-17)
 
 ## Compliance enforcement (governance, 2026-09-17)
