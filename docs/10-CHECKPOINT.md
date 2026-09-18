@@ -659,6 +659,18 @@ UnicodeDecodeError on the Windows runner. One-line fix
 (cp1252-safe); production `src/` fully pinned (15/15 reads explicit).
 Expected state: main 100% green in CI.
 
+## Pool re-probe under round-robin (2026-09-18, Step 3)
+
+Owner set round-robin + sticky-5 on both providers. Re-probe: FAST 31b
+1.6 s TTFT (first sub-SLA sample ever) then 25 s; 26b 44 s — floor
+improved, tails persist (high variance across accounts). Bare nex-agi
+slugs still 404 (slug form, not pool). Pro streams first time via
+`openrouter/` fallback: 6 s, quality Arabic 3-step DAG. Ultra empty;
+Lightning ok-but-prose again. VERDICT: improved but not pinnable —
+variance too high for FAST pin changes; MEDIUM/HEAVY primaries should
+move to `openrouter/`-prefixed slugs (explicit approval requested, NOT
+applied). Baselines hold.
+
 ## Model probe Phase 1 — FAST (2026-09-18)
 
 `scripts/probe_candidate_models.py` (`--phase fast`; tabulate present,

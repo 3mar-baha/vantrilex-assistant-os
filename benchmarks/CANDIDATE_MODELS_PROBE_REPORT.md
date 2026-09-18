@@ -196,3 +196,80 @@
   ]
 }
 
+
+## Phase: FAST conversational (2026-09-18 15:13)
+
+| model                   | status   | TTFTms   | totalMs   | tok/s~   | masc✓   | fem✗   |
+|-------------------------|----------|----------|-----------|----------|---------|--------|
+| gemma-4-31b-it:free     | ok       | 1646.0   | 4338.0    | 15.4     | طمني    | --     |
+| gemma-4-31b-it:free     | ok       | 25305.0  | 28177.0   | 2.9      | قلي     | --     |
+| gemma-4-26b-a4b:free    | HTTP 404 | --       | --        | --       | --      | --     |
+| gemma-4-26b-a4b:free    | HTTP 404 | --       | --        | --       | --      | --     |
+| gemma-4-26b-a4b-it:free | ok       | 43918.0  | 45939.0   | 1.4      | طمني    | --     |
+
+### google/gemma-4-31b-it:free
+> أهلين! أنا بخير والحمد لله، شكراً لسؤالك. 😊
+
+بما أني ذكاء اصطناعي، "يومي" عبارة عن استقبال أسئلة ومساعدة الناس. حالياً أنا موجودة هنا، جاهزة ومتحمسة لأي شيء تحتاجه؛ سواء كنت بدك تدردش، تسأل عن معلومة، أو حتى نخطط لشيء جديد.
+
+أنت طمني عنك؟ كيف يومك وكيف كانت أحوالك اليوم؟
+
+### google/gemma-4-31b-it:free
+> بناءً على المعطيات العامة الحالية، الوضع **مستقر وعادي** في معظم الدول العربية.
+
+إليك الملخص باختصار:
+1. **الخدمات:** البريد الحكومي مستمر في تقديم خدماته (طرود، رسائل، مدفوعات).
+2. **التحول الرقمي:** هناك توجه كبير نحو "البريد الإلكتروني" والتطبيقات الذكية لتقليل الاعتماد على الورق.
+3. **المنافسة:** شركات الشحن السريع (مثل DHL و
+
+### google/gemma-4-26b-a4b:free
+> {"error":{"message":"No active credentials for provider: google","type":"invalid_request_error","code":"model_not_found"}}
+
+### google/gemma-4-26b-a4b:free
+> {"error":{"message":"No active credentials for provider: google","type":"invalid_request_error","code":"model_not_found"}}
+
+### openrouter/google/gemma-4-26b-a4b-it:free
+> أهلين! أنا بخير والحمد لله، كلي طاقة وحماس لمساعدتك. 😊
+
+أنا دائماً هنا، جالسة بانتظار أسئلتك أو أي موضوع تحب تدردش فيه. سواء كان عندك شغل بدك تخلصه، أو معلومة حابب تعرفها، أو حتى لو بس حابب تدردش وتضيع وقت.. أنا جاهزة!
+
+أنت طمني عنك؟ كيف يومك؟ وكيف بقدر أساعدك اليوم؟
+
+
+## Phase: MEDIUM tool-JSON (2026-09-18 15:13)
+
+| model              | status   | TTFTms   | tok/s~   | json?   | schema?   | extra_keys   |
+|--------------------|----------|----------|----------|---------|-----------|--------------|
+| nex-n2.5-mini:free | HTTP 404 | --       | --       | --      | --        | --           |
+| nex-n2.5-mini:free | HTTP 404 | --       | --       | --      | --        | --           |
+| nex-n2.5-mini:free | HTTP 404 | --       | --       | --      | --        | --           |
+
+### nex-agi/nex-n2.5-mini:free
+> {"error":{"message":"No active credentials for provider: nex-agi","type":"invalid_request_error","code":"model_not_found"}}
+
+### nex-agi/nex-n2.5-mini:free
+> {"error":{"message":"No active credentials for provider: nex-agi","type":"invalid_request_error","code":"model_not_found"}}
+
+### nex-agi/nex-n2.5-mini:free
+> {"error":{"message":"No active credentials for provider: nex-agi","type":"invalid_request_error","code":"model_not_found"}}
+
+
+## Phase: HEAVY DAG decomposition (2026-09-18 15:14)
+
+| model                                  | status   |   TTFTms |   totalMs | steps   | tools?   | acyclic?   |
+|----------------------------------------|----------|----------|-----------|---------|----------|------------|
+| nex-agi/nex-n2.5-pro:free              | ok       |     6036 |     10108 | 3       | True     | True       |
+| nvidia/nemotron-3-ultra-550b-a55b:free | empty    |          |       723 | --      | --       | --         |
+| nvidia/nemotron-3.5-lightning:free     | ok       |    14813 |     14818 | 0       | False    | False      |
+
+### openrouter/nex-agi/nex-n2.5-pro:free
+> {"steps":[{"tool":"gmail","arg":"استعرض الإيميلات المهمة وغير المقروءة اليوم وحدد الرسائل التي تحتاج متابعة.","after":[]},{"tool":"calendar","arg":"اعرض جميع المواعيد والأحداث المقررة غدًا مع أوقاتها ومواقعها أو روابط الحضور.","after":[]},{"tool":"telemetry","arg":"تحقق من حالة الجهاز: مستوى البطارية، الاتصال بالإنترنت، التخزين المتاح، وأي تحذيرات أو أعطال نشطة.","after":[]}]}
+
+### openrouter/nvidia/nemotron-3.5-lightning:free
+> Here's a thinking process:
+
+1.  **Analyze User Input:**
+   - User speaks Arabic: "جهز موجز المسا: شوف الإيميلات المهمة، مواعيد بكرة، وحالة الجهاز"
+   - Translation: "Prepare a summary for the morning: Check important emails, tomorrow's appointments, and device status."
+   - The request is to gather information from various sources: Gmail (emails), Calendar (tomorrow's appointments), and device sta
+
