@@ -44,6 +44,44 @@ OBS_HEAD_CHARS: Final[int] = 400
 
 _THOUGHT_RE: Final = re.compile(r"\{.*\}", re.DOTALL)
 
+# In-turn healing (P1 consensus): deterministic, zero-LLM arg repair.
+# Arabic-Indic digits ride user text into tool args (ISO 8601 failures);
+# wrapping quotes sneak in from dictated speech. Both normalize losslessly.
+_ARABIC_DIGITS: Final[dict[str, str]] = {
+    "٠": "0",
+    "١": "1",
+    "٢": "2",
+    "٣": "3",
+    "٤": "4",
+    "٥": "5",
+    "٦": "6",
+    "٧": "7",
+    "٨": "8",
+    "٩": "9",
+}
+HEALING_MAX_ATTEMPTS: Final[int] = 2
+
+
+def normalize_tool_arg(arg: str) -> str:
+    """Strip dictated quotes/whitespace; fold Arabic-Indic digits to ASCII."""
+    text = (arg or "").strip().strip("\"'“”‘’").strip()
+    return "".join(_ARABIC_DIGITS.get(ch, ch) for ch in text)
+
+
+class HealingBudget:
+    """Per-tool retry budget inside one turn; dispatcher wiring stays P2."""
+
+    def __init__(self, max_attempts: int = HEALING_MAX_ATTEMPTS) -> None:
+        self._max = max_attempts
+        self._failures: dict[str, int] = {}
+
+    def note_failure(self, tool: str) -> None:
+        self._failures[tool] = self._failures.get(tool, 0) + 1
+
+    def may_retry(self, tool: str) -> bool:
+        return self._failures.get(tool, 0) < self._max
+
+
 # Information-seeking tools: the only family eligible for the one-shot pivot
 # (a dead read may still answer via live web search; actions never pivot).
 INFORMATION_TOOLS: Final[frozenset[str]] = frozenset(

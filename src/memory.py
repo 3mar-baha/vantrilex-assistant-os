@@ -499,6 +499,47 @@ class VaultMemoryWriter:
         return fact
 
 
+def upsert_fact(note_body: str, entity: str, slot: str, value: str, stamped: str) -> str:
+    """Append a slot value, marking any prior live row for the slot superseded.
+
+    Append-only storage (audit preserved); RAG reads resolve via
+    resolve_current_facts. Slot keys normalize through stripping only —
+    LLM-side triple emission stays P2 work.
+    """
+    key = f"{entity.strip()}/{slot.strip()}"
+    marker = f"superseded: {key}"
+    out: list[str] = []
+    for line in (note_body or "").splitlines():
+        if line.strip() == f"slot: {key}" and not (out and out[-1].strip() == marker):
+            indent = line[: len(line) - len(line.lstrip())]
+            out.append(f"{indent}{marker}")
+        out.append(line)
+    section = f"## معلومة {stamped}\nslot: {key}\nvalue: {value.strip()}\n"
+    return ("\n".join(out) + "\n" if out else "") + section
+
+
+def resolve_current_facts(note_body: str) -> dict[str, str]:
+    """Live slot view: superseded rows are invisible to RAG."""
+    current: dict[str, str] = {}
+    doomed: str | None = None  # key whose NEXT row is superseded (row-scoped)
+    key: str | None = None
+    skip = False
+    for line in (note_body or "").splitlines():
+        stripped = line.strip()
+        if stripped.startswith("superseded: "):
+            doomed = stripped[len("superseded: ") :].strip()
+        elif stripped.startswith("slot: "):
+            key = stripped[len("slot: ") :].strip()
+            skip = doomed == key
+            doomed = None
+        elif stripped.startswith("value: ") and key is not None:
+            if not skip:
+                current[key] = stripped[len("value: ") :].strip()
+            key = None
+            skip = False
+    return current
+
+
 def day_chat_lines(note_body: str, *, max_messages: int = SUMMARY_MAX_MESSAGES) -> list[str]:
     """The day's chat turns (**المالك:** / **سارة:** lines) from a Daily_Logs body,
     oldest first, capped to the LAST ``max_messages`` turns."""
@@ -578,11 +619,11 @@ class DailySummarizer:
         )
         return summary
 
-    async def run_forever(self) -> None:
+    async def run_forever(self, *, now_fn=None) -> None:
         """Tick loop — like the daily brief/journaler: due() gates all idle work."""
         while True:
             try:
-                now = datetime.now(UTC)
+                now = now_fn() if now_fn is not None else datetime.now(UTC)
                 if self.due(now):
                     await self.summarize_day(now.astimezone(self._tz).date(), now=now)
             except Exception:  # noqa: BLE001 — the loop survives anything

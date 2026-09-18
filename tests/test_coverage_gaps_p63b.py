@@ -133,7 +133,8 @@ def test_run_forever_summarizes_until_cancelled(monkeypatch):
     async def _run():
         summarizer.due = _due
         try:
-            await summarizer.run_forever()
+            # Frozen clock: run_forever must not depend on the real calendar day.
+            await summarizer.run_forever(now_fn=lambda: NOW)
         except _aio.CancelledError:
             pass
 
@@ -168,7 +169,8 @@ def test_run_forever_survives_writer_errors(monkeypatch):
     async def _run():
         summarizer.due = _due
         try:
-            await summarizer.run_forever()
+            # Frozen clock: the writer-error path must actually be reached.
+            await summarizer.run_forever(now_fn=lambda: NOW)
         except _aio.CancelledError:
             pass
 

@@ -7,7 +7,8 @@ on:
 
 jobs:
   quality-gate:
-    runs-on: ubuntu-latest
+    # Windows-native suite (Win32 ctypes, C:/D: telemetry, backslash paths).
+    runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
 
@@ -15,6 +16,9 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
+
+      - name: Install ffmpeg (voice contract tests)
+        run: choco install ffmpeg --no-progress -y
 
       - name: Install dependencies
         run: |

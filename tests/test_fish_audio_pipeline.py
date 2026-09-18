@@ -25,9 +25,14 @@ def _settings(**over) -> Settings:
         "fish_audio_voice_ref": "56c2f0c23924449781863ff20aceb5fa",
         "fish_audio_speed": "0.9",
         "openrouter_api_key": "sk-or-test",
+        # Hermetic: never inherit the developer .env or depend on CI secrets.
+        "vault_github_repo": "owner/vault-repo",
+        "vault_github_token": "ci-dummy-pat",
+        "bridge_token": "ci-dummy-token",
+        "bridge_server_url": "wss://ci.invalid/bridge",
     }
     base.update(over)
-    return Settings(**base)
+    return Settings(_env_file=None, **base)
 
 
 class _Recorder(httpx.MockTransport):

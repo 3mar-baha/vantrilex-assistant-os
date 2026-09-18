@@ -603,6 +603,22 @@ memory_upsert, hybrid RAG, ROI vision); live floors (1,819 passed, Gmail
 git-guardrails file named `git-guardrails-claude-code.md`, docs-guard file
 named `docs-guard.md`.
 
+## CI triage + P1 quick-wins (2026-09-18)
+
+CI root-caused via `gh run view` (21 fails, all environmental): Linux runner
+vs Windows-native suite (windll/DETACHED_PROCESS/tmp paths/Win32 disks),
+4 missing Settings vars in `test_fish_audio_pipeline` (vault_github_repo/
+token, bridge_token/server_url — local `.env` masked it), missing ffmpeg,
+plus genuine date-rot in p63b (`run_forever` used real today vs 2026-09-17
+fixture). Landed: `ci.yml` → windows-latest + choco ffmpeg; hermetic fish
+`_settings` (`_env_file=None` + dummies); `run_forever(now_fn=)` seam
+(SelfEvolutionWorker precedent) + frozen clocks. P1 primitives (wiring P2):
+ReflectiveTrace.render_ledger_block, stdlib BM25 rank/score, memory
+upsert_fact/resolve_current_facts (row-scoped supersede), HealingBudget +
+normalize_tool_arg, CompositionCache (explicit read-only gate). Suite 1,838
+passed, only h04/h06 live-pool fails; coverage 91.8% PASSED; ruff + security
++ quality gates green. Guards: clean/test-guard clean.
+
 ## Model probe Phase 1 — FAST (2026-09-18)
 
 `scripts/probe_candidate_models.py` (`--phase fast`; tabulate present,
