@@ -29,6 +29,13 @@ WATCH_URL = f"{GMAIL_API}/watch"
 TRUNCATION_MARKER = "…[مقتطع]"
 SEEN_IDS_CAP = 2000
 
+# Live incident 2026-09-18: each messages.get costs quota units, so one chat
+# turn hydrating 25 FULL bodies blew the per-minute limit (HTTP 403). The
+# read-only snapshot stays small; delivery sweeps burst-cap with the cursor
+# held back so overflow redelivers instead of being skipped.
+PEEK_DEFAULT_MAX = 10
+FETCH_BURST_CAP = 25
+
 
 class EmailMessage(BaseModel):
     id: str
@@ -177,6 +184,7 @@ class GmailInbox:
             return await self._fetch_locked()
 
     async def _fetch_locked(self) -> list[EmailMessage]:
+        saved_cursor = self.state.history_id
         if self.state.history_id:
             try:
                 candidates = await self._history_ids(self.state.history_id)
@@ -186,6 +194,10 @@ class GmailInbox:
         else:
             candidates = await self._sweep_ids()
         candidates = [mid for mid in candidates if mid and mid not in self.state.seen_ids]
+        truncated = len(candidates) > FETCH_BURST_CAP
+        if truncated:  # hold the cursor back: overflow redelivers next cycle
+            candidates = candidates[:FETCH_BURST_CAP]
+            self.state.history_id = saved_cursor
         messages: list[EmailMessage] = []
         for mid in candidates:
             parsed = await self._get_message(mid)
@@ -241,7 +253,7 @@ class GmailInbox:
         unseen = [mid for mid in ids if mid not in self.state.seen_ids]
         return len(ids), len(unseen)
 
-    async def peek_unread(self, max_n: int = 25) -> list[EmailMessage]:
+    async def peek_unread(self, max_n: int = PEEK_DEFAULT_MAX) -> list[EmailMessage]:
         """Read-only recent unread snapshot (daily brief) — never touches cursor/seen."""
         data = await self._session.request(
             "GET",

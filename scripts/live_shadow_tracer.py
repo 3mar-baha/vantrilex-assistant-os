@@ -54,6 +54,8 @@ DOMAIN_COLORS: Final[dict[str, str]] = {
 }
 
 # Ordered: first match wins. Blob = logger name + function + message, lowercased.
+# NOTE: bare `router` is deliberately absent — model slugs like `openrouter/…`
+# contain it. Router signals use multi-word/dispatcher-anchored keywords.
 DOMAIN_RULES: Final[tuple[tuple[str, tuple[str, ...]], ...]] = (
     ("audio", ("fish", "synth", "opus", "ffmpeg", "expressive_audio", "tts")),
     ("ingest", ("transcrib", "voice note", "inbound", "biometric", "telegram", "stt")),
@@ -61,12 +63,50 @@ DOMAIN_RULES: Final[tuple[tuple[str, tuple[str, ...]], ...]] = (
         "posture",
         ("posture", "turn counter", "turn_counter", "turns_since", "cadence", "situational"),
     ),
-    ("router", ("verdict", "repair_verdict", "router", "dispatch", "decision_loop", "deduce")),
-    ("memory", ("rag", "envelope", "digest", "ledger", "recall", "associative", "user_info")),
-    ("generation", ("ttft", "token", "paidmodel", "cost", "$0", "gateway", "first-token")),
+    (
+        "memory",
+        (
+            "rag",
+            "envelope",
+            "digest",
+            "ledger",
+            "recall",
+            "associative",
+            "user_info",
+            "affect",
+            "extraction",
+        ),
+    ),
     (
         "tools",
-        ("tool", "confirmation_id", "bridge", "screenshot", "screen_ocr", "pc_actions", "launch"),
+        ("tool '", "confirmation_id", "bridge", "screenshot", "screen_ocr", "pc_actions", "launch"),
+    ),
+    (
+        "router",
+        (
+            "dispatcher",
+            "decision_loop",
+            "deduce",
+            "repair_verdict",
+            "router-miss",
+            "router verdict",
+            "router failed",
+            "verdict",
+        ),
+    ),
+    (
+        "generation",
+        (
+            "ttft",
+            "token",
+            "paidmodel",
+            "cost",
+            "$0",
+            "gateway",
+            "first-token",
+            "exhausted",
+            "all models",
+        ),
     ),
 )
 
@@ -178,11 +218,19 @@ def turn_count() -> str:
         return "--"
 
 
+def _event_timestamp(inner: dict) -> str:
+    """Serialized loguru `time` is a dict (`repr`/`timestamp`) — unwrap it."""
+    raw_time = inner.get("time", "--")
+    if isinstance(raw_time, dict):
+        raw_time = raw_time.get("repr", "--")
+    return str(raw_time)[:19]
+
+
 def render_event(console: Console, record: dict) -> None:
     inner = record.get("record") or {} if isinstance(record, dict) else {}
     domain = classify_record(record if isinstance(record, dict) else {})
     color = DOMAIN_COLORS[domain]
-    timestamp = str(inner.get("time", "--"))[:19]
+    timestamp = _event_timestamp(inner)
     level = str(
         inner.get("level", {}).get("name", "INFO")
         if isinstance(inner.get("level"), dict)
@@ -221,6 +269,18 @@ def snapshot_once(console: Console, log_path: Path, tail_depth: int) -> int:
     return 0
 
 
+def wait_for_log(
+    console: Console, log_path: Path, poll_s: float = 2.0, timeout_s: float | None = None
+) -> None:
+    """Block until the shadow log appears; the notice prints exactly once."""
+    console.print(f"[yellow]Waiting for shadow log at {log_path} … (start sara.bat)[/]")
+    started = time.monotonic()
+    while not log_path.exists():
+        if timeout_s is not None and time.monotonic() - started >= timeout_s:
+            raise TimeoutError(log_path)
+        time.sleep(poll_s or 0.01)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Sara live shadow tracer console")
     parser.add_argument("--log", type=Path, default=DEFAULT_LOG)
@@ -231,9 +291,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.once:
         return snapshot_once(console, args.log, args.lines)
     console.print(Panel(vitals_table(), title="SHADOW TRACER — live", border_style="green"))
-    while not args.log.exists():
-        console.print(f"[yellow]Waiting for shadow log at {args.log} … (start sara.bat)[/]")
-        time.sleep(2)
+    wait_for_log(console, args.log)
     console.print(f"[green]Tailing {args.log} — Ctrl+C to stop.[/]")
     try:
         for record in follow_events(args.log):

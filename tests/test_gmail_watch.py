@@ -298,3 +298,40 @@ async def test_fetch_serialized_under_lock(make_settings, tmp_path):
     inbox = GmailInbox(session, settings)
     first, second = await asyncio.gather(inbox.fetch_new(), inbox.fetch_new())
     assert [m.id for m in first + second].count("m1") == 1
+
+
+async def test_peek_unread_caps_hydrations(make_settings, tmp_path):
+    """Live incident 2026-09-18: peek hydrated 25 FULL messages per turn and blew
+    the per-minute Gmail quota (HTTP 403). The snapshot caps per-message gets."""
+    settings = _settings(make_settings, tmp_path)
+    ids = [f"m{i}" for i in range(1, 13)]
+    routes = {LIST_URL: _list(ids, "100")}
+    routes.update(
+        {_msg_url(mid): httpx.Response(200, json=message_payload(mid)) for mid in ids[:10]}
+    )
+    session = GoogleSession(settings, transport=Routes(**routes).transport())
+    inbox = GmailInbox(session, settings)
+    # m11/m12 have NO route: any hydration attempt raises -> proves the cap.
+    assert [m.id for m in await inbox.peek_unread()] == ids[:10]
+
+
+async def test_fetch_new_caps_sweep_burst_without_losing_overflow(make_settings, tmp_path):
+    """Live incident 2026-09-18: unbounded sweeps multiply quota burn. Bursts are
+    capped AND the cursor is held back so overflow redelivers next cycle."""
+    settings = _settings(make_settings, tmp_path)
+    ids = [f"m{i}" for i in range(1, 41)]
+    routes = {LIST_URL: _list(ids, "100")}
+    routes.update(
+        {_msg_url(mid): httpx.Response(200, json=message_payload(mid)) for mid in ids[:25]}
+    )
+    session = GoogleSession(settings, transport=Routes(**routes).transport())
+    inbox = GmailInbox(session, settings)
+    first = await inbox.fetch_new()
+    assert [m.id for m in first] == ids[:25]
+    inbox.mark_seen(first)
+    routes.update(
+        {_msg_url(mid): httpx.Response(200, json=message_payload(mid)) for mid in ids[25:]}
+    )
+    session2 = GoogleSession(settings, transport=Routes(**routes).transport())
+    second = await GmailInbox(session2, settings).fetch_new()
+    assert [m.id for m in second] == ids[25:]

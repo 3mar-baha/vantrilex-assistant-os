@@ -571,6 +571,25 @@ invariants. Launch: `.\sara.bat -Trace` (full cognition stream after next
 core boot). Pre-existing fails carried, not fixed: p63b run_forever +
 h06 joda live.
 
+## Incident 2026-09-18 14:54–14:57 + hardening (telemetry/triage, 2026-09-18)
+
+Live session wall of «خلل تقني»: free-pool storm (nex-agi 404 no provider
+credentials + groq/gemma 429 quarantines ~900 s + nemotron empty) overlaid on
+a Gmail per-minute quota 403. Forensics: the core did NOT die — the pasted
+traceback is `tools:call`'s own ERROR log; `_tool_lane` survival boundary
+(`dispatcher.py:945-958`, tested by `test_registry_failure_degrades_to_plain_tier2`)
+held. Landed: (a) tracer hotfix — loguru time-dict unwrap, rule reorder
+(memory/tools before router/generation), bare-`router` keyword dropped for
+dispatcher-anchored signals (openrouter-slug collision), `exhausted`/`tool '`
+keywords, wait-notice once; (b) Gmail quota diet — `PEEK_DEFAULT_MAX=10`
+(was 25), `FETCH_BURST_CAP=25` with cursor hold-back so overflow redelivers
+(`_do_gmail` needs only sender/subject; triage keeps full bodies); (c) pool
+audit — MEDIUM/HEAVY primaries are nex-agi slugs, dead-weight 404s until the
+OmniRoute credential is restored (owner console action; `auto/*` combos now
+served). Gates: suite 1,819 passed (3 live storm fails re-passed post-recovery;
+p63b carried pre-existing); tiered coverage PASSED (91.8%); ruff clean;
+security gate OK; docs guard 16/16.
+
 ## Arsenal sanitization (governance, 2026-09-17)
 
 ## Compliance enforcement (governance, 2026-09-17)
