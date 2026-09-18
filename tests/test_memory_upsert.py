@@ -50,9 +50,7 @@ def test_unrelated_slots_survive_upsert() -> None:
 
 def test_envelope_filter_drops_dead_rows_keeps_prose() -> None:
     """RAG sees live facts + free prose, never superseded rows or markers."""
-    body = upsert_fact(
-        "عمر يحب الكنافة\n" + NOTE, "owner", "workout", "07:00", "2026-09-18 09:00"
-    )
+    body = upsert_fact("عمر يحب الكنافة\n" + NOTE, "owner", "workout", "07:00", "2026-09-18 09:00")
     filtered = filter_superseded_rows(body)
     assert "عمر يحب الكنافة" in filtered
     assert "value: 07:00" in filtered
