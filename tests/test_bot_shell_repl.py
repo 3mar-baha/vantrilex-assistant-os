@@ -12,13 +12,20 @@ presentation only, every turn is handed to `FrontDoorDispatcher`
 (`src/dispatcher.py:744`, `handle` at `:824`), so there is no second code path for an
 invariant to leak through. The guards below:
 
-  1. structural — the shell imports the front door and NOT `src.persona` /
-     `src.gender_pipeline` / `src.voice_policy`, and cannot reach a tool or the PC
-     coordinator at all;
+  1. structural — the shell imports the front door and NOT `src.gender_pipeline` /
+     `src.voice_policy`, and cannot reach a tool or the PC coordinator at all;
   2. behavioural — every turn goes through the dispatcher, and every string the shell
      emits is a string the dispatcher produced;
   3. honest failure — a dead gateway or a dead turn lands one Amman-colloquial line,
      never a traceback and never an empty line.
+
+NARROWED 2026-09-30 (owner decision 1, Terminal 1 must answer in ar-JO): guard 1
+above no longer bans `src.persona` outright. The terminal was sending no `system`
+prompt at all, so it answered in MSA; the persona BUILDER is the only thing that can
+give it a dialect. `src/bot_shell.py` now binds exactly `build_persona_joda` and
+nothing else from persona. That permit — and the ban on the raw literals and on
+core-only `build_persona` — is asserted in `tests/test_bot_shell_dialect.py`. This
+file keeps guarding everything else.
 
 The module is unbuilt, so the fixture below fails every test with a message naming
 the missing file: that is the intended RED, one failure per guard instead of a single
@@ -43,9 +50,11 @@ from tests.test_omniroute_gateway import _collect
 
 SHELL_PATH = Path(__file__).resolve().parents[1] / "src" / "bot_shell.py"
 
-# The three modules that own an invariant. A chat shell that imports any of them has
+# The invariant owners the shell must never reach, after the 2026-09-30 narrowing
+# that permitted exactly one `src.persona` symbol (`build_persona_joda`) so Terminal 1
+# can speak ar-JO. Gender and voice stay banned: a chat shell that imported either has
 # a second code path for that invariant, which is the exact failure mode §2 forbids.
-INVARIANT_OWNERS = ("src.persona", "src.gender_pipeline", "src.voice_policy")
+INVARIANT_OWNERS = ("src.gender_pipeline", "src.voice_policy")
 
 # The surfaces that can cause a side effect. Presentation-only means none of them.
 SIDE_EFFECT_SURFACES = ("src.tools", "src.pc_actions", "bridge.executor")
@@ -163,8 +172,19 @@ def test_shell_imports_the_front_door_dispatcher() -> None:
 def test_shell_does_not_import_the_invariant_owners() -> None:
     """§2: there must be no second persona / gender / voice path to leak through.
 
+    NARROWED 2026-09-30 (owner decision 1): `src.persona` is no longer a blanket
+    ban. The terminal must speak ar-JO, the persona builder is the only thing that
+    can give it a dialect, and `src/bot_shell.py` now binds EXACTLY
+    `build_persona_joda` from it. Relaxing ONE module must not relax the rest, so
+    the two remaining invariant owners are still banned here and the side-effect
+    surfaces are still banned in the test below — together the two tests assert
+    `src.gender_pipeline`, `src.voice_policy`, `src.tools`, `src.pc_actions` and
+    `bridge.executor`. The persona permit itself is asserted in
+    `tests/test_bot_shell_dialect.py::test_shell_binds_exactly_the_permitted_persona_symbol`,
+    which also bans the raw literals and the core-only `build_persona`.
+
     Red: the module is missing. Green: no import (direct or laundered through
-    `from src import ...`) of src.persona, src.gender_pipeline or src.voice_policy.
+    `from src import ...`) of src.gender_pipeline or src.voice_policy.
     """
     leaked = _imported_modules(_shell_source()) & set(INVARIANT_OWNERS)
     assert not leaked, f"bot_shell owns presentation only; it must not import {sorted(leaked)}"

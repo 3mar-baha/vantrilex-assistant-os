@@ -4,8 +4,17 @@ This module owns PRESENTATION ONLY. Every turn is handed to `FrontDoorDispatcher
 (`src/dispatcher.py:744`, `handle` at `:824`) and the dispatcher's deltas are
 yielded back verbatim, token by token. There is deliberately no second code path:
 
-  * it imports NONE of `src.persona`, `src.gender_pipeline`, `src.voice_policy` —
-    the invariant owners. A shell that imported any of them could apply an
+  * it binds EXACTLY ONE symbol from `src.persona` — `build_persona_joda`, the
+    builder, and nothing else. That is the narrowed contract (owner decision
+    2026-09-30). The builder is the single-sourced dialect + gender contract:
+    it composes Sara's byte-locked identity core with the JODA ar-JO few-shot
+    exemplars, so the terminal speaks the same dialect and the same masculine-
+    address rule as Telegram. The raw literals (`SARA_PERSONA_AR`,
+    `JODA_EXEMPLARS_AR`, `JODA_EXEMPLARS_HEADER_AR`) and the core-only
+    `build_persona` stay out on purpose — a copied literal is a second source
+    of truth, and a second source of truth is what drifts;
+  * it imports NONE of `src.gender_pipeline`, `src.voice_policy` — the other
+    invariant owners. A shell that imported any of them could apply an
     invariant its own way, and the safety floor would depend on discipline
     instead of structure;
   * it imports NONE of `src.tools`, `src.pc_actions`, `bridge.executor`. A turn
@@ -13,20 +22,25 @@ yielded back verbatim, token by token. There is deliberately no second code path
     where the confirmation gate lives;
   * it mints no confirmation id and owns no retry policy — the gateway owns both.
 
-`tests/test_bot_shell_repl.py` parses this file with `ast` and asserts exactly
-that, so the constraint is checked rather than remembered.
+`tests/test_bot_shell_dialect.py` and `tests/test_bot_shell_repl.py` both parse
+this file with `ast` and assert exactly that, so the constraint is checked
+rather than remembered.
+
+Dialect, closed (owner decision 2026-09-30): the terminal used to pass no
+`system` prompt at all. `_plain_messages` (`src/dispatcher.py:1076`) emits a
+system message only when `system` is truthy, so the FAST conversation call left
+the model with a bare user turn and it answered in MSA. The seam already existed
+and the Telegram route already used it (`src/bot.py:615`); the terminal never
+supplied it. `build_shell` now takes an injected `system` and `Shell.turn`
+forwards that exact object on every turn, and `_live_shell` — the sole
+production constructor behind `sara.bat -Chat` — supplies
+`system=build_persona_joda()`. The default is the same composed prompt, so a
+future caller that forgets the keyword gets ar-JO rather than MSA.
 
 Honest failure: a turn that dies lands one Amman-colloquial line — never a
 traceback, never an exception class name, never nothing at all. What the shell
 already streamed before the failure is NOT retracted (the gateway's own doctrine:
 never restart a partially-yielded reply).
-
-Known gap, stated here rather than in a report (Directive 4): this REPL passes no
-`system` prompt, so it carries the front door's default one. The persona-bearing
-surface is the Telegram shell (`src/bot.py`), which builds the same dispatcher and
-passes the persona in; importing `src.persona` here is forbidden by the invariant
-above, so the terminal surface is deliberately persona-free. The producer that
-would close this gap is a caller-supplied system prompt — there is none today.
 
 Usage:
     .\\sara.bat -Chat
@@ -45,6 +59,13 @@ from loguru import logger
 
 from src.dispatcher import FrontDoorDispatcher
 from src.gateway import OmniRouteClient, Tier
+from src.persona import build_persona_joda
+
+# The ONE permitted symbol from src.persona: the builder, never a literal. It
+# composes the byte-locked identity core with the JODA ar-JO few-shot exemplars,
+# so the terminal and Telegram share one dialect + gender contract. Composed once
+# at import and reused as the default so no caller can accidentally ship MSA.
+TERMINAL_SYSTEM_PROMPT: Final[str] = build_persona_joda()
 
 # The one honest sentence a failed turn leaves behind. Amman colloquial, because
 # the owner reads it in a terminal at 2am. It must never carry the exception: the
@@ -74,20 +95,27 @@ class Shell:
     the conversation window it echoes back to the dispatcher as `history`.
     """
 
-    def __init__(self, front_door: FrontDoorDispatcher) -> None:
+    def __init__(self, front_door: FrontDoorDispatcher, system: str) -> None:
         self._front_door = front_door
+        # Held by identity, never rebuilt per turn: a per-turn rebuild would let
+        # the dialect drift mid-session while every equality check still passed.
+        self._system = system
         self._history: list[dict] = []
 
     async def turn(self, text: str) -> AsyncIterator[str]:
         """Yield the dispatcher's deltas verbatim, then keep the honest floor.
 
         Never raises and never yields nothing: whatever the gateway does, the owner
-        reads a sentence, not a stack trace.
+        reads a sentence, not a stack trace. The injected `system` prompt rides
+        every call — without it `_plain_messages` sends no system message at all
+        and the model answers in MSA instead of ar-JO.
         """
         streamed = False
         spoken = ""
         try:
-            async for delta in self._front_door.handle(text, history=self._window()):
+            async for delta in self._front_door.handle(
+                text, system=self._system, history=self._window()
+            ):
                 streamed = True
                 spoken += delta
                 yield delta
@@ -121,14 +149,22 @@ class Shell:
         del self._history[:-HISTORY_MESSAGES]
 
 
-def build_shell(gateway: OmniRouteClient, settings) -> Shell:
+def build_shell(
+    gateway: OmniRouteClient, settings, *, system: str = TERMINAL_SYSTEM_PROMPT
+) -> Shell:
     """Wrap the ADR-18 front door as a terminal shell.
 
     The dispatcher is built once and reused for every turn: per-turn construction
     would drop the verdict cache and the reflective friction trace, and the shell
     would silently behave differently on turn two.
+
+    `system` is the injected dialect prompt, keyword-only and named to match
+    `FrontDoorDispatcher.handle` so the terminal and Telegram spell the contract
+    identically. It defaults to the composed ar-JO prompt rather than to `None`:
+    `None` is the silent-MSA failure this decision exists to remove, and a caller
+    that forgets the keyword should not inherit it.
     """
-    return Shell(FrontDoorDispatcher(gateway, settings))
+    return Shell(FrontDoorDispatcher(gateway, settings), system)
 
 
 def _live_shell() -> Shell:
@@ -145,7 +181,10 @@ def _live_shell() -> Shell:
             Tier.HEAVY: settings.heavy_chain,
         },
     )
-    return build_shell(gateway, settings)
+    # The production prompt is passed explicitly, not left to the default: this is
+    # the one constructor behind `sara.bat -Chat`, and if the terminal ever loses
+    # its dialect this line is where the loss is visible.
+    return build_shell(gateway, settings, system=build_persona_joda())
 
 
 async def _repl(shell: Shell) -> int:
