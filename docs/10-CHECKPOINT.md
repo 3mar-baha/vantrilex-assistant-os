@@ -659,6 +659,50 @@ UnicodeDecodeError on the Windows runner. One-line fix
 (cp1252-safe); production `src/` fully pinned (15/15 reads explicit).
 Expected state: main 100% green in CI.
 
+## Cross-framework analysis + self-evolution blueprint (2026-09-30)
+
+Leader directive: exhaustive mapping of 24 external resources + a hardened
+"Mojito"-pattern self-evolution engine. Deliverable:
+`docs/architecture/CROSS_FRAMEWORK_ANALYSIS_AND_SELF_EVOLUTION.md` (~610
+lines, docs-only — zero runtime change, zero new packages).
+
+Upstreams fetched and quoted directly: mojito (README, self-rebuild-loop,
+SECURITY, CLAUDE), laya, JevRouter, qualixar/jev-decision-layer, HyperAgents,
+ScaleMCP (arXiv 2505.06416), ReasoningBank (arXiv 2509.25140 / ICLR 2026).
+
+Central engineering finding — **registering a tool is four edits, not one.**
+`ToolRegistry.call` resolves `_do_<tool>` by `getattr` (runtime-bindable) and
+`TOOL_CAPABILITIES` is a mutable dict, but `_VALID_TOOLS` (dispatcher) and
+`_TOOL_GOALS` (cognition) are `Final` literals. A tool missing from either is
+silently unreachable: an unknown name is rewritten to `"none"`
+(`dispatcher.py:730`) and `deduce` can never propose it. No exception is
+raised. Therefore the roadmap ships an overlay refactor with an EMPTY overlay
+(P3-C) before any dynamic tool is enabled (P3-D).
+
+Comparative result: mojito's own `SECURITY.md` admits *"the auto/ask gate is
+not enforced in code"* and its `CLAUDE.md` forbids test files — the release
+gate is type-check + build. Sara's four gates (own tests, full baseline,
+per-module 98% coverage, lint+security) plus a bool-returning
+`promotion_decision` with no override path are the whole difference.
+
+Dossier corrections recorded in §8 of the blueprint: (1) laya is a 33 ms
+non-autoregressive decision model, not a sub-10 ms ModernBERT classifier —
+and a checkpoint is ruled out by $0.00 anyway; (2) Jev's 193.6×/444.6× and
+$0.042/M are TypeSafe's published claims, not repo measurements; (3)
+`TOOL_CAPABILITIES` holds **42** capabilities, not 46.
+
+Gates: pytest **1,864 passed** / 2 failed / 6 skipped — the 2 are the known
+live-pool class (h04 TTFT, h06 dialect), failing on gateway
+`empty reply` + `first-token timeout` against a throttled free pool, zero code
+regressions. Coverage 91.9% TIERED GATE PASSED. security_gate OK. quality
+7/7. docs_guard 16/16. ruff check + format clean (418 files). Also: MOC entry
+added to `00-MAP-OF-ARCHITECTURE.md`, CHANGELOG entry added.
+
+Pending owner word, unchanged: MEDIUM/HEAVY `openrouter/`-prefix slug switch
+(production file, not applied). Also flagged: 12 tracked docs are deleted in
+the working tree, unstaged — `docs/00-MAP-OF-ARCHITECTURE.md` still links to
+them. Not restored, not staged; owner's call.
+
 ## Pool re-probe under round-robin (2026-09-18, Step 3)
 
 Owner set round-robin + sticky-5 on both providers. Re-probe: FAST 31b

@@ -22,6 +22,10 @@ links back here via its own `See also` block — no orphaned nodes.
 - [07 — Implementation Plan](./07-IMPLEMENTATION-PLAN.md)
 - [16 — Operational Workflows](./16-WORKFLOWS.md)
 
+## Deep-dive blueprints
+
+- [Cross-Framework Analysis & Self-Evolution ("Mojito" pattern)](./architecture/CROSS_FRAMEWORK_ANALYSIS_AND_SELF_EVOLUTION.md) — 24-resource mapping, five-stage self-evolution spec, roadmap P3-A…P3-D
+
 ## Governance
 
 - [09 — Decision Records](./09-DECISIONS.md)

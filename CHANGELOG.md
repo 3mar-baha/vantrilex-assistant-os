@@ -8,6 +8,24 @@ product release tags start independently at v1.0.0.)
 
 ## [Unreleased]
 
+### Added — cross-framework analysis & self-evolution blueprint (2026-09-30)
+- **`docs/architecture/CROSS_FRAMEWORK_ANALYSIS_AND_SELF_EVOLUTION.md`** — a
+  24-resource architectural matrix (orchestration, governance, memory, observability,
+  System-1 decision layers), the five-stage self-evolution specification modelled on
+  the [Mojito](https://github.com/TimeLovercc/mojito) self-rebuild loop, a comparative
+  analysis against unconstrained self-rewriting, and the roadmap P3-A…P3-D with the
+  exact assertions each phase must pass.
+- **Documentation only — no runtime change.** Nothing in the blueprint is implemented.
+  It also records three corrections to the source dossier (§8 of the document): Laya is
+  a 33 ms non-autoregressive decision model rather than a sub-10 ms ModernBERT
+  classifier; the Jev speed/cost figures are vendor-published; and
+  `TOOL_CAPABILITIES` holds **42** capabilities, not 46.
+- The document's central finding for the runtime: registering a new tool is **four**
+  edits, not one — `ToolRegistry.call`'s `getattr` seam is runtime-bindable, but
+  `_VALID_TOOLS` and `_TOOL_GOALS` are `Final` literals, so a tool that is not in both
+  is silently unreachable. The roadmap therefore ships a registration-overlay refactor
+  (P3-C) with an empty overlay before any dynamic tool is enabled.
+
 ### Fixed — live round 2026-09-07 (owner manual test)
 - **Prayer times routing**: «شو اوقات الاذان للصلوات اليوم» fell to plain chat
   («ما عندي أداة لأوقات الأذان») because the net matched only «اوقات الصلاة».
