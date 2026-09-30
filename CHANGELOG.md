@@ -8,6 +8,37 @@ product release tags start independently at v1.0.0.)
 
 ## [Unreleased]
 
+### Added — 10-agent agency swarm + binding Precision Workflow (2026-09-30)
+- **`.claude/skills/vantrilex-precision-workflow/SKILL.md`** — vendored
+  byte-identical (hash-verified) into the repo. It previously existed only at the
+  user level, so it loaded on one machine and for no sub-agent in a fresh checkout.
+- **`CLAUDE.md` §5.1** — the skill is now the binding contract for the root agent,
+  every role in `.claude/agents/`, and every dispatched sub-agent. All seven
+  directives are named with their one-line tests. Scope clarified: concurrent
+  read-only reconnaissance and review sub-agents are authorized; parallel
+  **writers** are not, so the closed-loop rule at §5 stands.
+- **10 Sara-bound agent roles** in `.claude/agents/`. Nine wrap a persona from
+  [`msitarzewski/agency-agents`](https://github.com/msitarzewski/agency-agents)
+  (MIT, pinned `765be423`), vendored verbatim into `.claude/agents/agency/`.
+  `github-ecosystem-miner` has no upstream counterpart and is authored locally.
+- **`scripts/launch_parallel_scouts.py` + `tests/test_parallel_scouts.py`** —
+  concurrent in-process runner for the two internal reconnaissance scouts on a
+  `ThreadPoolExecutor`; the two external scouts return `deferred_to_harness` with a
+  dispatch manifest and zero findings. Stdlib only, 41 tests.
+- **`docs/architecture/AGENCY_SWARM_WORKFLOW.md`** — the roster, the four governance
+  rules, and — for each — the mechanism that would enforce it, including the two
+  rules whose enforcement is a convention rather than a gate.
+
+### Fixed — two correctness defects in the scout detectors
+- The unbounded-concurrency detector reported `src/agent_manager.py:247` as having no
+  bound, when `_trim_lines` caps the iterable at `MAX_LINES` one call upstream. It now
+  resolves the upstream cap and reports `bounded-fanout` with the citing line.
+- The silent-swallow classifier read a handler's inline comment via `ast.unparse`,
+  which strips comments — so the documented "handler comment marks it deliberate"
+  signal could never fire, and two structurally identical handlers in
+  `src/associative.py` received opposite verdicts. It now reads real source lines via
+  a `tokenize`-based comment map with suppression pragmas stripped.
+
 ### Added — cross-framework analysis & self-evolution blueprint (2026-09-30)
 - **`docs/architecture/CROSS_FRAMEWORK_ANALYSIS_AND_SELF_EVOLUTION.md`** — a
   24-resource architectural matrix (orchestration, governance, memory, observability,

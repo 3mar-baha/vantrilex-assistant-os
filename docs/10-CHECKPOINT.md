@@ -659,6 +659,115 @@ UnicodeDecodeError on the Windows runner. One-line fix
 (cp1252-safe); production `src/` fully pinned (15/15 reads explicit).
 Expected state: main 100% green in CI.
 
+## 10-agent agency swarm + Precision Workflow binding (2026-09-30)
+
+Leader directive: provision a 10-agent swarm, then finalize a dual-console
+plan. **Scope actually landed: swarm provisioning + governing contract.**
+The dual-console surface is specified but NOT built — refuted premises
+below, and the stop condition was not met.
+
+### Contract: Vantrilex-Precision-Workflow is now binding
+
+`Vantrilex-Precision-Workflow` loaded and demonstrably applied this
+session. **Material finding: it was not repo-resident.** It existed only
+at `~/.config/opencode/skills/` — a user-level path, so it loads for
+this machine and for nobody else, and no sub-agent in a fresh checkout
+would have it. Vendored byte-identical (hash-verified) to
+`.claude/skills/vantrilex-precision-workflow/SKILL.md` and bound as
+`CLAUDE.md` §5.1, naming all 7 directives with their one-line tests.
+Anti-pattern recorded in-tree: a binding that points outside the repo is
+a dangling reference.
+
+`CLAUDE.md:164-165` ("One implementer thread per task — no agent
+swarms during implementation", owner-approved) left intact for
+*implementation*. §5.1 adds a scope clarification (owner,
+2026-09-30): concurrent read-only reconnaissance and review sub-agents
+ARE authorized; parallel *writers* are not. That is what was actually
+run.
+
+### Swarm provisioned
+
+`msitarzewski/agency-agents` (MIT, pinned `765be423`) fetched by clone.
+**9 of 10 roles map to a real upstream persona**, vendored verbatim into
+`.claude/agents/agency/` (10 files + LICENSE). `github-ecosystem-miner`
+has **no upstream counterpart** — authored locally, says so on its face
+rather than borrowing an unrelated persona. 10 Sara-bound role files in
+`.claude/agents/`; the 8 pre-existing unrelated agent files left
+untouched and untracked.
+
+### Scout runner — and two defects peer review caught
+
+`scripts/launch_parallel_scouts.py` (874 lines) + 41 tests, stdlib-only.
+A Python process cannot spawn harness sub-agents, so Group A (the two
+internal scouts) are real in-process AST detectors run concurrently on a
+`ThreadPoolExecutor`; Group B (web/GitHub) return `deferred_to_harness`
+with a dispatch manifest and **zero findings** — a deferred scout never
+claims to have scanned anything.
+
+Directive 7 review found two correctness defects in the tool itself:
+the tool reported things that were not true.
+
+1. **False positive.** `src/agent_manager.py:247` reported "fans out
+   with no obvious bound", but `_trim_lines` at `:152-155` caps the
+   iterable at `MAX_LINES` one call upstream. Now `bounded-fanout`, with
+   the bound resolved and cited (`:156` → helper at `:246`).
+2. **A documented signal that could never fire.** `_is_justified` read
+   the handler comment via `ast.unparse(handler)`, and `ast.unparse`
+   strips comments — proven: it returns `'except Exception:'`. The
+   docstring claimed a handler's own comment marks it deliberate. Now
+   reads real source lines via a `tokenize`-based comment map, with
+   suppression pragmas stripped. Consequence fixed: `associative.py:194`
+   and `:459` are structurally identical handlers and were getting
+   opposite verdicts; both now quote their own reason.
+
+Both fixes carry break-runs with injection proof. The second break-run's
+first attempt **printed no confirmation line** — the injection had never
+landed (PowerShell `\"` is not an escape) — and was re-run with a
+pre-flight match assertion. That is Directive 2 catching its own class.
+
+The sub-agent then found **one of its own guards was defective**: the
+twin-consistency invariant test passed with the D2 mechanism still
+broken, because a non-empty-but-wrong rationale also read "deliberate".
+Strengthened to assert each row quotes *its own* comment and not the
+twin's; both injection variants now go red.
+
+### Refuted premises — measured, not assumed
+
+- **"Unjustified silent loss" 15 → 0.** All 16 broad `except` handlers
+  with a bare `pass`/`return` body in `src/`+`tests/` carry an inline
+  rationale that survives pragma-stripping. The 15 were an artifact of
+  reading a comment that could never be read. Zero here is a true
+  statement, not a broken detector.
+- **"46 cataloged capabilities"** → `TOOL_CAPABILITIES` holds **42**.
+- **"Laya sub-10ms"** → upstream states **33 ms**, and a checkpoint
+  violates `$0.00`. Not adopted as a dependency.
+- **"Fish Audio SIP outbound calling"** → `src/skills/live_calls.py` is
+  PyTgCalls over Telegram; SIP is a recorded v1.5 deferral, no SIP
+  library in any requirements file.
+- **`@explore-codebase` / `@explore-architecture`** → the harness
+  exposes exactly `explore` and `general`. Roles 7-8 map onto `explore`.
+- **"Meter sub-agent queries across the 5+5 Groq/OpenRouter key pools"**
+  → harness sub-agents do not route through OmniRoute at all; the pool
+  is server-side and invisible from the repo.
+- **"CMD REPL HUD"** → a case-insensitive search for `HUD` returns zero
+  hits across the whole tree.
+
+### Gate-record defects found (queued, NOT fixed — Directive 1 scope)
+
+- **`check_tiered_coverage.py` is not in `make gate`.** `Makefile:40` is
+  `gate: lint test security docs-guard`. `docs/11-TESTING.md:37-42`
+  lists coverage inside a checklist headed "every change — `make gate`".
+  Documented gate and real gate differ by one step. *Fix the document,
+  not the script* — but which side is wrong is the Leader's call.
+- **The nine `.claude/hooks/*.json` guards are unarmed.**
+  `.claude/settings.json` registers an `Edit|Write` ruff hook and no
+  `PreToolUse`; those JSON files are reference configs.
+- **`opencode.json` holds a live `sk-or-v1-…` key.** Verified NOT
+  tracked, gitignored at `.gitignore:50`, zero commits in history. Not
+  leaked. Rotating it is an owner action.
+- `pyproject.toml:7` excludes `.claude` from ruff, so no agent
+  definition is linted.
+
 ## Cross-framework analysis + self-evolution blueprint (2026-09-30)
 
 Leader directive: exhaustive mapping of 24 external resources + a hardened

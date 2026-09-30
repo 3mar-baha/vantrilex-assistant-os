@@ -25,6 +25,8 @@ links back here via its own `See also` block — no orphaned nodes.
 ## Deep-dive blueprints
 
 - [Cross-Framework Analysis & Self-Evolution ("Mojito" pattern)](./architecture/CROSS_FRAMEWORK_ANALYSIS_AND_SELF_EVOLUTION.md) — 24-resource mapping, five-stage self-evolution spec, roadmap P3-A…P3-D
+- [Agency Swarm Roster & Workflow Manifest](./architecture/AGENCY_SWARM_WORKFLOW.md) — the 10-agent roster, the four governance rules, and the enforcement gap in each
+- [Master Operational Plan & Dual Console](./architecture/MASTER_OPERATIONAL_PLAN_AND_DUAL_CONSOLE.md) — the 10 locked calibration decisions, the build plan of record, and the refuted premises
 
 ## Governance
 
