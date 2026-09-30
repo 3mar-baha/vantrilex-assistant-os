@@ -308,13 +308,52 @@ failure raises; both present as "the feature just doesn't work."
 
 Therefore:
 
-- **3.5.1 — Refactor before enabling.** Replace the two `Final` literals with an overlay:
-  `TOOL_CAPABILITIES` gains a runtime-mutable sibling, and `_TOOL_GOALS` / `_VALID_TOOLS`
-  are read through a helper that merges the overlay. This mirrors the pattern already
-  proven in `_VALID_TOOLS`, which splices `*VALID_OPENCLAW_TOOLS` from a single source
-  (`src/dispatcher.py:168`) instead of duplicating names. The refactor ships **first**, with
-  no dynamic tools enabled, and is covered by a test asserting the merged set equals the
-  static set for all 42 current tools.
+- **3.5.1 — Refactor before enabling.** A runtime-mutable overlay — `OVERLAY`, a plain
+  `dict` in a new third module, `src/tool_overlay.py` — is merged onto the static base by
+  two accessors, `valid_tools()` and `tool_goals()`. The five production consumers read
+  through them: `src/dispatcher.py:730` (the silent `"none"` rewrite), `src/cognition.py:416`
+  (`deduce`'s goal iteration), `src/decision_loop.py:217`, `src/agent_manager.py:110`, and
+  `src/evolution.py:195`.
+
+  Three properties of that placement are load-bearing, and two of them contradict the
+  obvious design:
+
+  - **The `Final` literals stay.** `_VALID_TOOLS` and `_TOOL_GOALS` keep their names,
+    their types and their `Final` annotation. They are not replaced and not unfrozen —
+    they remain the static base, and the refactor works *around* `Final` rather than
+    removing it. Nine test modules import `_VALID_TOOLS` by name and one imports
+    `_TOOL_GOALS`; renaming or retyping either breaks all ten. Only the *production*
+    consumers move to the accessors; the tests keep reading the base, which is correct
+    precisely because the overlay is empty.
+  - **The overlay lives in a third module, not in either consumer.** `src.dispatcher`
+    already imports `src.cognition`, and cognition does not import dispatcher, so neither
+    can host the overlay without an import cycle. `src/tool_overlay.py` therefore imports
+    the two base registries *inside* its accessors, keeping itself an import leaf.
+  - **A colliding overlay key UNIONS with the static goals; it does not replace them.** A
+    plain `dict(base) | overlay` is the reflexive implementation and it is wrong: on an
+    accidental collision it silently *shrinks* a tool's detection vocabulary — the exact
+    silent-degradation class this refactor exists to eliminate. `_goal_markers`
+    (`src/cognition.py:399`) already unions two goal sources via `dict.fromkeys`, so
+    `tool_goals()` follows that house convention. `valid_tools()` appends overlay keys
+    *after* the base, preserving base order, and returns a `tuple` because the importing
+    call sites depend on `in`, iteration and `set()` over it.
+
+  The overlay **ships empty**. This phase registers nothing and is revertible in one
+  commit; P3-D enables an actual tool. `tests/test_tool_overlay.py` pins the merge with a
+  parametrized guard over all **46** routed names (the capability registry holds 42 — the
+  four routed-but-uncatalogued names are `analytics`, `cloud_backup`, `none` and
+  `quota_safety`), so a dropped name names itself rather than surfacing as a set difference.
+
+  Two constraints are **latent and, today, blind to the overlay** — both are stated at
+  their call sites in `src/` rather than here, and both are P3-D's to close:
+  `tests/suite/tier1_resilience/test_contextual_routing.py:37` requires every valid tool to
+  appear in `_ROUTER_PROMPT_AR`, which is a static literal, so an overlay tool passes that
+  guard while being *unemittable by the router* — the router may only name tools its
+  catalog lists; and `tests/suite/tier1_resilience/test_skill_standard.py:25` requires every
+  `_TOOL_GOALS` key to exist in `TOOL_CAPABILITIES`, which would let an overlay tool skip
+  the capability schema, the narration guide and the `_do_<name>` handler that
+  `ToolRegistry.call` `getattr`s. Passing either guard is therefore *not* evidence the tool
+  runs.
 - **3.5.2 — Two distinct failure modes, two distinct fixes.** If the verb cluster *is*
   reachable but scored low, the fix is one line in `_TOOL_GOALS`. If the verb cluster is
   unreachable, it is a synthesis candidate. The classifier in §3.1 must decide which, and
@@ -492,10 +531,13 @@ set is green and the checkpoint ledger is updated.
 
 ### P3-C — Registration overlay refactor (ship empty)
 
-- The merged tool set equals the static set for all 42 current capabilities — a
-  parametrized test over the whole catalog, so a refactor cannot silently drop a tool.
-- `_VALID_TOOLS` and `_TOOL_GOALS` are no longer `Final` literals; both read through the
-  overlay helper.
+- The merged tool set equals the static set for all **46** routed names, and the merged
+  goal map equals the static map for all **37** goal keys — parametrized test over the
+  whole catalog, so a refactor cannot silently drop a tool.
+- `_VALID_TOOLS` and `_TOOL_GOALS` **remain** `Final` literals and remain the static base;
+  the five *production* consumers read through `valid_tools()` / `tool_goals()`. They are
+  not unfrozen and not renamed — ten test modules import them by name. A colliding
+  overlay key unions its goal markers with the static ones rather than replacing them.
 - A tool present in the overlay but absent from `TOOL_CAPABILITIES` is rejected at
   registration time.
 - With an empty overlay, the full suite passes unchanged — **this phase ships with zero

@@ -23,6 +23,8 @@ import re
 from dataclasses import dataclass, field
 from typing import Any, Final
 
+from src.tool_overlay import tool_goals
+
 # Goal families per tool: human objectives, not trigger spellings. Each entry
 # is a set of concept markers (Arabic stems + English). Scoring counts how
 # many distinct goal concepts appear — a paraphrase scores, a coincidental
@@ -413,7 +415,19 @@ def evaluate_candidates(
         cursor += len(token)
     lead = clean[:_LEAD_WINDOW]
     ranked: list[IntentHypothesis] = []
-    for tool, goals in _TOOL_GOALS.items():
+    # P3-C: iterate the merged goal map so an overlay tool is SELECTABLE, not
+    # merely registered. `_TOOL_GOALS` stays the static base (ten test modules
+    # import it by name); `tool_goals()` unions the overlay's markers onto it on
+    # a collision rather than shadowing them.
+    # BUT — Directive 4, unreachability stated at the call site: selection is NOT
+    # sufficient for execution. `_goal_markers` (:399) unions the inline family
+    # with `markers_for(tool)`, and a tool absent from `TOOL_CAPABILITIES` simply
+    # gets the inline family — no capability schema, no narration guide, and
+    # `ToolRegistry.call` has no `_do_<name>` to getattr. The missing producer is
+    # P3-D's `TOOL_CAPABILITIES` entry; `tests/suite/tier1_resilience/
+    # test_skill_standard.py:25` reads the STATIC `_TOOL_GOALS` and is blind to
+    # the overlay, so it will not catch the omission.
+    for tool, goals in tool_goals().items():
         markers = _goal_markers(tool, goals)
         # multi_task needs 2+ distinct action zones joined by a connector;
         # score it by connector-separated action density instead of raw hits.

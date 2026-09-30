@@ -35,8 +35,8 @@ from typing import Any, Final
 # name, and the router's own weak-signal cap is the measured trust floor. Reading
 # a constant from the tree beats asserting a copy of it in this file.
 from src.cognition import _WEAK_SIGNAL_CAP, evaluate_candidates
-from src.dispatcher import _VALID_TOOLS
 from src.skills.capabilities import IRREVERSIBLE_TOOLS, TOOL_CAPABILITIES
+from src.tool_overlay import valid_tools
 
 ALLOWED_IMPORTS: Final[frozenset[str]] = frozenset(
     {"re", "math", "json", "datetime", "collections", "itertools", "functools", "pathlib"}
@@ -187,12 +187,17 @@ NAME_RE: Final = re.compile(r"^[a-z][a-z0-9_]{2,39}$")
 
 #: Both collision surfaces, unioned, read from the live registries. The union
 #: is load-bearing and NOT symmetric: `TOOL_CAPABILITIES` is a strict subset of
-#: `_VALID_TOOLS`, so a guard reading only the capabilities registry provably
+#: the routed set, so a guard reading only the capabilities registry provably
 #: leaks every routed-but-uncatalogued name (`analytics`, `cloud_backup`,
 #: `none`, `quota_safety` as of this writing). Snapshotting the union at import
 #: keeps `is_valid_task_name` a pure predicate — no registry import per call.
+#: P3-C: the routed half now reads the merged overlay view, so the snapshot still
+#: equals `_VALID_TOOLS` today (the overlay ships empty). Directive 4: it stays an
+#: IMPORT-TIME snapshot — a tool registered after import is not yet a collision
+#: surface here. P3-D must re-decide that lifecycle if a name is ever registered
+#: before a task is proposed for it.
 _COLLIDING_TOOL_NAMES: Final[frozenset[str]] = frozenset(TOOL_CAPABILITIES) | frozenset(
-    _VALID_TOOLS
+    valid_tools()
 )
 
 #: §3.1 says JSONL ("one JSON object per line rather than a rewritten array")

@@ -342,10 +342,24 @@ def test_accessor_keeps_the_base_tuple_type():
 
 
 def test_accessor_preserves_static_order():
-    """Base order is load-bearing for prompt-adjacent readers; the overlay appends."""
+    """Base order is load-bearing for prompt-adjacent readers; the overlay appends.
+
+    Repaired 2026-09-30. The first version read `valid_tools()` against an EMPTY
+    overlay, so `merged[:len(_VALID_TOOLS)] == _VALID_TOOLS` held whether the
+    implementation appended or PREPENDED — the guard could not observe the
+    property its name claimed. Proof it was blind: injecting a prepending
+    `return (*extra, *_VALID_TOOLS)` left it green.
+
+    The overlay now carries a sentinel before the read, so the tail is observable
+    and a prepend fails the suffix assertion instead of passing silently.
+    """
     ov = _overlay()
+    ov.OVERLAY[SENTINEL] = (SENTINEL_MARKER,)
     merged = ov.valid_tools()
-    assert merged[: len(_VALID_TOOLS)] == _VALID_TOOLS
+    assert len(merged) == len(_VALID_TOOLS) + 1, "the overlay entry was dropped, not merged"
+    assert merged[: len(_VALID_TOOLS)] == _VALID_TOOLS, "the static base was reordered"
+    assert merged[len(_VALID_TOOLS) :] == (SENTINEL,), "the overlay did not append after the base"
+    assert set(merged) == set(_VALID_TOOLS) | {SENTINEL}
 
 
 def test_accessor_results_are_not_cached_across_calls():

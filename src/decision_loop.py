@@ -27,13 +27,13 @@ from loguru import logger
 from src.cognitive_dag import EphemeralTodo, TodoItem, classify_weight
 from src.dispatcher import (
     _ROUTER_PROMPT_AR,
-    _VALID_TOOLS,
     DEFAULT_ACK_AR,
     _parse_router,
 )
 from src.gateway import GatewayError, Tier
 from src.openclaw import plans as openclaw_plans
 from src.skills.capabilities import IRREVERSIBLE_TOOLS
+from src.tool_overlay import valid_tools
 from src.tools import TOOL_FAIL_AR
 
 REACT_ENV_VAR: Final[str] = "SARA_REACT_LOOP"
@@ -214,7 +214,11 @@ def parse_thought(reply: str) -> dict | None:
     action = verdict.get("action")
     if action is not None:
         tool = str(action.get("tool") or "").strip().lower()
-        if tool not in _VALID_TOOLS or tool == "none":
+        # P3-C: reads the merged overlay view, so a runtime-registered tool is no
+        # longer rejected here with a bare `None`. `THOUGHT_PROMPT_AR` below asks
+        # for a generic `<اسم أداة>` and names no catalog, so unlike the Tier-1
+        # router prompt this surface needs no extension for P3-D.
+        if tool not in valid_tools() or tool == "none":
             logger.warning("decision loop rejected invalid thought tool {!r}", tool)
             return None
         action = {"tool": tool, "arg": str(action.get("arg") or "").strip()}

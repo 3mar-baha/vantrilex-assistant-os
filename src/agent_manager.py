@@ -105,9 +105,9 @@ class AgentManager:
             self._valid = set(valid_tools)
         else:  # the production set lives in the dispatcher; import lazily to
             # avoid a circular import (dispatcher imports nothing from here)
-            from src.dispatcher import _VALID_TOOLS
+            from src.tool_overlay import valid_tools as _valid_tools
 
-            self._valid = {t for t in _VALID_TOOLS if t not in ("none", "multi_task")}
+            self._valid = {t for t in _valid_tools() if t not in ("none", "multi_task")}
 
     # -- planning ---------------------------------------------------------------
 
