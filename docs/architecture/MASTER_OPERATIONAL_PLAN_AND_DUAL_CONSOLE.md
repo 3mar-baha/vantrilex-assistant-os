@@ -37,10 +37,25 @@ from this table.
 
 | # | Item | Write-set (exclusive) | Red-first guard | Non-goal |
 |---|---|---|---|---|
-| A | Launcher flag `-Chat` + `--tracer` alias | `sara.bat`, `tests/test_launcher_flags.py` | A test parses `sara.bat` and asserts each named mode maps to its target script | No new PowerShell logic; `sara.ps1` is untouched |
-| B | `src/bot_shell.py` | `src/bot_shell.py`, `tests/test_bot_shell.py` | A test asserts the shell routes through `FrontDoorDispatcher` and never imports `src.persona` | No voice, no Telegram, no persistence |
-| C | CLI field drill | `scripts/test_cli_live_drill.py`, `tests/test_cli_live_drill.py` | A test asserts an OS-launch step **cannot** run without a `confirmation_id` | The drill never auto-confirms |
+| A | Launcher flag `-Chat` + `--tracer` alias | `sara.bat`, `tests/test_launcher_flags.py` | A test parses `sara.bat` and asserts every declared flag maps to its target, and that no pre-existing mode was repointed | No new PowerShell logic; `sara.ps1` is untouched |
+| B | `src/bot_shell.py` | `src/bot_shell.py`, `tests/test_bot_shell_repl.py` | An `ast` assertion that the shell imports **none** of `src.persona`, `src.gender_pipeline`, `src.voice_policy`, `src.tools`, `src.pc_actions` | No voice, no Telegram, no persistence |
+| C | CLI field drill | `scripts/test_cli_live_drill.py`, `tests/test_cli_live_drill.py` | A test asserts an OS-launch step records the **refusal** as the expected outcome, and that every `confirmation_id` in the drill is the literal `None` | The drill never auto-confirms |
 | D | Tracer invariant group + per-tool counters | `scripts/live_shadow_tracer.py`, `tests/test_shadow_tracer_markers.py` | A test asserts all six HUD markers classify from a synthetic record set | No OTel dependency |
+
+**Write-set correction (item B), measured during the RED phase.** The plan originally
+named `tests/test_bot_shell.py`. That path is **taken** — it is a 47,828-byte pre-existing
+suite for the *Telegram* shell, importing `src.bot`. Overwriting it would have destroyed
+someone else's work. The RED suite is therefore `tests/test_bot_shell_repl.py`. Re-scoped,
+not dropped.
+
+**The seam item B is pinned to.** A behavioural guard cannot avoid naming a seam, so the
+RED suite pins two public names, and the implementation must match them:
+
+- `build_shell(gateway, settings)` — mirrors `src.bot.build_dispatcher`, returns a `Shell`.
+- `Shell.turn(text)` — an **async generator** yielding the dispatcher's deltas verbatim.
+
+`turn` yields verbatim because that is the whole invariant guarantee: if the shell composes
+or rewrites anything, there is a second code path for an invariant to leak through.
 
 ### Non-goals — what this milestone does NOT do, and why
 
