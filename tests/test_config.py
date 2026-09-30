@@ -24,12 +24,12 @@ def test_settings_accept_all_env_example_vars(make_settings):
     assert s.omniroute_base_url == "http://localhost:20128/v1"
     assert s.omniroute_api_key == "sk-omniroute-local-key"
     assert s.fast_model == "groq/openai/gpt-oss-120b"
-    assert s.medium_model == "nex-agi/nex-n2.5-mini:free"
-    assert s.heavy_model == "nex-agi/nex-n2.5-pro:free"
+    assert s.medium_model == "openrouter/nex-agi/nex-n2.5-mini:free"
+    assert s.heavy_model == "openrouter/nex-agi/nex-n2.5-pro:free"
     assert s.heavy_escalation_model == "openrouter/nvidia/nemotron-3-ultra-550b-a55b:free"
     assert s.heavy_concurrency_threshold == 3
     assert s.heavy_escalated_chain[0] == "openrouter/nvidia/nemotron-3-ultra-550b-a55b:free"
-    assert s.heavy_chain_for(2)[0] == "nex-agi/nex-n2.5-pro:free"
+    assert s.heavy_chain_for(2)[0] == "openrouter/nex-agi/nex-n2.5-pro:free"
     assert s.heavy_chain_for(4)[0] == "openrouter/nvidia/nemotron-3-ultra-550b-a55b:free"
     assert s.heavy_chain_for(1, is_dag_swarm=True)[0] == (
         "openrouter/nvidia/nemotron-3-ultra-550b-a55b:free"

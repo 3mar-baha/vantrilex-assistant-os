@@ -987,6 +987,23 @@ residual dirs quarantined restorable; MCP `fetch`/`time` removed as dead
 (404/unresolvable), `sqlite` fixed dormant; sequential-thinking launch-proven;
 `16-WORKFLOWS.md` §0 realigned + Mandatory Invocation Rule bound from P2.
 
+## nex-agi slug-form re-pin (owner decision 2026-09-30) — supersedes the 2026-09-13 "pool audit"
+
+The 2026-09-13 pool audit above recorded MEDIUM/HEAVY primaries as dead-weight
+404s "until the OmniRoute credential is restored". **That premise is refuted and
+this entry supersedes it.** The live gateway's `/models` (1,409 models) lists both
+`nex-n2.5-mini:free` and `nex-n2.5-pro:free` under the `openrouter/` provider: the
+pool was never down and the credential never needed restoring — the BARE
+`nex-agi/...` slug form is the wrong *form* and 404s, while `openrouter/nex-agi/...`
+routes. Pins re-written in `.env.example` and the live `.env` to
+`openrouter/nex-agi/nex-n2.5-mini:free` / `openrouter/nex-agi/nex-n2.5-pro:free`.
+Scope: those TWO variables only — fallback chains, escalation model, concurrency
+threshold and Tier 1 held still, asserted by `tests/test_env_model_slugs.py`.
+The earlier dated entries (incl. the bare-slug 404 observations at :962) are left
+intact as the record of what was believed and measured at the time.
+`tests/test_omniroute_gateway.py::test_nexagi_404_canary_regression` keeps the bare
+slug on purpose — it is this decision's regression witness.
+
 - [07 — Implementation Plan](./07-IMPLEMENTATION-PLAN.md)
 - [11 — Testing](./11-TESTING.md)
 - [Objectives Ledger](./reports/OBJECTIVES_LEDGER_MET_VS_PENDING.md)

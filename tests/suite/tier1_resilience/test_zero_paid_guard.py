@@ -16,8 +16,8 @@ from src.gateway import (
 )
 
 FAST = "google/gemma-4-31b-it:free"
-MEDIUM = "nex-agi/nex-n2.5-mini:free"
-HEAVY = "nex-agi/nex-n2.5-pro:free"
+MEDIUM = "openrouter/nex-agi/nex-n2.5-mini:free"
+HEAVY = "openrouter/nex-agi/nex-n2.5-pro:free"
 ESCALATED = "openrouter/nvidia/nemotron-3-ultra-550b-a55b:free"
 FB = "groq/openai/gpt-oss-120b"
 

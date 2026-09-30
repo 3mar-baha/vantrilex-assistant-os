@@ -294,8 +294,9 @@ because they bear on how much the roster can be trusted:
 
 ## 9. What this document does not authorize
 
-- No model pin change; `MEDIUM_MODEL` / `HEAVY_MODEL` still point at `nex-agi/*` slugs
-  that 404.
+- No model pin change; this document predates the 2026-09-30 decision that re-pinned
+  `MEDIUM_MODEL` / `HEAVY_MODEL` from the bare `nex-agi/*` slugs to the
+  `openrouter/nex-agi/*` form.
 - No edit to `.env`, `src/config.py`, `src/gateway.py`, or `src/persona.py`.
 - No telephony, no SIP, no Laya checkpoint, no MCP transport, no new package.
 - No dynamic tool registration before the overlay refactor ships empty.

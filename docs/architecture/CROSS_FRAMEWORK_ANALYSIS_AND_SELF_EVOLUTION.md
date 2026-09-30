@@ -401,16 +401,16 @@ This is the whole of the JevRouter lesson, and it costs no dependency.
 | Tier | Model (`.env.example`) | Role | Measured behaviour (probe of 2026-09-18; raw data in [the probe report](../../benchmarks/CANDIDATE_MODELS_PROBE_REPORT.md)) |
 |---|---|---|---|
 | FAST | `groq/openai/gpt-oss-120b`, fallback `google/gemma-4-31b-it:free` | Voice, ack, routing | 1.6 s TTFT at best, 25 s at worst — high variance |
-| MEDIUM | `nex-agi/nex-n2.5-mini:free` | Sub-agent fleet workers | **HTTP 404** — bare `nex-agi/` slugs have no active credential |
-| HEAVY | `nex-agi/nex-n2.5-pro:free`, fallbacks `openrouter/nvidia/nemotron-3-ultra-550b-a55b:free`, `groq/openai/gpt-oss-120b` | Orchestrator above 3 concurrent tasks | Pro streams via the `openrouter/` fallback: 6 s, valid Arabic 3-step DAG |
+| MEDIUM | `openrouter/nex-agi/nex-n2.5-mini:free` | Sub-agent fleet workers | **HTTP 404 on the BARE form** — the bare `nex-agi/...` slug has no route; the `openrouter/`-prefixed form of the same model answers |
+| HEAVY | `openrouter/nex-agi/nex-n2.5-pro:free`, fallbacks `openrouter/nvidia/nemotron-3-ultra-550b-a55b:free`, `groq/openai/gpt-oss-120b` | Orchestrator above 3 concurrent tasks | Pro streams via the `openrouter/` fallback: 6 s, valid Arabic 3-step DAG |
 | Escalation | `openrouter/nvidia/nemotron-3-ultra-550b-a55b:free` | 550B MoE | Returns an empty stream; quarantined |
 
-The `nex-agi/*` failure is a **slug-form** problem, not a pool problem: the same models
-answer when addressed as `openrouter/nex-agi/…`. Changing `MEDIUM_MODEL` and
-`HEAVY_MODEL` to the prefixed form is a two-line edit to `.env` — **and it is a
-production-file change, so it is not made here.** It waits for the Leader's word. The
-probe verdict is unchanged: **hold all pins**, because FAST variance is still too high to
-pin against.
+The `nex-agi/*` failure was a **slug-form** problem, not a pool problem: the same
+models answer when addressed as `openrouter/nex-agi/…`. **RESOLVED 2026-09-30** —
+`MEDIUM_MODEL` and `HEAVY_MODEL` are re-pinned to the prefixed form in `.env.example`
+and the live `.env`; the two tiers no longer pay a wasted 404 round trip per turn. The
+probe verdict is otherwise unchanged: **hold all pins**, because FAST variance is still
+too high to pin against.
 
 Topology mapping, given what already exists:
 
@@ -529,9 +529,10 @@ set is green and the checkpoint ledger is updated.
 
 ## 7. What this document does not authorize
 
-- It does not change a model pin. `MEDIUM_MODEL` and `HEAVY_MODEL` still point at
-  `nex-agi/*` slugs that 404, and the fix is a production-file change awaiting the
-  Leader's explicit approval.
+- It does not change a model pin. As originally scoped it left `MEDIUM_MODEL` and
+  `HEAVY_MODEL` on the bare `nex-agi/*` slugs that 404 — that part was superseded
+  by the Leader's 2026-09-30 decision, which re-pins both to the `openrouter/`
+  form. Every other pin is still untouched.
 - It does not read or modify `.env`.
 - It does not create a runtime synthesizer. Synthesis is a maintainer action in a separate
   process.

@@ -22,9 +22,9 @@ from tests.test_omniroute_gateway import _chunk, _collect, _Scripted, _sse
 # logic; the canonical pins live in .env.example (test below).
 FAST_PIN = "groq/openai/gpt-oss-120b"
 FAST_FB1 = "google/gemma-4-31b-it:free"
-MEDIUM_PIN = "nex-agi/nex-n2.5-mini:free"
+MEDIUM_PIN = "openrouter/nex-agi/nex-n2.5-mini:free"
 MEDIUM_FB1 = "groq/openai/gpt-oss-120b"
-HEAVY_PIN = "nex-agi/nex-n2.5-pro:free"
+HEAVY_PIN = "openrouter/nex-agi/nex-n2.5-pro:free"
 HEAVY_FB1 = "groq/openai/gpt-oss-120b"
 HEAVY_ESC_PIN = "openrouter/nvidia/nemotron-3-ultra-550b-a55b:free"
 

@@ -104,9 +104,11 @@ Codified execution paths (all ratified consensus, all tested):
   stdlib + `src.*`), OverlayVault-tested, owner-promoted.
 - **Gmail quota diet + pool sanitization.** `PEEK_DEFAULT_MAX=10`
   (`src/gmail.py`), `FETCH_BURST_CAP=25` with cursor hold-back (overflow
-  redelivers, never lost). MEDIUM/HEAVY primaries are nex-agi slugs: a 404
-  `No active credentials` parks the tier — verify the OmniRoute credential
-  before blaming the code.
+  redelivers, never lost). MEDIUM/HEAVY primaries are `openrouter/nex-agi/*`
+  slugs: the BARE `nex-agi/...` form has no route and 404s `No active
+  credentials`, so a 404 on this lane usually means a slug lost its provider
+  prefix, not that the pool or the credential died — check the prefix before
+  blaming the code.
 
 ## 3. Tier 3 — /audit (Security, Invariants & Real-World Validation)
 

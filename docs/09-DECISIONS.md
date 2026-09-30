@@ -179,6 +179,20 @@ Supersedes draft preference for Google Cloud Run deployment.
   (intra-speaker variance), while the TTS impostor control scored 0.11. The ADR-17
   default 0.75 sat above genuine owner notes — the biometric gate locked out the owner
   himself. Threshold lowered to 0.60: every measured impostor stays 0.49 below.
+- **Amendment (owner decision 2026-09-30 — provider-prefixed MEDIUM/HEAVY slugs)**: the
+  2026-09-13 reading of the nex-agi 404 was "no live provider credentials", and the two
+  tiers were parked on their fallbacks. Measurement refuted that: the live gateway's
+  `/models` (1,409 models) lists both `nex-n2.5-mini:free` and `nex-n2.5-pro:free` under
+  the `openrouter/` provider. The pool was never down — the BARE `nex-agi/...` slug form
+  was the wrong *form* and 404s, while `openrouter/nex-agi/...` routes. Re-pinned:
+  `MEDIUM_MODEL=openrouter/nex-agi/nex-n2.5-mini:free`,
+  `HEAVY_MODEL=openrouter/nex-agi/nex-n2.5-pro:free`, in `.env.example` and the live
+  `.env`. Scoped to those TWO variables: the fallback chains, the escalation model, the
+  concurrency threshold and Tier 1 are unchanged, and
+  `tests/test_env_model_slugs.py` asserts they held still.
+  `tests/test_omniroute_gateway.py::test_nexagi_404_canary_regression` deliberately keeps
+  the bare slug — it is the regression witness for this exact decision, and converting it
+  would delete the evidence.
 - **Rejected on evidence**: gemma-4 (owner: «لغته ركيكة كعربية» — weak Arabic prose);
   nemotron-3-super + ling-3.0-flash (role inversion — addressed the owner as Sara);
   glm-5.2/gemma-26b/inkling (reasoning burned the whole budget → empty replies).

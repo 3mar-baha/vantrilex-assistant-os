@@ -31,8 +31,12 @@ Untrusted-content boundary (email/web/file = data).
 | Tier | Primary | Fallbacks | Policy |
 |---|---|---|---|
 | FAST | `groq/openai/gpt-oss-120b` | `google/gemma-4-31b-it:free` | 4 s first-token guillotine; 15 min quarantine on 429/empty; `reset after Xs` parsed |
-| MEDIUM | `nex-agi/nex-n2.5-mini:free` | `groq/openai/gpt-oss-120b` | conversation depth / tier-2 chat |
-| HEAVY | `nex-agi/nex-n2.5-pro:free` | `openrouter/nvidia/nemotron-3-ultra-550b-a55b:free`, `groq/openai/gpt-oss-120b` | tool-lane narration via `stream_heavy()`; >3-call turns escalate to MoE |
+| MEDIUM | `openrouter/nex-agi/nex-n2.5-mini:free` | `groq/openai/gpt-oss-120b` | conversation depth / tier-2 chat |
+| HEAVY | `openrouter/nex-agi/nex-n2.5-pro:free` | `openrouter/nvidia/nemotron-3-ultra-550b-a55b:free`, `groq/openai/gpt-oss-120b` | tool-lane narration via `stream_heavy()`; >3-call turns escalate to MoE |
+
+The `openrouter/` prefix on both nex-agi pins is load-bearing: the bare
+`nex-agi/...` slug form does not route and 404s against the live gateway. Re-pinned
+2026-09-30; the fallback chains and Tier 1 are unchanged by it.
 
 FAST callers budget ≥ 120 tokens (reasoning-model floor). Groq key
 rotation is OmniRoute-server-side (5 keyed connections); client keeps one

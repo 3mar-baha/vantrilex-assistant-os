@@ -13,8 +13,8 @@ tags: [architecture]
 
 Three tiers walked per request behind the Fast Front-Door Dispatcher
 (`src/dispatcher.py`, ADR-18): FAST `groq/openai/gpt-oss-120b` (router, Jordanian
-ack, direct chat, memory narration) · MEDIUM `nex-agi/nex-n2.5-mini:free`
-(depth) · HEAVY `nex-agi/nex-n2.5-pro:free` + nemotron/gpt-oss fallbacks (tool
+ack, direct chat, memory narration) · MEDIUM `openrouter/nex-agi/nex-n2.5-mini:free`
+(depth) · HEAVY `openrouter/nex-agi/nex-n2.5-pro:free` + nemotron/gpt-oss fallbacks (tool
 narration, DAGs). Survival doctrine: 4 s first-token guillotine, 15 min
 quarantine on 429/empty/stall, immediate cascade — never a retry burn.
 `PaidModelBlockedError` kills non-free IDs pre-wire ($0.00 circuit breaker).

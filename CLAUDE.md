@@ -45,19 +45,27 @@ strictly-zero-cost executive AI assistant named **Sara (سارة)**.
   tech scout, and PC automation companion speaking in a warm, authentic Jordanian Arabic accent (`ar-JO`).
 - **Primary Transport**: Telegram (Aiogram 3.x chat + Ogg Opus voice notes; live PyTgCalls calls land in v1.1).
 - **Brain Engine (3-tier, ADR-16 amended 2026-09-01 — two strong models, FAST pivoted
-  to Groq 2026-09-14 per ADR-23)**: OmniRoute Gateway (`http://localhost:20128/v1`,
+  to Groq 2026-09-14 per ADR-23, MEDIUM/HEAVY re-pinned to provider-prefixed
+  `openrouter/nex-agi/*` slugs 2026-09-30)**: OmniRoute Gateway
+  (`http://localhost:20128/v1`,
   co-located with the core) routes through three tiers behind the **Fast Front-Door
   Dispatcher** (ADR-18). CONVERSATION LANE (Sara's exclusive speaker): TIER 1
   `FAST_MODEL=groq/openai/gpt-oss-120b` (fallback `google/gemma-4-31b-it:free`) —
   router, instant Jordanian ack «من عيوني هسا ببدأ...», direct chat, memory narration,
   fact extraction (measured ~0.6–0.9 s cold TTFT); TIER 2
-  `MEDIUM_MODEL=nex-agi/nex-n2.5-mini:free` (fallback `groq/openai/gpt-oss-120b`) —
-  conversation depth / tier2 chat. TOOL LANE (exclusive executor): TIER 3
-  `HEAVY_MODEL=nex-agi/nex-n2.5-pro:free` (fallbacks
+  `MEDIUM_MODEL=openrouter/nex-agi/nex-n2.5-mini:free` (fallback
+  `groq/openai/gpt-oss-120b`) — conversation depth / tier2 chat. TOOL LANE
+  (exclusive executor): TIER 3 `HEAVY_MODEL=openrouter/nex-agi/nex-n2.5-pro:free`
+  (fallbacks
   `openrouter/nvidia/nemotron-3-ultra-550b-a55b:free`, `groq/openai/gpt-oss-120b`) —
   every Gmail/Calendar/Tasks/bridge narration streams here after the ToolRegistry
   executes the real backend; launch notifies the owner directly (audit code, no
-  narration). **Fail-fast doctrine (ADR-23)**: FAST attempts carry a 4 s first-token
+  narration). **Slug form is load-bearing (owner decision 2026-09-30)**: the
+  `openrouter/` prefix on both nex-agi pins is REQUIRED, not decorative. The BARE
+  `nex-agi/...` form does not route and 404s against the live gateway, so these
+  two tiers are primaries that work — they do NOT fall back by default. The
+  fallback chains and Tier 1 are unchanged by that re-pin.
+  **Fail-fast doctrine (ADR-23)**: FAST attempts carry a 4 s first-token
   guillotine (stall → abort + quarantine + cascade, never a retry); any 429 or
   empty stream parks the model 15 min (later turns skip it at turn zero with zero
   network calls); the proxy's «reset after Xs» phrasing parses as a rate window. Dual-tier memory: 50-message rolling buffer +

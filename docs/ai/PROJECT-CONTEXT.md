@@ -29,7 +29,8 @@ top-3) · Tier-1 digest (`Omar_Master_Digest.md`, ≤800 words) · Write-back
 9. Boot never dies on scaffolding; failures degrade loudly.
 10. TDD red→green→gate→commit→halt-for-"التالي".
 
-## Live pins (2026-09-14)
-FAST `groq/openai/gpt-oss-120b` (fb gemma) · MEDIUM `nex-agi/nex-n2.5-mini`
-· HEAVY `nex-agi/nex-n2.5-pro` (MoE nemotron escalation past 3 tasks) ·
+## Live pins (2026-09-14; nex-agi slugs re-pinned 2026-09-30)
+FAST `groq/openai/gpt-oss-120b` (fb gemma) · MEDIUM `openrouter/nex-agi/nex-n2.5-mini:free`
+· HEAVY `openrouter/nex-agi/nex-n2.5-pro:free` (MoE nemotron escalation past 3 tasks) ·
 4 s FAST guillotine · 15 min quarantine · Fish `s2.1-pro-free:free`.
+The `openrouter/` prefix on the nex-agi pins is load-bearing: the bare slug form 404s.
