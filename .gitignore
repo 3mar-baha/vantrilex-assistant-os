@@ -51,6 +51,13 @@ vault/
 compile.txt
 ruff_out.txt
 
+# CLI drill transcripts — generated per drill run (~30 files/session, 2026-09-30);
+# live scan output of a moving tree, same class as LIVE_BENCHMARK_TRANSCRIPT.json
+benchmarks/CLI_DRILL_TRANSCRIPT_*.json
+
+# Duplicate working tree (untracked docs/.claude copy) — never commit
+Vantrilex Assistant/
+
 # sara.ps1 boot transcripts — local diagnostics, never commit
 logs/
 
