@@ -216,7 +216,7 @@ def test_durable_state_only_in_vault():
         "src/skills/voice_biometric_auth.py": "sealed owner voiceprint (ADR-17) + tempfile model cache",
         "src/skills/voice_to_vault_transcriber.py": "Voice_Memos notes — this IS the vault",
         "bridge/app_sessions.py": "PC-local per-minute usage JSON (v2.0 pass-1 §3-د/3) — machine-scoped telemetry state under data/app_sessions/, describes the PC it lives on, gitignored like vault/",
-        "src/task_orchestrator.py": "reminder timers state (§5 2026-09-04) — vault-mirror State/ pattern, gitignored; re-armed on restart so a registered reminder can never vanish",
+        "src/task_orchestrator.py": "reminder timers state (§5 2026-09-04) — vault-mirror State/ pattern, covered by .gitignore since 2026-09-30 (it was NOT ignored before that); re-armed on restart so a registered reminder can never vanish",
         "src/vault.py": "04_Resources boot mirror into the vault (audit 2026-09-14) — this IS the vault mirror VaultIndex reads; idempotent, never deletes",
     }
     offenders = []
@@ -234,6 +234,36 @@ def test_durable_state_only_in_vault():
     assert "src/google_auth.py" in justified, "the OAuth cache is the explicit allowlist member"
     source = (REPO / "src" / "skills" / "voice_biometric_auth.py").read_text(encoding="utf-8")
     assert "tempfile" in source, "transient audio/model buffers go through tempfile, never disk"
+
+
+def test_vault_mirror_state_dirs_are_actually_gitignored():
+    """AC6 (2026-09-30) — a justification that says "gitignored" must be true.
+
+    The allowlist is a list of prose justifications, and prose rots: an entry
+    claimed State/ was gitignored for months while it was not. Each directory an
+    AC6 justification names as ignored is therefore verified against the real
+    ignore rules rather than trusted. If a rule is ever dropped, or a new
+    vault-mirror directory appears, this fires.
+    """
+    mirrors = {
+        "State/": "vault-mirror runtime state (src/vault.py LOCAL_SCAFFOLD_DIRS)",
+        "data/": "bridge/app_sessions.py machine-scoped telemetry state",
+        "vault/": "the git-backed Obsidian working copy",
+    }
+    unignored = []
+    for relpath, why in mirrors.items():
+        probe = subprocess.run(
+            ["git", "check-ignore", "-q", relpath + "_probe_file"],
+            cwd=REPO,
+            capture_output=True,
+            check=False,
+        )
+        if probe.returncode != 0:
+            unignored.append(f"{relpath} ({why})")
+    assert not unignored, (
+        "these directories are named as ignored but .gitignore does not cover them:\n  "
+        + "\n  ".join(unignored)
+    )
 
 
 def test_no_live_call_stack_in_artifacts():
