@@ -1088,6 +1088,54 @@ intact as the record of what was believed and measured at the time.
 `tests/test_omniroute_gateway.py::test_nexagi_404_canary_regression` keeps the bare
 slug on purpose — it is this decision's regression witness.
 
+## P3-B shipped — AST gate hardened to 5 rules (2026-09-30)
+
+`verify_proposal_code` no longer early-returns on the first violation. It collects
+all violations and joins them with `"; "`, so `open(".env")` yields BOTH
+`forbidden call: open` AND `ambient authority: .env` — and a test pins that the
+dual reason appears, which is what makes the M6 first-violation-only mutant
+catchable.
+
+The two new rules, both genuinely RED before this commit (28 failed / 29 passed /
+1 xpassed on the barrier):
+- **Ambient authority** — `confirmation_id`, `.env`, `_secrets`, `getattr`,
+  `setattr`, `__dict__`, `globals`, `locals` rejected as names, attributes, AND
+  string literals, each with `ambient authority: <token>`. A bare `# noqa` is
+  not a reason.
+- **`importlib` denylist** — `forbidden import: importlib`, checked before the
+  allow-list. `from importlib import import_module` + `import_module("os")`
+  defeated the `__import__` ban before this commit; the highest-value single
+  test in the set proves it no longer does.
+
+**Explicitly not built, by owner-ratified non-goal:** bare `id()` is excluded —
+rejecting it would ban an innocent builtin. And non-secret `pathlib` reads
+(`Path("notes.txt").read_text()`) are unspecified by design; inventing a
+filesystem policy would be a claim nobody measured. The xfail hole-demonstration
+(`Path(".env").read_text()` passes structurally) stays demonstrating on both
+sides of the fix.
+
+Break-runs, each with printed injection proof and hash-verified restore:
+ambient-name dropped → 8 red; ambient-string dropped → 10 red (the xfail
+hole-demo passes again, proving the string rule is what closes it);
+importlib denylist dropped → 3 red; reason weakened to generic → 8 red.
+
+Coverage: `src/evolution.py` 146 → 169 statements at steady **96%** — +23
+statements, zero new misses in the gate code; every new enforcement line is hit
+by the 28 gate tests. Residual misses are pre-existing/out-of-scope.
+
+Two doc corrections in the same commit (Directive 7): the §3.3 ambient row went
+PROPOSED → three Implemented rows (the old row wrongly listed bare `id`), and
+the §6 P3-B "three new rules" count now reconciles with the table. Leftover
+staleness outside the write-set, flagged for follow-up: the §3.3 intro "extends
+it to five" against a 7-row table, the "honest limits" paragraph still claiming
+the `importlib` bypass, and the header "Nothing in §3–§6 is implemented."
+
+Suite: 2,379 passed / 2 failed / 6 skipped / 1 xfailed. The 2 failures are the
+live-pool family (h06 + the omniroute live probe, both `GatewayError: all models
+exhausted… streamed zero deltas in 4s`); h04 passed this run. Zero code
+regressions. Tiered coverage PASSED, security OK, quality 7/7, docs 16/16,
+ruff clean.
+
 - [07 — Implementation Plan](./07-IMPLEMENTATION-PLAN.md)
 - [11 — Testing](./11-TESTING.md)
 - [Objectives Ledger](./reports/OBJECTIVES_LEDGER_MET_VS_PENDING.md)

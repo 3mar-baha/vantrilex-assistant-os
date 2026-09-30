@@ -45,6 +45,32 @@ FORBIDDEN_CALLS: Final[frozenset[str]] = frozenset(
     {"eval", "exec", "compile", "__import__", "open"}
 )
 
+#: P3-B: the dynamic-loader bypass for the `__import__` ban. `importlib` is not
+#: in `ALLOWED_IMPORTS`, so the allow-list alone would reject it with a generic
+#: reason — the denylist below exists to name the rule instead.
+FORBIDDEN_IMPORTS: Final[frozenset[str]] = frozenset({"importlib"})
+
+#: P3-B: ambient-authority tokens. A synthesized tool must never touch the
+#: confirmation flow, the secret store, or the interpreter's reflective
+#: surface. Bare `id` is deliberately EXCLUDED: rejecting it would ban the
+#: innocent `id()` builtin (owner ruling pending).
+AMBIENT_AUTHORITY_NAMES: Final[frozenset[str]] = frozenset(
+    {"confirmation_id", "_secrets", "getattr", "setattr", "__dict__", "globals", "locals"}
+)
+
+#: P3-B: string-literal form of the same rule. `.env` is not a valid
+#: identifier so it has no name/attribute form — it is covered here only.
+AMBIENT_STRING_TOKENS: Final[tuple[str, ...]] = (
+    "confirmation_id",
+    "_secrets",
+    "getattr",
+    "setattr",
+    "__dict__",
+    "globals",
+    "locals",
+    ".env",
+)
+
 
 def _chain_key(chain: list) -> tuple:
     return tuple((str(tool), str(arg).strip()) for tool, arg in chain)
@@ -65,25 +91,53 @@ def distill_chains(trajectories: list[list], *, min_repeats: int = 3) -> list[di
 
 
 def verify_proposal_code(code: str) -> tuple[bool, str]:
-    """AST gate: parses + stdlib-allowlisted imports + no dynamic exec."""
+    """AST gate: parses + stdlib-allowlisted imports + no dynamic exec.
+
+    Structural only — the candidate is parsed and walked, never executed, so
+    a module that would raise on import still yields a `(bool, str)` tuple.
+    All violations are collected and joined with `"; "` so each names its
+    rule; a bare `# noqa` comment is not in the AST and changes nothing.
+    """
     try:
         tree = ast.parse(code or "")
     except SyntaxError as exc:
         return False, f"syntax error: {exc}"
+    reasons: list[str] = []
+
+    def _add(reason: str) -> None:
+        if reason not in reasons:
+            reasons.append(reason)
+
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
             for alias in node.names:
-                if alias.name.split(".")[0] not in ALLOWED_IMPORTS:
-                    return False, f"import not allowlisted: {alias.name}"
+                root = alias.name.split(".")[0]
+                if root in FORBIDDEN_IMPORTS:
+                    _add("forbidden import: importlib")
+                elif root not in ALLOWED_IMPORTS:
+                    _add(f"import not allowlisted: {alias.name}")
         elif isinstance(node, ast.ImportFrom):
-            if (node.level or 0) > 0 or (node.module or "").split(".")[0] not in ALLOWED_IMPORTS:
-                return False, f"import not allowlisted: {node.module}"
+            root = (node.module or "").split(".")[0]
+            if (node.level or 0) == 0 and root in FORBIDDEN_IMPORTS:
+                _add("forbidden import: importlib")
+            elif (node.level or 0) > 0 or root not in ALLOWED_IMPORTS:
+                _add(f"import not allowlisted: {node.module}")
         elif (
             isinstance(node, ast.Call)
             and isinstance(node.func, ast.Name)
             and node.func.id in FORBIDDEN_CALLS
         ):
-            return False, f"forbidden call: {node.func.id}"
+            _add(f"forbidden call: {node.func.id}")
+        if isinstance(node, ast.Name) and node.id in AMBIENT_AUTHORITY_NAMES:
+            _add(f"ambient authority: {node.id}")
+        elif isinstance(node, ast.Attribute) and node.attr in AMBIENT_AUTHORITY_NAMES:
+            _add(f"ambient authority: {node.attr}")
+        elif isinstance(node, ast.Constant) and isinstance(node.value, str):
+            for token in AMBIENT_STRING_TOKENS:
+                if token in node.value:
+                    _add(f"ambient authority: {token}")
+    if reasons:
+        return False, "; ".join(reasons)
     return True, "ok"
 
 

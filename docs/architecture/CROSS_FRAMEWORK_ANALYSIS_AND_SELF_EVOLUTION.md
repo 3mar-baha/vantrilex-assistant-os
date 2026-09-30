@@ -246,7 +246,9 @@ entirely:
 |---|---|---|
 | Import allow-list | `ast.Import` / `ast.ImportFrom` against `ALLOWED_IMPORTS` (8 stdlib modules) | **VERIFIED** — `src/evolution.py:18` |
 | No dynamic execution | `eval`, `exec`, `compile`, `__import__`, `open` rejected as bare `ast.Call` on `ast.Name` | **VERIFIED** — `src/evolution.py:21` |
-| No ambient authority | reject any reference to `confirmation_id`, `.env`, `_secrets`, `id`, `globals`, `locals`, `getattr`, `setattr`, `__dict__` | **PROPOSED** |
+| No ambient authority (names + attributes) | reject `confirmation_id`, `_secrets`, `getattr`, `setattr`, `__dict__`, `globals`, `locals` as `ast.Name` / `ast.Attribute`, reason `ambient authority: <token>`; bare `id()` is excluded (would ban the innocent builtin — owner ruling pending) | **Implemented** — `src/evolution.py:AMBIENT_AUTHORITY_NAMES` |
+| No secret-bearing strings | reject any string literal containing an ambient token, including `.env` (not a valid identifier, so string-only); this is what rejects `Path(".env").read_text()`; multiple violations joined with `"; "` | **Implemented** — `src/evolution.py:AMBIENT_STRING_TOKENS` |
+| No dynamic import (`importlib`) | `import importlib` / `from importlib import …` rejected with `forbidden import: importlib` (closes the `__import__` bypass) | **Implemented** — `src/evolution.py:FORBIDDEN_IMPORTS` |
 | Registry containment | every tool name in the chain ∈ `TOOL_CAPABILITIES`; ∩ `IRREVERSIBLE_TOOLS` = ∅ | **VERIFIED** — `src/evolution.py:104` |
 | Vault read containment | every note the task cites resolves under `OverlayVault.resolve`, whose path guard rejects `..`, absolute and empty paths with `ValueError` | **VERIFIED** — `tests/live_harness/overlay.py:20` |
 
@@ -518,7 +520,9 @@ set is green and the checkpoint ledger is updated.
 ### P3-B — Synthesis sandbox and gate hardening
 
 - The three new AST rules (§3.3) reject `confirmation_id`, `.env`, `getattr`, and
-  `importlib` in synthesized source, each with a named reason string.
+  `importlib` in synthesized source, each with a named reason string
+  (`ambient authority: <token>`, `forbidden import: importlib`); a candidate
+  tripping several rules joins them with `"; "` so each names its rule.
 - `import socket` / `import requests` are rejected — the zero-cost invariant is
   structural, not policy.
 - A candidate importing only `re` and `json` passes.
