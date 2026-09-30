@@ -14,11 +14,13 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import socket
 import sys
 import time
 import urllib.request
-from collections.abc import Iterator
+from collections import deque
+from collections.abc import Iterable, Iterator
 from pathlib import Path
 from typing import Final
 
@@ -50,13 +52,41 @@ DOMAIN_COLORS: Final[dict[str, str]] = {
     "generation": "blue",
     "tools": "red",
     "audio": "bright_cyan",
+    "invariants": "bright_magenta",
     "system": "dim",
 }
+
+# The tracer's own tool-call marker — the keyword the `tools` group already keys on.
+# Emitted by the `{!r}` tool logs: src/tools.py:145 (`tool 'gmail' failed: …`),
+# src/dispatcher.py:1040 (`dispatcher tool 'gmail' failed -> plain tier2: …`) and
+# src/decision_loop.py:435. Decision 8's per-tool counters read the same stream the
+# classifier already consumes, so no new instrumentation is needed in `src/`.
+#
+# MEASURED LIMIT, stated here because the HUD must not overclaim: as of this writing
+# only the tool lane's FAILURE path logs that marker. A successful call logs nothing,
+# and the dispatcher's verdict lines use a different shape (`tool='gmail'`). In the
+# owner's live log, 1 of 229 records carried it. So these counters count recorded
+# tool-lane events, NOT total tool traffic, and the row reads as a floor. Making them
+# exact needs a success-path log in src/tools.py — out of this file's write-set.
+TOOL_MARKER: Final[re.Pattern[str]] = re.compile(r"tool '([^']+)'")
+
+# How many rendered records the HUD's per-tool counters can see. Bounded so a live
+# tail cannot grow this without limit; the oldest record falls off the window.
+RECORD_WINDOW: Final[int] = 500
+RECENT_RECORDS: Final[deque[dict]] = deque(maxlen=RECORD_WINDOW)
 
 # Ordered: first match wins. Blob = logger name + function + message, lowercased.
 # NOTE: bare `router` is deliberately absent — model slugs like `openrouter/…`
 # contain it. Router signals use multi-word/dispatcher-anchored keywords.
+#
+# `invariants` is FIRST, and that ordering is load-bearing rather than cosmetic. A
+# real invariant report names the invariants themselves, and those words collide with
+# two other groups: "Zero Edge-TTS" contains `tts` (the `audio` group) and "$0.00 cost"
+# contains `cost`/`$0` (the `generation` group). Under first-match-wins, any position
+# after those groups files every invariant line under the wrong domain and the HUD
+# silently loses the marker.
 DOMAIN_RULES: Final[tuple[tuple[str, tuple[str, ...]], ...]] = (
+    ("invariants", ("invariant", "sacred floor")),
     ("audio", ("fish", "synth", "opus", "ffmpeg", "expressive_audio", "tts")),
     ("ingest", ("transcrib", "voice note", "inbound", "biometric", "telegram", "stt")),
     (
@@ -218,6 +248,30 @@ def turn_count() -> str:
         return "--"
 
 
+def tool_call_counters(records: Iterable[dict]) -> dict[str, int]:
+    """Per-tool call counts read off the record stream the classifier already reads.
+
+    Keys on the tracer's own `tool '<name>'` marker, so a record that merely lands in
+    the `tools` domain without naming a tool — `confirmation_id pending`, say —
+    contributes nothing, and a gateway record never does either.
+
+    Returns `{}` for no tool records: never `None`, so the HUD can print the row
+    without a `TypeError`. Never raises — a malformed record is skipped, not fatal.
+    """
+    counters: dict[str, int] = {}
+    for record in records:
+        inner = record.get("record") if isinstance(record, dict) else None
+        if not isinstance(inner, dict):
+            continue
+        found = TOOL_MARKER.search(str(inner.get("message", "")))
+        if found is None:
+            continue
+        name = found.group(1).strip()
+        if name:
+            counters[name] = counters.get(name, 0) + 1
+    return counters
+
+
 def _event_timestamp(inner: dict) -> str:
     """Serialized loguru `time` is a dict (`repr`/`timestamp`) — unwrap it."""
     raw_time = inner.get("time", "--")
@@ -228,6 +282,11 @@ def _event_timestamp(inner: dict) -> str:
 
 def render_event(console: Console, record: dict) -> None:
     inner = record.get("record") or {} if isinstance(record, dict) else {}
+    if isinstance(record, dict):
+        # Feed the HUD's per-tool counters (Decision 8). Every record the tracer
+        # displays passes through here — live tail and `--once` alike — so this is
+        # the one place the counter has to hook to see real traffic.
+        RECENT_RECORDS.append(record)
     domain = classify_record(record if isinstance(record, dict) else {})
     color = DOMAIN_COLORS[domain]
     timestamp = _event_timestamp(inner)
@@ -244,6 +303,11 @@ def render_event(console: Console, record: dict) -> None:
 
 
 def vitals_table() -> Table:
+    """The HUD's signal table.
+
+    The per-tool counters read `RECENT_RECORDS`, the window `render_event` fills, so
+    in the live console they count what has actually streamed past on this run.
+    """
     table = Table(title="SARA live vitals", show_header=True, header_style="bold")
     table.add_column("Signal")
     table.add_column("Value")
@@ -251,21 +315,33 @@ def vitals_table() -> Table:
     table.add_row("BRIDGE_SESSIONS", bridge_sessions())
     table.add_row("GATEWAY_MODELS", gateway_models())
     table.add_row("TURN_COUNTER", turn_count())
+    counters = tool_call_counters(RECENT_RECORDS)
+    if counters:
+        for tool, count in sorted(counters.items()):
+            table.add_row(f"TOOL_CALLS {tool}", str(count))
+    else:
+        table.add_row("TOOL_CALLS", "--")
     return table
 
 
 def snapshot_once(console: Console, log_path: Path, tail_depth: int) -> int:
     """Print one vitals table plus the last records, then exit (scriptable mode)."""
-    console.print(vitals_table())
     if not log_path.exists():
+        console.print(vitals_table())
         console.print(f"[yellow]No shadow log yet at {log_path} (core boots it).[/]")
         return 0
-    lines = log_path.read_text(encoding="utf-8", errors="replace").splitlines()
-    for line in lines[-tail_depth:]:
+    lines = log_path.read_text(encoding="utf-8", errors="replace").splitlines()[-tail_depth:]
+    # Parse the tail BEFORE the vitals print, so the per-tool counters above are real
+    # numbers in `--once` mode instead of a row of dashes.
+    records: list[dict] = []
+    for line in lines:
         try:
-            render_event(console, json.loads(line))
+            records.append(json.loads(line))
         except json.JSONDecodeError:
             continue
+    console.print(vitals_table())
+    for record in records:
+        render_event(console, record)
     return 0
 
 
