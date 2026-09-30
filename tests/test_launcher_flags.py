@@ -31,9 +31,16 @@ ROOT = Path(__file__).resolve().parents[1]
 BAT = ROOT / "sara.bat"
 PS1 = ROOT / "sara.ps1"
 
-# One match per condition, so a combined line
-#   if /i "%~1"=="-Trace" if /i "%~1"=="--tracer" (
-# yields two flags off one block.
+# One match per condition. NOTE: this regex deliberately matches EVERY `if` condition on a
+# line, which is what lets the "a pre-existing mode was not repointed" guard see a flag
+# declared twice. It does NOT make a combined line correct batch.
+#
+# Chained `if`s are a CONJUNCTION in cmd -- `if /i "%~1"=="-Trace" if /i "%~1"=="--tracer" (`
+# runs only when BOTH hold, which is never true for two spellings of one flag. Verified on
+# this machine: with that spelling neither `-Trace` nor `--tracer` enters the block. Two
+# spellings of one mode must therefore be two blocks with byte-identical bodies; `sara.bat`
+# carries a `rem` at the alias site saying so. The two bodies being byte-identical is what
+# keeps the alias from drifting into a second implementation.
 _COND = re.compile(r'(?:(/i)\s+)?"%~1"\s*==\s*"([^"]+)"')
 _BLOCK_OPEN = re.compile(r"^\s*if\b(?P<head>.*?)\(\s*$")
 _BLOCK_CLOSE = re.compile(r"^\s*\)\s*$")
