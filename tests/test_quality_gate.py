@@ -61,11 +61,17 @@ def test_pragmas_are_justified():
 
 
 def test_makefile_gate_order():
-    """AC4 — gate order pinned: lint -> test -> security -> docs-guard."""
+    """AC4 — gate order pinned: lint -> test -> security -> docs-guard -> coverage.
+
+    `coverage` was added 2026-09-30 (owner decision 3): the tiered branch gate was
+    documented in docs/11-TESTING.md as part of `make gate` but was never wired
+    into the target, so the gate being run was not the gate being documented.
+    tests/test_makefile_gate.py re-derives both sides on every run.
+    """
     gate_line = re.search(r"^gate:\s*(.+)$", _read("Makefile"), re.MULTILINE)
     assert gate_line, "gate target missing"
     parts = gate_line.group(1).split()
-    assert parts == ["lint", "test", "security", "docs-guard"]
+    assert parts == ["lint", "test", "security", "docs-guard", "coverage"]
 
 
 def test_ci_runs_all_four_guards():

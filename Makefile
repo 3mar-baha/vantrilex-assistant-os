@@ -2,7 +2,7 @@
 PY      = .venv/Scripts/python.exe
 SETUPPY = py -3.12
 
-.PHONY: help setup lint format test security docs-guard gate run-core run-bridge
+.PHONY: help setup lint format test security docs-guard coverage gate run-core run-bridge
 
 help:
 	@echo Available targets:
@@ -12,7 +12,8 @@ help:
 	@echo   test       - pytest
 	@echo   security   - bandit scan over src/
 	@echo   docs-guard - verify canonical documentation set is present
-	@echo   gate       - lint + test + security + docs-guard
+	@echo   coverage   - tiered branch coverage (98% per core module, 90% total)
+	@echo   gate       - lint + test + security + docs-guard + coverage
 	@echo   run-core   - run the VPS core (aiogram + orchestrator)
 	@echo   run-bridge - run the Windows PC bridge daemon
 
@@ -37,7 +38,10 @@ security:
 docs-guard:
 	$(PY) scripts/docs_guard.py
 
-gate: lint test security docs-guard
+coverage:
+	$(PY) scripts/check_tiered_coverage.py
+
+gate: lint test security docs-guard coverage
 
 run-core:
 	$(PY) -m src.main
