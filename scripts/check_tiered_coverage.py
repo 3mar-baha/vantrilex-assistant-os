@@ -23,6 +23,13 @@ TOTAL_THRESHOLD = 90.0
 
 CORE = [
     "src/gateway.py",
+    # P3-C (2026-09-30): the registration merge layer. Chosen for this list
+    # precisely because it fails SILENTLY -- a dropped name yields a quietly
+    # unroutable tool, a replaced goal tuple yields a quietly shrunken detection
+    # vocabulary, and neither raises. It also gates four modules (dispatcher,
+    # cognition and decision_loop are CORE already; agent_manager and evolution
+    # are not), so it is the only place a break in the latter pair is caught.
+    "src/tool_overlay.py",
     "bridge/guard.py",
     "bridge/executor.py",
     "bridge/openclaw/breaker.py",
