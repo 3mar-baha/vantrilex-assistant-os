@@ -8,6 +8,36 @@ product release tags start independently at v1.0.0.)
 
 ## [Unreleased]
 
+### Added — dual console: clean chat REPL, CLI field drill, 6th HUD marker (2026-09-30)
+- **`src/bot_shell.py`** — Terminal 1. `build_shell(gateway, settings) -> Shell`, and
+  `Shell.turn(text)` is an async generator yielding the dispatcher's deltas **verbatim**.
+  The module imports none of `src.persona`, `src.gender_pipeline`, `src.voice_policy`,
+  `src.tools`, `src.pc_actions` or `bridge.executor`; a guard parses it with `ast` and
+  asserts it. Invariant preservation is structural — there is no second code path for a
+  gender, dialect or confirmation rule to leak through. A failed turn yields one honest
+  Amman line, never a traceback and never an empty string.
+- **`sara.bat -Chat`** launches it; **`sara.bat --tracer`** is a new alias of the existing
+  `-Trace`. Both flags are purely additive — 14 lines added, 0 removed, CRLF preserved,
+  and `-Trace` / `-InstallAutoStart` are untouched.
+- **`scripts/test_cli_live_drill.py`** — programmatic multi-turn CLI field testing. Its
+  launch row records the **refusal** as the expected outcome (146 ms live), and a PID
+  diff across a full run showed 73 Chrome processes before and 73 after. It never supplies
+  a `confirmation_id`, carries its own fail-closed whitelist rather than reading
+  `config/whitelist.json`, and calls the dispatcher with `tools=None`. Adds ~101 s to the
+  suite — intrinsic to drilling the real gateway, not worked around.
+- **`scripts/live_shadow_tracer.py`** — the sixth HUD marker. The `invariants` classifier
+  group is **first** in `DOMAIN_RULES`, because `classify_record` is first-match-wins and a
+  real invariant report collides with both `generation` (`$0.00 cost`) and `audio`
+  (`Zero Edge-TTS`). Per-tool gateway counters added. **Measured limit, stated in the
+  code:** only the tool lane's failure path emits a marker, so the counters count recorded
+  tool-lane events, not total tool traffic.
+
+### Known limitation — Terminal 1 answers in MSA, not ar-JO
+The shell carries the front door's default prompt, not Sara's persona, because importing
+`src.persona` is what the safety rule forbids. Adding the dialect would reopen a second
+path for the gender and dialect invariants. Awaiting an owner decision between a
+persona-free engineering surface and a composed persona.
+
 ### Added — 10-agent agency swarm + binding Precision Workflow (2026-09-30)
 - **`.claude/skills/vantrilex-precision-workflow/SKILL.md`** — vendored
   byte-identical (hash-verified) into the repo. It previously existed only at the

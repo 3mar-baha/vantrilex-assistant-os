@@ -45,6 +45,7 @@ links back here via its own `See also` block — no orphaned nodes.
 
 ## Strategic reports (2026-09-16 comprehensive set)
 
+- [Session report 2026-09-30 — cross-framework, agency swarm, dual console](./reports/SESSION_REPORT_2026-09-30.md) — ten commits, six refuted premises, four errors
 - [Timeline & Milestones](./reports/PROJECT_TIMELINE_AND_MILESTONES.md)
 - [Objectives Ledger](./reports/OBJECTIVES_LEDGER_MET_VS_PENDING.md)
 - [Tools & API Compendium](./reports/TOOLS_AND_API_COMPENDIUM.md)

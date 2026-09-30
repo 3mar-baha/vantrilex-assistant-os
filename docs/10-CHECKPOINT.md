@@ -659,6 +659,94 @@ UnicodeDecodeError on the Windows runner. One-line fix
 (cp1252-safe); production `src/` fully pinned (15/15 reads explicit).
 Expected state: main 100% green in CI.
 
+## Dual console shipped — Terminal 1, the drill, and the 6th HUD marker (2026-09-30)
+
+Plan items A–D from `MASTER_OPERATIONAL_PLAN_AND_DUAL_CONSOLE.md` §1, each its own
+commit, Test-First Barrier honoured: `b6b0a67` landed the RED suite (26 red / 18
+green) before a line of implementation existed. Then `7ab3d0d` (A), `bbe3cf7` (B),
+`7b3db69` (C), `ea79a3b` (D).
+
+**Terminal 2 was already delivered.** `sara.bat -Trace` has existed all along
+(`sara.bat:11-14`) and the tracer already carried 5 of the 6 HUD markers. The delta
+was one classifier group, not a subsystem. The directive's `sara.bat --tracer` is
+now an accepted alias.
+
+**Terminal 1 is new: `src/bot_shell.py`** (190 lines). `build_shell(gateway,
+settings) -> Shell`; `Shell.turn(text)` is an async generator yielding the
+dispatcher's deltas **verbatim**. It imports none of `src.persona`,
+`src.gender_pipeline`, `src.voice_policy`, `src.tools`, `src.pc_actions`,
+`bridge.executor` — a guard parses the module with `ast` and asserts it. The
+invariant guarantee is therefore structural: no second code path exists.
+
+### OWNER DECISION — Terminal 1 answers in MSA, not ar-JO
+
+The directive asked Terminal 1 for "authentic Amman dialect (ar-JO)". **It cannot
+have that without importing `src.persona`, which the safety rule forbids.** Live
+proof: asked about programming, the shell replied MSA. The gap is stated in the
+module docstring, not papered over. Two honest resolutions:
+
+1. **Persona-free shell** (current) — ar-JO arrives only where the full pipeline
+   runs (Telegram). Terminal 1 is an engineering surface, not Sara.
+2. **Let the shell compose the persona** — gives ar-JO in Terminal 1, and reopens
+   a second path for the gender and dialect invariants to leak through.
+
+Not mine to decide. Until it is decided, Terminal 1 is a dispatcher front, not
+Sara.
+
+### Refuted premise — the CRLF incident was not real
+
+The implementer reported that the committed `sara.bat` was LF-only, that `cmd.exe`
+skipped every `if … (` block, and that it had restored CRLF — a pre-existing repo
+defect that "would have shipped a `-Chat` flag that does the opposite of what it
+says". I read the committed blob directly: `HEAD:sara.bat` has CR=16 LF=16. **It
+was already CRLF.** The mixed endings were that agent's own intermediate write,
+misdiagnosed. The end state is correct — the content diff is 14 added / 0 removed —
+but the narrative was fabricated and would have put a non-existent incident into
+the permanent record. Recorded here so nobody goes hunting for a CRLF bug that was
+never in a commit.
+
+### Accepted finding — a docstring that recommended dead batch
+
+`tests/test_launcher_flags.py` documented
+`if /i "%~1"=="-Trace" if /i "%~1"=="--tracer" (` as yielding two flags off one
+block. Chained `if`s are a **conjunction** in cmd. Verified on this machine with a
+probe batch file: with that spelling **neither** `-Trace` nor `--tracer` enters the
+block. The docstring would have shipped a dead launcher behind a green guard. It is
+corrected, `sara.bat` carries a `rem` at the alias site, and the alias is two
+blocks with byte-identical bodies.
+
+### Measured limits — stated in-tree, not in a report
+
+- **The per-tool counters count the tool lane's failure path only.** Successful
+  calls log nothing; 1 of 229 real records carries a tool marker. Exactness needs
+  a success-path log in `src/tools.py` — outside the write-set, not claimed.
+- **The drill adds ~101 s to the suite** (33.4 s per run), dominated by the
+  gateway's retry-and-backoff at 30 s/turn against a closed port. Intrinsic to
+  drilling the real gateway; not hacked around, because doing so would have
+  violated the retry doctrine.
+
+### Decision 6 proven, not asserted
+
+The drill's live launch row records **REFUSED (whitelisted but requires
+confirmation)** in 146 ms. A PID diff across a full run: **73 Chrome processes
+before, 73 after, zero new.** Two structural reasons, both commented at the call
+site: the drill carries its *own* fail-closed whitelist rather than
+`config/whitelist.json`, and it calls the dispatcher with `tools=None`.
+
+### Director's own errors in this milestone — three, all corrected
+
+1. `--amend` swept the whole index and batched the 10 agent roles into the contract
+   commit.
+2. Item A's commit **silently failed** on PowerShell quoting and its files were
+   absorbed into item B's commit — verified by `git show --stat`, undone with
+   `reset --soft`, re-committed separately.
+3. A heredoc for item C's message split into a string array, so `git commit` took
+   the trailing lines as *file paths*.
+
+Directive 1 exists to prevent exactly this, and it happened three times in one
+milestone. What caught all three was verifying `git show --stat` after every commit
+rather than trusting the exit output. Message files (`git commit -F`) are the fix.
+
 ## 10-agent agency swarm + Precision Workflow binding (2026-09-30)
 
 Leader directive: provision a 10-agent swarm, then finalize a dual-console
