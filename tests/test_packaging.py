@@ -209,6 +209,7 @@ def test_durable_state_only_in_vault():
         "src/gmail.py": "sweep-state cache — re-derivable, settings-pathed",
         "src/google_auth.py": "OAuth token cache (ADR-15 explicit allowlist member)",
         "src/app_indexer.py": "config/whitelist.json merge — git-tracked owner config (v1.0.2), not durable state",
+        "src/evolution.py": "self-evolution backlog State/evolution_backlog.jsonl (blueprint §3.1) — the ADR-15 vault-mirror State/ dir, already a mandatory scaffold entry. Deliberately NOT routed through VaultClient.upsert: upsert rewrites the whole document, and a rewrite destroys the torn-line residue the append-only contract exists to preserve. NOT covered by .gitignore — flagged in docs/10-CHECKPOINT.md as an open item",
         "src/skills/evening_journaler.py": "journal state + Daily_Logs ledger (vault mirror)",
         "src/skills/proactive_outreach.py": "outreach cadence state (cooldown/cap) — same vault-mirror State/ pattern as the journaler (remediation 3.2)",
         "src/skills/social_enrollment.py": "sealed voiceprint vectors + dossiers (encrypted at rest)",

@@ -182,7 +182,7 @@ class EvolutionTask:
     created_day: str
 ```
 
-**Backlog:** `State/evolution_backlog.json` — `State/` is already a mandatory scaffold
+**Backlog:** `State/evolution_backlog.jsonl` — `State/` is already a mandatory scaffold
 directory (`src/vault.py:LOCAL_SCAFFOLD_DIRS`), so no scaffolding change is needed.
 Append-only, one JSON object per line (JSONL) rather than a rewritten array: a crash
 mid-write must not corrupt the queue. The nightly dialect worker already writes through

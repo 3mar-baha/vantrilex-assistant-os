@@ -659,6 +659,90 @@ UnicodeDecodeError on the Windows runner. One-line fix
 (cp1252-safe); production `src/` fully pinned (15/15 reads explicit).
 Expected state: main 100% green in CI.
 
+## P3-A shipped — EvolutionTask and the append-only backlog (2026-09-30)
+
+`src/evolution.py` gains the gap-detection stage: `is_valid_task_name`,
+`EvolutionTask`, `BACKLOG_RELPATH`, `append_task`, `read_backlog`, `classify_gap`,
+`OWNER_NOTICE_TEMPLATE`, `owner_notice`. 192 RED → green, plus 4 registry-precondition
+guards that were green from the start.
+
+**The barrier proved itself before any code existed.** The qa-agent built a throwaway
+reference implementation **in temp** and mutation-tested it: 19 mutants, each verified
+to have landed and to have collected 196 tests — **19/19 caught**. Green-ability was
+checked too, so the guards are satisfiable rather than over-constrained. That harness
+found a real defect in its own reference: a crash-torn last line has **no trailing
+newline**, and a plain append concatenates onto it — destroying both the torn residue
+and the new record, which is exactly the corruption JSONL exists to prevent. Pinned in
+`test_append_never_rewrites_and_never_drops_the_garbage_line_before_it`, and the
+implementer's break-run #1 disabled the repair and confirmed exactly that test reds.
+
+### The four-name leak — measured, not asserted
+
+| Set | Size |
+|---|---|
+| `TOOL_CAPABILITIES` | **42** (not 46) |
+| `_VALID_TOOLS` | **46** |
+| union | 46 |
+| capabilities − valid | **empty** |
+| **valid − capabilities** | **`analytics`, `cloud_backup`, `none`, `quota_safety`** |
+
+A collision guard reading only `TOOL_CAPABILITIES` provably leaks exactly those four —
+the same four-point registration trap the master plan warns about. Break-run #2 dropped
+the `_VALID_TOOLS` surface and failed on precisely those four names × 3 tests and on
+nothing else, which is what bounds the leak rather than hand-waving it.
+
+### Two ratified deviations
+
+1. **`EvolutionTask` gains `kind`.** Blueprint §3.1's snippet omits it, but §3.5.2
+   requires the backlog to record *which* gap was chosen. A dataclass with no
+   discriminator cannot satisfy that.
+2. **The forced safety tier is a token scan over `intent` + `evidence`.** A
+   *paraphrased* irreversible request («سكّر البرنامج اللي مقفول») names no tool and
+   will not trip it. Stated in the module docstring, not hidden. Structural backstop:
+   `IRREVERSIBLE_TOOLS ⊆ TOOL_CAPABILITIES`, so a task *named* after one is rejected
+   outright, and that subset relation is pinned by a test.
+
+### Refuted premise, carried forward
+
+The blueprint said the backlog is `State/evolution_backlog.json` while describing JSONL.
+A `.json` name holding JSONL is a lie in the filename. Corrected to `.jsonl` in the same
+commit (blueprint `:185`); it was the only other reference anywhere.
+
+### OPEN ITEM — `State/` is not gitignored, and one existing justification says it is
+
+`append_task` is a genuine new durable-state write site, so it joined the AC6 allowlist
+rather than evading the detector: the implementer used `path.open("a", …)`, which is the
+form the guard *catches*, and declined the builtin-`open` spelling that would have
+slipped past the `\.open\(` regex. Evasion would have defeated the guard's whole purpose.
+
+The justification I wrote does **not** repeat a claim I could not verify:
+
+> **`.gitignore` covers `data/` and `vault/` under its "state lives in the vault" comment
+> and does NOT cover `State/`.** One existing entry, `tests/test_packaging.py:219`
+> (`src/task_orchestrator.py`), asserts `gitignored` and is **false as written**.
+
+**Correction to my own first pass.** I initially recorded *two* stale `gitignored`
+claims. Checking each one individually rather than pattern-matching the word showed the
+second is **true**: `bridge/app_sessions.py:218` writes under `data/app_sessions/`, and
+`data/` **is** ignored at `.gitignore:37`, so "gitignored like vault/" is accurate. One
+stale claim, not two. An audit that greps for a keyword and counts hits gets the wrong
+answer; one that checks each claim gets the right one.
+
+Nothing is tracked under `State/` today, so a rule is safe — but once `append_task`
+ships, a `State/evolution_backlog.jsonl` will exist at runtime and `git add -A` would
+stage it. Not fixed here: it is a different item, and bundling it would break
+one-item-one-commit. **Owner approved: add `State/` to `.gitignore` and correct the one
+stale justification, in an isolated commit.**
+
+### Measured
+
+`src/evolution.py` coverage 88% → **93%**. The +69 statements and +14 branches added
+contribute **zero new misses**; every remaining miss is pre-existing P2 code. Two of the
+implementer's own gaps were closed honestly rather than by evasion — a blank-line guard
+that was dead code (`json.loads("")` already raises `ValueError`) and a zero-byte check
+that merged into the absent-file check. The file was **not** added to the tiered-coverage
+core list; that is a separate item.
+
 ## Dual console shipped — Terminal 1, the drill, and the 6th HUD marker (2026-09-30)
 
 Plan items A–D from `MASTER_OPERATIONAL_PLAN_AND_DUAL_CONSOLE.md` §1, each its own
