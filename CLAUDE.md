@@ -170,6 +170,47 @@ strictly-zero-cost executive AI assistant named **Sara (سارة)**.
 - Documentation changes in the same commit as the behavior it describes.
 - Ship the smallest abstraction that satisfies the specification — no speculative layers.
 
+### 5.1 Precision Workflow — binding for every agent and every sub-agent
+
+The seven directives below are the **governing contract** for all work in this repository:
+for the root agent, every role definition in `.claude/agents/`, and every dispatched
+sub-agent. Each exists because the naive alternative shipped a defect or a green suite
+that meant nothing.
+
+| # | Directive | The one-line test |
+|---|---|---|
+| 1 | **Precision over speed** | One item, one commit, full gate before each. Never batch. |
+| 2 | **A guard is real once you have seen it fail** | RED before GREEN, then break it and prove the injection landed. A break-run that printed nothing is not a pass. |
+| 3 | **Measure, never assume; re-scope rather than build** | If a spec item rests on a premise, measure it first. If measurement refutes it, re-scope — do not drop it, do not build it as written. Record the refutation. |
+| 4 | **A passing test is not evidence a feature ships** | Answer three questions separately: does it exist, can it fire, is it correct. State unreachability **in the code at the call site**, naming the missing producer — not in a report. |
+| 5 | **A test that pins a bug is worse than no test** | Read a failing test's name and its assertion together. If they disagree, the test is wrong. Repair it; never revert the fix to keep green. |
+| 6 | **Docs are re-derived, never asserted** | Every number and structural claim comes from the tree, by script, every time. **Fix the document, not the checker.** "Unverifiable" is an error, not a warning. |
+| 7 | **Peer review on a second model, and apply the dissent** | The reviewer's job is to find the reason the item is wrong. Dissent is applied even when the defect lies in already-committed code outside the write-set — record that you exceeded the write-set and why. |
+
+**Full text and worked examples:** the skill is mirrored locally at
+`.claude/skills/vantrilex-precision-workflow/SKILL.md` (byte-identical to the authored
+skill, hash-verified). **That path is gitignored** — `.gitignore` carries a deliberate
+`.claude/skills/` rule, so the mirror does **not** ship with the repository and is not
+part of the tracked contract. This table is the tracked contract; the mirror is the
+expanded reference. Adding the skill to the repository requires an owner decision, not a
+`git add -f`.
+
+**Scope clarification (owner, 2026-09-30).** The closed-loop rule above is unchanged for
+*implementation*: one implementer thread per task, no parallel writers. What is authorized
+is **concurrent read-only reconnaissance and review sub-agents** — the Division B scouts
+and the peer review in Directive 7. They dispatch concurrently and converge at a barrier;
+they never write `src/` and never author implementation tests. Full roster and the
+enforcement gaps in each rule are recorded in
+`docs/architecture/AGENCY_SWARM_WORKFLOW.md`.
+
+**Anti-pattern this repository has already paid for, twice.** A binding rule that points
+at a path outside the repository is a dangling reference: it loads for whoever has that
+file locally and for nobody else. Every contract pointer must resolve inside the tree or
+CI. The first version of this very section claimed a vendored skill shipped with the repo
+when `.gitignore` had excluded it, and the commit message asserted what the diff did not
+contain.
+
+
 
 ## Active Components (runner=opencode model=inclusionai/ling-3.0-flash-vl:free effort=medium)
 
