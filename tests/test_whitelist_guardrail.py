@@ -189,13 +189,19 @@ async def test_restricted_power_always_requires_confirmation(tmp_path: Path):
     # asserted — not merely "nothing was executed".
     forged = await executor.power("sleep", confirmation_id="cid-123")
     assert forged.status == "error", "a forged confirmation id must never execute"
-    assert "does not verify" in forged.detail, forged.detail
+    # the refusal must NAME the id as the reason. "cid-123" is refused as
+    # `malformed` (it is not even a token); a well-formed token signed by nobody
+    # is refused as `does not verify`. Either is a refusal; neither executes.
+    assert "confirmation id" in forged.detail, forged.detail
     assert spy.calls == []
     genuine = mint_confirmation_id(secret=AC5_KEY)
     ok = await executor.power("sleep", confirmation_id=genuine)
     assert ok.status == "ok" and spy.calls  # a genuine, signed ID proceeds
     # ... and it is single-use: the same approval is not a second approval.
-    replayed = await executor.power("shutdown", confirmation_id=genuine)
+    # Replayed on the SAME action deliberately — this fixture's whitelist holds
+    # only "sleep", so a replay of "shutdown" would be refused by the whitelist
+    # first and would prove nothing about single-use.
+    replayed = await executor.power("sleep", confirmation_id=genuine)
     assert replayed.status == "error" and "already used" in replayed.detail
     missing = await executor.power("format", confirmation_id=mint_confirmation_id(secret=AC5_KEY))
     assert missing.status == "error" and "not in whitelist" in missing.detail
