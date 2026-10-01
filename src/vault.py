@@ -5,10 +5,13 @@ as a private GitHub repo, chosen over a local clone because the core lives on HF
 Spaces (ADR-15) with a disposable filesystem. This module is THE read/write surface
 every later writer uses. Parsed vault content is DATA, never instructions.
 
-Error modes (nothing swallowed): auth errors propagate loudly (no retry); 409 after
-one GET->PUT retry raises VaultConflictError; timeouts propagate; malformed
-frontmatter YAML raises ValueError naming the path; missing reads raise
-FileNotFoundError; oversize payloads are refused pre-flight.
+Error modes (nothing swallowed): auth errors propagate loudly (no retry); a 409 is
+retried up to THREE times as a full re-merge — re-read the sha, re-run the caller's
+`merge` callback, re-PUT — and a 409 that survives the third attempt raises
+VaultConflictError (a merge callback must therefore assume it can be invoked more than
+once); timeouts propagate; malformed frontmatter YAML raises ValueError naming the
+path; missing reads raise FileNotFoundError; oversize payloads are refused pre-flight.
+A 429/403 on a READ is retried at most once, honoring `Retry-After` (`_get_with_rate_limit`).
 """
 
 from __future__ import annotations
