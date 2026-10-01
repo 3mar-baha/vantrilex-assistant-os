@@ -7,6 +7,8 @@ from __future__ import annotations
 
 import asyncio
 
+import httpx
+
 from src.bot import start_background_loops
 
 
@@ -185,17 +187,56 @@ async def test_all_loops_cancel_cleanly_mid_tick(make_settings):
 # --- M-4 (deferred queue): the REAL run_bot boots and shuts down --------------------
 
 
+def _vault_factory(real_client, gh, built: list[dict], edges: list[httpx.AsyncClient]):
+    """Wrap the REAL `VaultClient` constructor with a faked HTTP edge.
+
+    Deliberately NOT a fake vault class: `VaultClient.__init__` still runs with
+    the real repo/token/branch `run_bot` hands it, so this keeps proving the
+    vault is constructible from settings. Only the network edge is swapped
+    (test-guard rule 2: HTTP is a system boundary) — `helpers_vault.FakeGitHub`
+    answers with real GitHub status codes, so status handling is still exercised.
+    """
+
+    def build(repo, token, *, branch="main", session=None):
+        built.append({"repo": repo, "token": token, "branch": branch})
+        edge = httpx.AsyncClient(transport=gh.transport, base_url="https://api.github.com")
+        edges.append(edge)
+        # session=... -> _owns_session False, so VaultClient never owns it and
+        # run_bot's own vault.aclose() stays a no-op; the test closes it.
+        return real_client(repo, token, branch=branch, session=edge)
+
+    return build
+
+
 async def test_run_bot_boots_all_components_and_shuts_down(make_settings, monkeypatch, tmp_path):
     """The production entry assembles EVERYTHING — gateway, voice, vault,
     memory, writers, tools, coordinator, dispatcher, and all six background
     loops — and the finally cancels them cleanly. Polling is stubbed (a
-    one-iteration mock); everything else is the REAL wiring."""
+    one-iteration mock); the vault's HTTP edge is stubbed; everything else is
+    the REAL wiring.
+
+    The vault fake exists because boot is NOT network-free: it issues one read
+    for the dialect notes, one capabilities-manifest upsert and one upsert per
+    per-tool skill guide — 31 sequential GitHub calls. Unfaked, the
+    `.env.example` placeholder PAT 401s on every one of them (~1 s each), which
+    is what burned this test's 30 s budget and failed it.
+    """
     import asyncio as aio
     from unittest.mock import AsyncMock
 
+    from helpers_vault import FakeGitHub
+
     from src import bot as bot_mod
+    from src.memory import SARA_CAPABILITIES_PATH
+    from src.skills.sara_tool_skills import SARA_SKILLS_DIR, build_skill_guides
 
     settings = make_settings(VAULT_LOCAL_PATH=str(tmp_path / "vault"))
+
+    gh = FakeGitHub(repo=settings.vault_github_repo, branch=settings.vault_branch)
+    built: list[dict] = []
+    edges: list[httpx.AsyncClient] = []
+    real_vault_client = bot_mod.VaultClient
+    monkeypatch.setattr(bot_mod, "VaultClient", _vault_factory(real_vault_client, gh, built, edges))
 
     # stop polling after one loop tick; record the dispatcher it was built with
     started = aio.Event()
@@ -215,5 +256,28 @@ async def test_run_bot_boots_all_components_and_shuts_down(make_settings, monkey
     # a dead outbound bot never reaches Telegram (no network in tests)
     monkeypatch.setattr(bot_mod, "Bot", lambda token: AsyncMock())
 
-    await aio.wait_for(bot_mod.run_bot(settings, bridge=None), timeout=30)
+    try:
+        await aio.wait_for(bot_mod.run_bot(settings, bridge=None), timeout=30)
+    finally:
+        for edge in edges:
+            await edge.aclose()
+
     assert started.is_set()  # the full wiring actually assembled
+
+    # The REAL VaultClient was built from the REAL settings — the fake replaced
+    # the socket, not the constructor.
+    assert built == [
+        {
+            "repo": settings.vault_github_repo,
+            "token": settings.vault_github_token.get_secret_value(),
+            "branch": settings.vault_branch,
+        }
+    ]
+
+    # ...and boot's vault WRITES landed. This is the half the old version could
+    # never assert: every guide 401'd, so the manifest and all 29 guides
+    # silently vanished and the test had nothing left to check.
+    landed = set(gh.objects)
+    assert SARA_CAPABILITIES_PATH in landed, "capabilities manifest never reached the vault"
+    missing = {name for name in build_skill_guides() if f"{SARA_SKILLS_DIR}/{name}" not in landed}
+    assert not missing, f"{len(missing)} per-tool guides never synced, e.g. {sorted(missing)[:3]}"
