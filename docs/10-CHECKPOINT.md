@@ -1918,6 +1918,164 @@ paths) is out of scope per the work order. F-2 — the executor-wide confirmatio
 next work order and is **gated on the owner's review of this entry**; `open_path` deliberately does
 not pre-empt it.
 
+---
+
+## 2026-10-01 — F-2: a forged confirmation id is refused (P0, phase 3 of 3)
+
+Report Part F §42. The daemon accepted ANY non-empty `confirmation_id`: `bridge/executor.py:321`
+(close), `:352` (launch), `:372` (power) and `bridge/openclaw/breaker.py:120` all asked only "is
+this string non-empty?", and the AC5 sacred-floor test pinned the forgery by calling `"cid-123"`
+a valid ID. The core minted a real id, wrote the vault note, forwarded it over `exec.*` — and
+nothing ever read that note back.
+
+### The measurement that decided the design
+
+§42's patch draft says "if the daemon cannot reach the vault, verification must move to the core
+side". **Measured: the daemon has no vault client at all** — the note lives in a GitHub-backed
+Obsidian vault and the executor process cannot see it, so a vault-reading verifier is §42's own
+named failure mode ("don't ship a verifier that can't reach its store"). Two more measurements
+shaped it:
+
+* the daemon's **process env does not carry `BRIDGE_TOKEN`** (`.env` is a FILE read by
+  `src/config.py`, which `bridge/__main__.py` already calls for that same token) — so an
+  `os.environ`-only resolver would work in tests and refuse every genuine confirmation in
+  production;
+* **CI runs the suite with no `.env`**, so a resolver with no reachable secret must fail CLOSED —
+  and then the end-to-end guards need a hermetic secret, hence one `os.environ.setdefault` line in
+  `tests/conftest.py` (the same pattern already there for `SARA_TURN_COUNTER_OFF`).
+
+The verifier therefore runs **where the id arrives** (the daemon) and is **stateless**: the core
+signs the id, the daemon re-computes the MAC. The vault note is untouched and stays the audit
+trail; it is simply not the enforcement point.
+
+### What shipped
+
+| Piece | Where | Law |
+|---|---|---|
+| `mint_confirmation_id` | `bridge/executor.py` | `cfm1.<epoch>.<8 hex nonce>.<16 hex MAC>`, MAC = `HMAC-SHA256(BRIDGE_TOKEN, "cfm1.<epoch>.<nonce>")[:16]`; returns `""` with no secret |
+| `verify_confirmation_id` | `bridge/executor.py` | fail-closed verdict WITH a reason (never a bare bool — the reason reaches the owner) |
+| `CONFIRMATION_TTL` | `bridge/executor.py` | the TTL now lives on the side that ENFORCES it; the core imports it as `PENDING_TTL`, so the two windows cannot drift |
+| `Executor(confirm_key=…, now_fn=…)` | `bridge/executor.py` | `confirm_key` overrides the shared secret (`None` = resolve at call time, which is how the daemon runs with zero new wiring); `now_fn` is the repo's clock seam |
+| `SafetyCircuitBreaker.authorize(…, *, confirm_key=None, now_fn=None)` | `bridge/openclaw/breaker.py` | stays a `@staticmethod` — five call sites, two in `scripts/`, invoke it off the class |
+| `PCActionCoordinator._confirm_and_execute` | `src/pc_actions.py` | signs the id; with no secret it REFUSES the confirmation (no command on the wire, no audit note for a confirmation that never became one) |
+
+**No new env var and no new config knob**: the signing secret is the tunnel's own shared
+`BRIDGE_TOKEN`, which both ends already hold.
+
+### Guarantees delivered — and guarantees NOT delivered
+
+This is the part worth reading twice.
+
+| Guarantee | Delivered? | Scope of the truth |
+|---|---|---|
+| **Forgery** | **YES** | No id without a valid MAC over the shared secret is accepted, whatever its shape — including the old `uuid4().hex[:12]`, which was never a secret. Checked constant-time (`hmac.compare_digest`). |
+| **Expiry** | **YES** | `issued_at` older than 10 min is refused. An UPPER bound on age, never a two-sided window, so core↔PC clock skew cannot refuse a live confirmation. Driven by an injected `now_fn=` in every guard. |
+| **Single-use** | **PARTIALLY** | A verified token is burned, so a second use of one approval is refused — **for the daemon process's lifetime only**. The set is in memory: a restart re-opens the window. |
+| **Target binding** | **NO** | The token is NOT bound to an app/action, so a captured LIVE token can be replayed against a *different* app inside the TTL window. Forgery and expiry still hold; only the replay does not. |
+| **Vault-note existence** | **NO** | Nothing reads the note back — the daemon cannot reach the vault. The note is the audit trail; the MAC is the enforcement. |
+| **Core-side gates** | **NO** | `src/decision_loop.py`'s ReAct gate and `ToolRegistry.call` still use truthiness. F-1 owns them; `ToolRegistry.call`'s signature is untouched here by order. |
+| **OpenClaw committing ops** | **unreachable by construction** | No core-side producer mints a signed id for `openclaw.act` (the only sender is `src/tools.py:555`'s read-only SCREENSHOT probe, which is reversible). Irreversible openclaw ops now require a signed id, and nothing on the core can produce one yet — so they are refused. Fail-closed and honest, but a real capability gap, recorded here rather than hidden. |
+
+### The sacred floor moved, and saying so is the point
+
+`tests/test_whitelist_guardrail.py::test_restricted_power_always_requires_confirmation` asserted
+`confirmation_id="cid-123"` → "valid ID proceeds". **That was the bug, not the contract** (the
+remediation-1.3 precedent, as §42 itself ordered). The test now asserts a forged id is refused
+*with its reason*, that a genuine signed id proceeds, and that a replay is refused.
+
+A **fifth** forgery-pinning site the report never named was found and corrected:
+`tests/suite/tier1_resilience/test_openclaw_breaker.py:112` asserted the bare string `"abc123"`
+authorizes an Alt+F4. Three more files outside the write-set encoded the same forgery and are
+corrected (recorded in the commit message, with reasons).
+
+### Mutation check (Directive 5) — every mutant turned a NAMED guard red
+
+| Mutant | Guard that went RED | Restored |
+|---|---|---|
+| (a1) `close()` back to truthiness | `test_executor_close_refuses_a_forged_confirmation_id` (6 params) | sha256 ✓ |
+| (a2) `power()` back to truthiness | `test_executor_power_refuses_a_forged_confirmation_id` (6) + AC5 | sha256 ✓ |
+| (a3) `launch()` back to truthiness | `test_executor_launch_refuses_a_forged_confirmation_id` (6) | sha256 ✓ |
+| (a4) breaker back to non-emptiness | `test_breaker_refuses_a_forged_confirmation_id` (4) + tier-1 breaker forged guards (4) + `test_act_irreversible_with_forged_id_refuses` | sha256 ✓ |
+| (b) expiry check deleted | `test_executor_refuses_an_expired_id_with_an_injected_clock` | sha256 ✓ |
+| (c) accept any 12-hex id (the pre-F-2 mint shape) | the `1234567890ab` param of all four site guards + the tier-1 breaker guard | sha256 ✓ |
+| (d1) rider (a) dropped — daemon inherits the open-root seed | `test_the_daemon_states_its_open_roots_instead_of_inherenting_the_seed` | sha256 ✓ |
+| (d2) rider (b) dropped — the stale lane comment returns | `test_the_open_path_lane_comment_names_the_wall_that_actually_exists` | sha256 ✓ |
+| (e) the audit-trail hazard the fix INTRODUCED: note name reverted to `id[:8]` | `test_two_confirmations_on_one_day_keep_two_notes` | sha256 ✓ |
+
+The driver follows the F-5 lesson: bytes in/out (never `Path.write_text`), every restore verified
+by sha256, and **two mutants were REFUSED as stale-anchor rather than reported** until re-anchored
+on the text that actually shipped (a3 and d2, first attempt).
+
+Mutant (e) deserves its own line because it is a defect the fix itself created. A signed id starts
+with the fixed `cfm1.` prefix, so the pre-F-2 note name `{date}_{id[:8]}.md` would name every
+same-day note identically — and `vault.upsert` OVERWRITES, so the second approval of the day would
+have destroyed the first one's audit note. The note is now named by the token's random **nonce**,
+and `test_two_confirmations_on_one_day_keep_two_notes` pins it. Note that the mutant leaves the
+pre-existing AC4 / WoL round-trip guards GREEN (they only ever write one note each) — the
+overwrite would have shipped silently.
+
+### The two riders, both landed and both guarded
+
+* **(a)** `bridge/__main__.py` now passes `open_roots=default_open_roots()` — the owner's home,
+  this checkout, and the daemon's CWD — instead of inheriting the Executor's implicit seed. F-3's
+  `default_open_roots()` docstring already names this file as "the single producer"; the
+  alternative (spelling the three roots out inline) would duplicate the policy in two places.
+* **(b)** `src/tools.py::_do_open_path`'s docstring no longer claims the lane "adds no checks of its
+  own". It now names the wall that exists: `OPEN_BLOCKED_SUFFIXES` plus `open_roots=` containment,
+  in `bridge/executor.py::open_path`. Comment and wording only —
+  `ToolRegistry.call`'s signature is untouched.
+
+### Measured, re-derived by script
+
+| Measurement | Before (HEAD `b570371`) | After |
+|---|---|---|
+| `git grep -n "if not confirmation_id" bridge/` | 3 hits | **0 hits** (also pinned by a guard) |
+| `tests/test_confirmation_verification_f2.py` | absent | **46 guards, all green** |
+| Suite excluding `live_harness` | 2,607 passed / 5 skipped / 1 xfailed | **2,659 passed / 4 skipped / 1 xfailed / 0 failed** |
+| `bridge/executor.py` coverage | 98.7% | **98.9%** (gate ≥ 98.0%) |
+| `bridge/openclaw/breaker.py` coverage | 100% | **100%** |
+| `src/pc_actions.py` coverage | 100% | **100%** |
+| TOTAL branch coverage | 92.0% | **92.1%** (gate ≥ 90.0%) |
+| ruff check / format | clean / clean | **clean / clean** |
+| `scripts/security_gate.py` / `docs_guard.py` | OK | **OK / OK** |
+
+`IRREVERSIBLE_TOOLS` 7 · `TOOL_CAPABILITIES` 45 · routed 46 · `INTERNAL_ONLY_TOOLS {"none"}` —
+unchanged; F-2 touches no registry, dispatcher or capability entry.
+
+Skips are reported separately from passes, as the work order requires: the count moves between 4
+and 5 because a **network-dependent** test (`tier2_live_probes/test_omniroute.py`, free-provider
+pool) is sometimes skipped. In one full run
+`tests/live_probe/test_omniroute_live.py::test_live_ttft_first_token` — a real OmniRoute stream —
+failed with "streamed zero deltas in 4s — cascade" and **passed on its own re-run**; it is
+free-provider variance, never weakened. The 2 `live_harness` failures seen in the coverage run are
+the pre-existing flakes the F-3 entry already recorded.
+
+`bridge/executor.py` sits at 98.9% with ONE uncovered line (`:351`, `resolve_in_roots`'s
+`if not raw: continue` — pre-existing, F-3's code, not F-2's) and three pre-existing partial
+branches. Every F-2 line and branch is covered.
+
+### Not red before the fix — stated plainly rather than buried
+
+* `test_the_daemon_and_the_core_share_one_ttl` passed pre-fix: both constants were already 10
+  minutes. The fix makes them the same VALUE object; the guard stops them drifting.
+* The empty/whitespace parameters of the four forgery guards passed pre-fix — truthiness already
+  refused those. They are kept so they STAY refused.
+* `test_a_genuine_token_is_accepted_by_all_three_executor_sites`,
+  `test_a_token_from_the_future_is_not_expired` and the EXECUTION half of
+  `test_a_genuine_id_minted_through_the_real_coordinator_is_accepted` are positive controls: green
+  pre-fix because truthiness accepts anything. That coordinator guard's token-grammar assertion is
+  red pre-fix (the core minted `ada4cbe88938` that day).
+* `test_minting_without_a_shared_secret_yields_no_id` and the two shared-secret resolution guards
+  pin NEW surface, so the RED probe could only show them red through its constant resolver — not a
+  law failure.
+
+### Still open, deliberately not folded in
+
+Target binding (bind the MAC to `kind`+`target`) and a durable single-use store are the two
+residuals above; both are design work with a wire implication, not a bug. The core-side truthiness
+gates are F-1's write-set. F-1, F-4, F-6, F-8, 33B, Part E and V-9 are untouched per the work
+order.
+
 - [07 — Implementation Plan](./07-IMPLEMENTATION-PLAN.md)
 - [11 — Testing](./11-TESTING.md)
 - [Objectives Ledger](./reports/OBJECTIVES_LEDGER_MET_VS_PENDING.md)

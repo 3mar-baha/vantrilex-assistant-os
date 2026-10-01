@@ -6,13 +6,15 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import hashlib
+import hmac
 import os
 import secrets
 import shutil
 import subprocess
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path, PureWindowsPath
-from typing import Final
+from typing import Final, NamedTuple
 
 from loguru import logger
 from pydantic import BaseModel
@@ -22,6 +24,147 @@ from bridge.guard import Guard
 
 def mint_audit_code() -> str:
     return f"PC-{datetime.now(UTC):%Y%m%d-%H%M%S}-{secrets.token_hex(2)}"
+
+
+# — F-2: the confirmation id is a SIGNED, EXPIRING token -------------------------
+#
+# MEASURED, and it decides the design: this process has NO vault client. The
+# confirmation note lives in a GitHub-backed Obsidian vault (the core writes it,
+# `04_Archives/Confirmations/`), so a verifier that "reads the note back" would
+# be a verifier that cannot reach its store — report Part F section 42's own
+# named failure mode. The id therefore carries its own proof: the core signs it
+# with the secret both ends already share (BRIDGE_TOKEN, the tunnel's own shared
+# token — no new knob, no new secret to distribute), and this side re-computes
+# the MAC. The note is untouched and remains the audit trail; it is simply not
+# the enforcement point.
+CONFIRMATION_VERSION = "cfm1"
+# The TTL lives HERE, on the side that ENFORCES it, and the core imports it as
+# its `PENDING_TTL` — two numbers that can drift is how a 10-minute promise
+# becomes a 20-minute one.
+CONFIRMATION_TTL = timedelta(minutes=10)
+_CONFIRMATION_NONCE_CHARS = 8
+_CONFIRMATION_MAC_CHARS = 16
+
+
+class ConfirmationCheck(NamedTuple):
+    """A verdict, never a bare bool: the refusal REASON reaches the owner."""
+
+    ok: bool
+    reason: str = ""
+
+
+def confirmation_secret() -> str:
+    """The shared core<->daemon secret that signs confirmation ids.
+
+    Resolution order is measured, not guessed: the process env first (the
+    suite, and any deployment that exports the token), then Settings — because
+    the daemon's env does NOT carry BRIDGE_TOKEN. `src/config.py` reads it from
+    the `.env` FILE, and `bridge/__main__.py` already calls `get_settings()` for
+    that very token. Unreachable is `""`, never a guess: an empty secret makes
+    every confirmation fail closed.
+    """
+    raw = (os.environ.get("BRIDGE_TOKEN") or "").strip()
+    if not raw:
+        try:
+            from src.config import get_settings
+
+            raw = get_settings().bridge_token.get_secret_value().strip()
+        except Exception:  # noqa: BLE001 — no settings reachable == no secret
+            return ""
+    return raw
+
+
+def _confirmation_mac(secret: str, payload: str) -> str:
+    return hmac.new(secret.encode("utf-8"), payload.encode("utf-8"), hashlib.sha256).hexdigest()[
+        :_CONFIRMATION_MAC_CHARS
+    ]
+
+
+def mint_confirmation_id(*, now: datetime | None = None, secret: str | None = None) -> str:
+    """Mint the id the owner actually approved: `cfm1.<issued>.<nonce>.<mac>`.
+
+    Every field is inside the MAC, and the whole string is filename-safe (it
+    becomes part of the confirmation note's name). With no shared secret this
+    returns `""` — the core must then REFUSE the confirmation rather than send
+    an id no daemon could ever accept.
+    """
+    key = confirmation_secret() if secret is None else secret
+    if not key:
+        return ""
+    issued = str(int((now or datetime.now(UTC)).timestamp()))
+    nonce = secrets.token_hex(_CONFIRMATION_NONCE_CHARS // 2)
+    payload = f"{CONFIRMATION_VERSION}.{issued}.{nonce}"
+    return f"{payload}.{_confirmation_mac(key, payload)}"
+
+
+# The single-use ledger. In memory, pruned by the TTL, so its size is bounded by
+# "approvals inside one TTL window" (a handful) and not by uptime.
+_CONSUMED_CONFIRMATIONS: dict[str, float] = {}
+
+
+def verify_confirmation_id(
+    confirmation_id: str | None, *, now: datetime | None = None, secret: str | None = None
+) -> ConfirmationCheck:
+    """Is this a live owner approval? Fail-closed, and the MAC compare is
+    constant-time; stateless apart from the single-use set (which the daemon
+    touches only from its single-threaded event loop, so it needs no lock).
+
+    DELIVERED — each has a guard in tests/test_confirmation_verification_f2.py:
+      * forgery — a MAC that does not recompute over the shared secret is
+        refused, whatever the string's shape (this includes the pre-F-2
+        `uuid4().hex[:12]` mint shape, which was never a secret at all);
+      * expiry — `issued_at` older than `CONFIRMATION_TTL` is refused. The TTL
+        is an UPPER bound on age, never a two-sided window: a clock skew between
+        the core and the PC must not refuse a live confirmation;
+      * fail-closed — no reachable secret refuses EVERY id;
+      * single-use — a verified token is burned here, so a second use of one
+        approval is refused.
+    NOT DELIVERED — stated here rather than implied by a passing test:
+      * the single-use set is in memory, so the guarantee holds for THIS
+        process's lifetime and NOT across a daemon restart;
+      * the token is not bound to a target, so a captured LIVE token can be
+        replayed against a different app inside the TTL window (forgery and
+        expiry still hold — only the replay does not);
+      * nothing here reads the vault note. The note is the audit trail; this
+        function is the enforcement point.
+    """
+    raw = (confirmation_id or "").strip()
+    if not raw:
+        return ConfirmationCheck(False, "no confirmation id")
+    # The secret is resolved BEFORE the shape is judged, so a misconfigured
+    # daemon says "unconfigured" about every id instead of blaming each
+    # caller's string.
+    key = confirmation_secret() if secret is None else secret
+    if not key:
+        return ConfirmationCheck(
+            False, "confirmation verifier unconfigured (no shared BRIDGE_TOKEN) — refused"
+        )
+    parts = raw.split(".")
+    grammar = f"expected {CONFIRMATION_VERSION}.<issued>.<nonce>.<mac>"
+    if len(parts) != 4 or parts[0] != CONFIRMATION_VERSION:
+        return ConfirmationCheck(False, f"malformed confirmation id ({grammar})")
+    _, issued_raw, nonce, mac = parts
+    if (
+        not issued_raw.isdigit()
+        or len(nonce) != _CONFIRMATION_NONCE_CHARS
+        or len(mac) != _CONFIRMATION_MAC_CHARS
+    ):
+        return ConfirmationCheck(False, f"malformed confirmation id ({grammar})")
+    payload = f"{CONFIRMATION_VERSION}.{issued_raw}.{nonce}"
+    if not hmac.compare_digest(mac, _confirmation_mac(key, payload)):
+        return ConfirmationCheck(
+            False, "confirmation id does not verify — refused (unsigned, forged or tampered)"
+        )
+    now_ts = (now or datetime.now(UTC)).timestamp()
+    if now_ts - int(issued_raw) > CONFIRMATION_TTL.total_seconds():
+        minutes = int(CONFIRMATION_TTL.total_seconds() // 60)
+        return ConfirmationCheck(False, f"confirmation id expired (TTL {minutes} min) — refused")
+    if raw in _CONSUMED_CONFIRMATIONS:
+        return ConfirmationCheck(False, "confirmation id already used — refused (single-use)")
+    _CONSUMED_CONFIRMATIONS[raw] = now_ts + CONFIRMATION_TTL.total_seconds()
+    for spent in [t for t, expiry in _CONSUMED_CONFIRMATIONS.items() if expiry <= now_ts]:
+        del _CONSUMED_CONFIRMATIONS[spent]
+    return ConfirmationCheck(True, "")
 
 
 class ExecResult(BaseModel):
@@ -253,6 +396,8 @@ class Executor:
         file_roots: tuple[Path, ...] = (),
         blocked_suffixes: tuple[str, ...] = (),
         open_roots: tuple[Path, ...] | None = None,
+        confirm_key: str | None = None,
+        now_fn=None,
     ):
         self._guard = guard
         self._spawn = self._spawn_real
@@ -268,6 +413,17 @@ class Executor:
         self._open_roots = tuple(
             Path(r) for r in (default_open_roots() if open_roots is None else open_roots)
         )
+        # F-2: `confirm_key` OVERRIDES the shared core<->daemon secret (tests
+        # and any caller that already holds it); `None` resolves that secret at
+        # call time, which is how the production daemon runs without new wiring.
+        # `now_fn` is the repo's clock seam — the expiry guard must never read
+        # the wall clock in a test.
+        self._confirm_key = confirm_key
+        self._now = now_fn or (lambda: datetime.now(UTC))
+
+    def _confirmation(self, confirmation_id: str | None) -> ConfirmationCheck:
+        """Verify an owner approval, or say exactly why it is not one."""
+        return verify_confirmation_id(confirmation_id, secret=self._confirm_key, now=self._now())
 
     async def screenshot(self, audit_code: str | None = None) -> ExecResult:
         """Pass-1 (v2.0 §3-د/2): ONE full-screen capture, entirely in memory —
@@ -318,8 +474,14 @@ class Executor:
         اغلاق ولا واحدة»)."""
         code = audit_code or mint_audit_code()
         verdict = self._guard.check_app(name)
-        if not verdict.allowed_without_confirmation and not (confirmation_id or "").strip():
-            return ExecResult(status="error", detail=verdict.reason, audit_code=code)
+        if not verdict.allowed_without_confirmation:
+            # F-2: a NON-EMPTY id is not an approval. It must verify against the
+            # shared secret, be unexpired, and be unused.
+            check = self._confirmation(confirmation_id)
+            if not check.ok:
+                return ExecResult(
+                    status="error", detail=f"{verdict.reason} — {check.reason}", audit_code=code
+                )
         # every image the app can run as — the whitelist image alone misses the
         # UWP rename (CalculatorApp.exe), which left the window open while the
         # owner was told nothing was running.
@@ -349,8 +511,13 @@ class Executor:
     ) -> ExecResult:
         code = audit_code or mint_audit_code()
         verdict = self._guard.check_app(name)
-        if not verdict.allowed_without_confirmation and not (confirmation_id or "").strip():
-            return ExecResult(status="error", detail=verdict.reason, audit_code=code)
+        if not verdict.allowed_without_confirmation:
+            # F-2: same law as close() — see `_confirmation`.
+            check = self._confirmation(confirmation_id)
+            if not check.ok:
+                return ExecResult(
+                    status="error", detail=f"{verdict.reason} — {check.reason}", audit_code=code
+                )
         argv = [verdict.executable or name]
         try:
             await self._spawn(argv)
@@ -369,10 +536,11 @@ class Executor:
         if "not in whitelist" in verdict.reason:
             return ExecResult(status="error", detail=verdict.reason, audit_code=code)
         # power ALWAYS needs a live confirmation id, even if a whitelist flag says otherwise
-        if not (confirmation_id or "").strip():
+        check = self._confirmation(confirmation_id)
+        if not check.ok:
             return ExecResult(
                 status="error",
-                detail="power action requires explicit owner confirmation",
+                detail=f"power action requires explicit owner confirmation — {check.reason}",
                 audit_code=code,
             )
         argv = POWER_ARGV.get(action.casefold())
@@ -403,8 +571,11 @@ class Executor:
 
         `confirmation_id` is kept for wire symmetry with launch/close/power and
         is NOT a bypass: no id value moves a path past any of the three walls.
-        Whether an id is even VALID is F-2's work (the executor's confirmation
-        verifier) and is deliberately not duplicated here.
+        It is also not VERIFIED here, and that is deliberate rather than an
+        oversight — this verb needs no confirmation, so a forged id and a
+        genuine one are equally irrelevant to it. (Launching, closing and power
+        do need one, and F-2 verifies those ids against the shared secret in
+        `verify_confirmation_id`.)
         """
         code = audit_code or mint_audit_code()
         raw = (path or "").strip()

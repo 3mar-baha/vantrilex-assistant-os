@@ -49,9 +49,9 @@ Envelopes (both directions after auth):
 
 | cmd | args | Guard rule | Result |
 |---|---|---|---|
-| `exec.launch` | `name`, `confirmation_id?`, `audit_code?` | whitelist `auto_approve` OR live `confirmation_id` | ExecResult |
+| `exec.launch` | `name`, `confirmation_id?`, `audit_code?` | whitelist `auto_approve` OR a VERIFIED `confirmation_id` (F-2) | ExecResult |
 | `exec.open` | `path`, `confirmation_id?`, `audit_code?` | blocked suffix → refuse; UNC / relative traversal → `outside_allowed_roots` | ExecResult |
-| `exec.close` | `name`, `confirmation_id?`, `audit_code?` | whitelist `auto_approve` OR live `confirmation_id` (closing is destructive on the live session — same gate as launching; v2.0 pass-1) | ExecResult; `taskkill /IM <image> /F /T` over EVERY image the app runs as (`close_images` UWP alias table — CalculatorApp.exe/Calculator.exe/calc.exe, live defect A 2026-09-05) + psutil-VERIFIED `killed_processes` (poll ≤2 s) |
+| `exec.close` | `name`, `confirmation_id?`, `audit_code?` | whitelist `auto_approve` OR a VERIFIED `confirmation_id` (F-2) (closing is destructive on the live session — same gate as launching; v2.0 pass-1) | ExecResult; `taskkill /IM <image> /F /T` over EVERY image the app runs as (`close_images` UWP alias table — CalculatorApp.exe/Calculator.exe/calc.exe, live defect A 2026-09-05) + psutil-VERIFIED `killed_processes` (poll ≤2 s) |
 | `exec.screenshot` | `audit_code?` | read-only capture, no confirmation | ExecResult with `detail` = base64 JPEG (Pillow `ImageGrab`, ≤1600px, quality 70, **entirely in memory — zero disk writes**, v2.0 pass-1) |
 | `exec.list_apps` | `audit_code?` | none — read-only running-process report (STT-2, no confirmation gate) | ExecResult; `detail` = the process list (whitelisted exes carry their owner display name, gap-ج) |
 | `exec.volume` | `action` (mute/unmute/up/down/set), `level?`, `audit_code?` | none — key-event effect (VK_VOLUME_* via ctypes user32, $0.00) | ExecResult; set-X% = X/2 VOLUME_UP presses (Windows steps 2%) |
@@ -59,7 +59,7 @@ Envelopes (both directions after auth):
 | `exec.screen_ocr` | `audit_code?` | read-only capture + vision extraction | ExecResult; `detail` = verbatim code/text extraction (the OCR prompt forbids conversational filler) |
 | `file.upload` | `name`, `payload` (bytes), `audit_code?` | basename-only sanitize (`sanitize_filename`); lands in the FIRST file root (Downloads) | ExecResult; traversal/absolute names reduce to the basename — the root decides location |
 | `file.download` | `path`, `audit_code?` | `resolve_in_roots` (traversal/absolute-outside refused); sensitive suffixes blocked | ExecResult; `detail` = base64 of the file bytes |
-| `power` | `action`, `confirmation_id` (MANDATORY), `audit_code?` | action in whitelist AND id present — ALWAYS, regardless of any whitelist flag | ExecResult |
+| `power` | `action`, `confirmation_id` (MANDATORY), `audit_code?` | action in whitelist AND a VERIFIED id — ALWAYS, regardless of any whitelist flag (F-2) | ExecResult |
 | `wol` | `mac`, `ip?=255.255.255.255`, `port?=9` | stateless UDP, one sendto, SO_BROADCAST | ExecResult |
 | `telemetry.state` | — | none — read-only snapshot | `LiveState` (`bridge/telemetry.py`); unmeasurable metrics arrive `null`, never a crash |
 | `openclaw.browse` | `action` (navigate/snapshot/click/type/scroll), `params` | browser backend bound (isolated Sara profile); missing wheels → honest error, never a fake page | ExecResult; `detail` = JSON observation (`{ok,url?}` / `{ok,handles[]}`); audit code always |
@@ -81,7 +81,12 @@ Telegram (CLAUDE.md rule 4; no exceptions, no bypass). Missing executable → de
 
 ## 3. Confirmation ID + audit code lifecycle
 
-- `confirmation_id = uuid4().hex[:12]` — minted core-side at approval time.
+- `confirmation_id = "cfm1." + <epoch issued_at> + "." + <8 hex nonce> + "." + <16 hex MAC>`
+  — minted core-side at approval time (`bridge.executor.mint_confirmation_id`).
+  F-2 replaced the old `uuid4().hex[:12]`, which was an unsigned string ANY sender
+  could invent. The MAC is `HMAC-SHA256(BRIDGE_TOKEN, "cfm1.<issued>.<nonce>")[:16]`
+  over the shared core↔daemon secret — no new secret, no new knob. The whole
+  string is filename-safe (it is part of the note's name).
 - `audit_code = "PC-" + YYYYMMDD + "-" + HHMMSS + "-" + 4hex`
   (`bridge.executor.mint_audit_code`).
 - ONE audit code chains the whole event: Confirmations note → command args →
@@ -90,15 +95,27 @@ Telegram (CLAUDE.md rule 4; no exceptions, no bypass). Missing executable → de
   command leaves the core — approval without audit is void.
 - The daemon refuses unconfirmed non-whitelisted commands even from a compromised core
   (defense in depth: the guard re-checks on the PC side).
+- **F-2 — what "verified" means, and what it does not.** The daemon has no vault
+  client, so the note is the audit trail and NOT the enforcement point
+  (`bridge.executor.verify_confirmation_id` is). Refused: a MAC that does not
+  recompute (any forged shape, including the old 12-hex one), an `issued_at` older
+  than the TTL (10 min — the core's `PENDING_TTL` and the daemon's
+  `CONFIRMATION_TTL` are now one value), a second use of one approval (in-memory
+  single-use set), and any id at all when no shared secret is reachable
+  (fail-closed). NOT refused, stated rather than implied: a restart clears the
+  single-use set, and the token is not bound to a target, so a captured LIVE token
+  can be replayed against a different app inside the TTL window.
 
 ## 4. Data-model schemas (vault records)
 
-Confirmations note — `Confirmations/YYYY-MM-DD_<id8>.md`:
+Confirmations note — `Confirmations/YYYY-MM-DD_<nonce8>.md` (`<nonce8>` is the signed id's random
+nonce, not its first 8 characters — a signed id starts with the fixed `cfm1.` prefix, so `[:8]`
+would name every same-day note identically and `upsert` would overwrite the previous approval):
 
 ```yaml
 ---
 type: pc-confirmation
-confirmation_id: <uuid4 hex, 12 chars>
+confirmation_id: <cfm1 token: epoch.nonce.MAC>
 audit_code: <PC-YYYYMMDD-HHMMSS-4hex>
 kind: launch|power
 target: <app name | power action>

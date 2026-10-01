@@ -3,8 +3,15 @@
 Layer 1 (core): `src/openclaw/plans.py` PARKs DAGs with irreversible ops
 lacking confirmation. Layer 2 (THIS module, daemon side): every op is
 re-classified from its own (kind, target, value, verify) — the wire claim
-is evidence, never authority — and execution requires a live
+is evidence, never authority — and execution requires a VERIFIED
 confirmation_id for anything committing.
+
+F-2: "verified" is no longer "non-empty". `authorize` delegates to
+`bridge.executor.verify_confirmation_id` — the id must carry a valid MAC over
+the shared core<->daemon secret, be unexpired, and be unused (see that
+function's docstring for the guarantees it keeps and the two it does not).
+The classifier stays static and deterministic; the only process state in this
+path is the verifier's TTL-pruned single-use set.
 
 Classes mirror `04_Resources/Knowledge_Bases/OpenClaw/
 Reversibility_and_Safety_Boundaries.md` 1:1. Unclear defaults UP.
@@ -13,10 +20,12 @@ Reversibility_and_Safety_Boundaries.md` 1:1. Unclear defaults UP.
 from __future__ import annotations
 
 import re
+from datetime import UTC, datetime
 from typing import Final, Literal
 
 from loguru import logger
 
+from bridge.executor import verify_confirmation_id
 from bridge.openclaw.hotkeys import SAFE_HOTKEY_SPECS
 from bridge.openclaw.protocol import Op, OpKind
 
@@ -71,7 +80,9 @@ def _forbidden_text(op: Op) -> str | None:
 
 class SafetyCircuitBreaker:
     """Stateless classifier + fail-closed authorizer (all static: no
-    per-process state to leak between turns)."""
+    per-process state to leak between turns — the verifier's TTL-pruned
+    single-use set is the only state on this path, and it is a security
+    control, not conversational memory)."""
 
     @staticmethod
     def classify(op: Op) -> Reversibility:
@@ -111,10 +122,20 @@ class SafetyCircuitBreaker:
         )
 
     @staticmethod
-    def authorize(op: Op, confirmation_id: str | None) -> bool:
-        """Fail-closed: forbidden raises, irreversible needs a live id,
-        reversible always passes."""
+    def authorize(
+        op: Op, confirmation_id: str | None, *, confirm_key: str | None = None, now_fn=None
+    ) -> bool:
+        """Fail-closed: forbidden raises, irreversible needs a VERIFIED id,
+        reversible always passes.
+
+        F-2: it stays a STATIC method (five call sites, two of them in
+        `scripts/`, invoke it off the class), so the new seams are
+        keyword-only: `confirm_key` overrides the shared core<->daemon secret
+        (`None` resolves it at call time, which is how the daemon runs) and
+        `now_fn` is the repo's clock seam for the expiry guard.
+        """
         verdict = SafetyCircuitBreaker.classify(op)  # raises on forbidden
         if verdict == "reversible":
             return True
-        return bool((confirmation_id or "").strip())
+        now = now_fn() if now_fn is not None else datetime.now(UTC)
+        return verify_confirmation_id(confirmation_id, secret=confirm_key, now=now).ok

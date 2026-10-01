@@ -8,7 +8,7 @@ import asyncio
 from loguru import logger
 
 from bridge.daemon import BridgeDaemon
-from bridge.executor import Executor
+from bridge.executor import Executor, default_open_roots
 from bridge.guard import Guard
 from bridge.openclaw.actuator import DesktopActuator, PyWinAutoBackend
 from bridge.openclaw.controller import OpenClawController
@@ -72,6 +72,12 @@ async def main() -> int:
                 Path("data/inbox"),
             ),
             blocked_suffixes=(".key", ".pem", ".env", ".p12", ".kdbx"),
+            # F-3 rider (F-2 work order): the daemon STATES its open roots
+            # instead of silently inheriting the Executor's implicit seed. The
+            # set is this machine: the owner's home (Desktop, Documents,
+            # Pictures, Downloads all live under it), this checkout, and the
+            # daemon's working directory.
+            open_roots=default_open_roots(),
         ),
         sessions=sessions,
         openclaw=openclaw,

@@ -7,20 +7,22 @@ memory.remember — the brain never meets a confirmation turn it can't see."""
 
 from __future__ import annotations
 
-import uuid
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from enum import StrEnum
 from typing import ClassVar
 
 from loguru import logger
 
-from bridge.executor import mint_audit_code
+from bridge.executor import CONFIRMATION_TTL, mint_audit_code, mint_confirmation_id
 from common.consent import is_affirmative
 from src.bridge_server import BridgeOffline
 from src.vault import AUDIT_DIR, CONFIRMATIONS_DIR, VaultClient, write_frontmatter
 
-PENDING_TTL = timedelta(minutes=10)
+# F-2: ONE TTL, defined on the side that ENFORCES it (the daemon refuses an
+# expired id) and imported here, so the window the coordinator honours and the
+# window the daemon applies can never drift apart.
+PENDING_TTL = CONFIRMATION_TTL
 LEDGER_PATH = f"{AUDIT_DIR}/pc-ledger.md"
 
 UNKNOWN_APP_AR = "«{}» مش موجود بالقائمة المعتمدة — اسمه مش مسجّل عندي."
@@ -274,23 +276,40 @@ class PCActionCoordinator:
         return action if await self._confirm_and_execute("power", action) else None
 
     async def _confirm_and_execute(self, kind: str, target: str) -> str | None:
-        confirmation_id = uuid.uuid4().hex[:12]
+        now = datetime.now(UTC)
+        # F-2: the id is a SIGNED, expiring token, not a bare uuid — the daemon
+        # verifies it against the shared core<->daemon secret, which is the
+        # only place it can be verified (it has no vault client to read this
+        # note back through). No secret, no id: refuse rather than send one.
+        confirmation_id = mint_confirmation_id(now=now)
         audit_code = mint_audit_code()
-        path = f"{CONFIRMATIONS_DIR}/{datetime.now(UTC):%Y-%m-%d}_{confirmation_id[:8]}.md"
+        if not confirmation_id:
+            line = "ما قدرت أسجّل تأكيدك — مفتاح التأكيد مو مضبوط عندي. قل لي من جديد."
+            await self._ledger(audit_code, kind, "refused", "confirmation signing key unreachable")
+            await self._notifier.notify(line)
+            self._remember("assistant", line)
+            return None
+        # The note is named by the token's NONCE, not by its first 8 characters:
+        # a signed id starts with the fixed version prefix "cfm1.", so `[:8]`
+        # would name every same-day note identically and `upsert` would
+        # OVERWRITE the previous approval — weakening the audit trail this note
+        # exists to be. The nonce is 8 random hex per mint.
+        nonce = confirmation_id.split(".")[2]
+        path = f"{CONFIRMATIONS_DIR}/{now:%Y-%m-%d}_{nonce}.md"
         meta = {
             "type": "pc-confirmation",
             "confirmation_id": confirmation_id,
             "audit_code": audit_code,
             "kind": kind,
             "target": target,
-            "confirmed_at": datetime.now(UTC).isoformat(),
+            "confirmed_at": now.isoformat(),
         }
         # the note lands BEFORE the command leaves: an approval without a persisted
         # audit trail is void
         await self._vault.upsert(
             path,
             write_frontmatter(meta, f"# {kind}: {target}\n\nسجل تأكيد مالك.\n"),
-            message=f"sara: pc confirmation {confirmation_id[:8]}",
+            message=f"sara: pc confirmation {nonce}",
         )
         if kind == "launch":
             result = await self._send(

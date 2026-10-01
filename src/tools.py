@@ -591,9 +591,14 @@ class ToolRegistry:
 
     async def _do_open_path(self, arg: str) -> str:
         """Step 10 — the orphaned exec.open verb gets its core caller: open a
-        file/folder on the PC. Read-equivalent (reversible); the daemon's own
-        shape walls (no UNC, no traversal, executables forced through the app
-        whitelist) stay authoritative — this lane adds no checks of its own."""
+        file/folder on the PC. Read-equivalent (reversible); this lane adds no
+        check of its own, because the daemon owns the walls — and since F-3
+        there ARE walls behind this verb: `bridge/executor.py::open_path`
+        refuses a double-click equivalent via `OPEN_BLOCKED_SUFFIXES` (a
+        `.lnk`/`.url`/`.jar`/`.exe` open is a launch, routed to the app
+        whitelist) and refuses anything outside `open_roots=` (component-wise
+        containment). A confirmation id — forged or genuine — moves a path past
+        neither."""
         path = (arg or "").strip()
         if not path:
             return "شو الملف اللي بدك أفتحه؟ قولي اسمه."

@@ -127,6 +127,44 @@ class Notifier:
         self.sent.append(text)
 
 
+class TunnelDouble:
+    """The in-process daemon edge: the coordinator's `send_cmd` dispatches to the
+    REAL executor (spawn edge spied), so the wire shape is exercised, not
+    assumed."""
+
+    def __init__(self, executor: Executor) -> None:
+        self.executor = executor
+        self.commands: list[tuple[str, dict]] = []
+
+    async def send_cmd(self, cmd, args, *, timeout_s=20.0):
+        self.commands.append((cmd, dict(args)))
+        if cmd == "exec.launch":
+            out = await self.executor.launch(
+                args["name"],
+                confirmation_id=args.get("confirmation_id"),
+                audit_code=args.get("audit_code"),
+            )
+        elif cmd == "exec.close":
+            out = await self.executor.close(
+                args["name"],
+                confirmation_id=args.get("confirmation_id"),
+                audit_code=args.get("audit_code"),
+            )
+        else:
+            out = await self.executor.power(
+                args["action"],
+                confirmation_id=args["confirmation_id"],
+                audit_code=args.get("audit_code"),
+            )
+        return out.model_dump()
+
+
+def _vault() -> tuple[VaultClient, FakeGitHub]:
+    gh = FakeGitHub()
+    session = httpx.AsyncClient(transport=gh.transport, base_url="https://api.github.com")
+    return VaultClient("owner/vault-repo", VAULT_TOKEN, session=session), gh
+
+
 def _whitelist(tmp_path: Path, apps: list[dict]) -> str:
     data = dict(WHITELIST, allowed_apps=apps)
     path = tmp_path / "whitelist.json"
@@ -251,36 +289,23 @@ async def test_a_genuine_token_is_accepted_by_all_three_executor_sites(tmp_path:
     assert len(spy.calls) == 3
 
 
-async def test_a_genuine_id_minted_through_the_real_coordinator_is_accepted(tmp_path: Path):
+async def test_a_genuine_id_minted_through_the_real_coordinator_is_accepted(
+    tmp_path: Path, monkeypatch
+):
     """The real path end to end: the owner asks -> prompt -> «نعم» -> the core
     mints AND SIGNS the id, writes the note, forwards it over `exec.*` — and
     the executor, which verifies rather than trusts, executes. Nothing is
-    stubbed except the OS spawn edge and the vault transport."""
-    gh = FakeGitHub()
-    session = httpx.AsyncClient(transport=gh.transport, base_url="https://api.github.com")
-    vault = VaultClient("owner/vault-repo", VAULT_TOKEN, session=session)
-    executor, spy = _executor(tmp_path)
-    commands: list[tuple[str, dict]] = []
+    stubbed except the OS spawn edge and the vault transport.
 
-    class Tunnel:
-        async def send_cmd(self, cmd, args, *, timeout_s=20.0):
-            commands.append((cmd, dict(args)))
-            if cmd == "exec.launch":
-                out = await executor.launch(
-                    args["name"],
-                    confirmation_id=args.get("confirmation_id"),
-                    audit_code=args.get("audit_code"),
-                )
-            else:
-                out = await executor.power(
-                    args["action"],
-                    confirmation_id=args["confirmation_id"],
-                    audit_code=args.get("audit_code"),
-                )
-            return out.model_dump()
+    The env carries the same secret the executor is given, because that is what
+    production is: one shared `BRIDGE_TOKEN`, two processes."""
+    monkeypatch.setenv("BRIDGE_TOKEN", KEY)
+    vault, gh = _vault()
+    executor, spy = _executor(tmp_path)
+    tunnel = TunnelDouble(executor)
 
     notifier = Notifier()
-    coordinator = PCActionCoordinator(Tunnel(), vault, notifier)
+    coordinator = PCActionCoordinator(tunnel, vault, notifier)
     assert await coordinator.request_launch("steam", origin="owner_chat") == (
         LaunchStatus.CONFIRMATION_REQUIRED
     )
@@ -288,7 +313,7 @@ async def test_a_genuine_id_minted_through_the_real_coordinator_is_accepted(tmp_
 
     assert await coordinator.handle_owner_reply("نعم") == "steam"
     assert spy.calls, "a genuine id must reach the spawn edge"
-    sent_id = commands[-1][1]["confirmation_id"]
+    sent_id = tunnel.commands[-1][1]["confirmation_id"]
     assert sent_id.startswith(f"{CONFIRMATION_VERSION}."), sent_id
     notes = [p for p in gh.objects if p.startswith(CONFIRMATIONS_DIR)]
     assert len(notes) == 1, "the audit note is still the trail — one note, unchanged"
@@ -303,18 +328,16 @@ async def test_the_core_refuses_rather_than_mint_an_unverifiable_id(monkeypatch,
     no command on the wire, and no audit note for a confirmation that never
     became one."""
     monkeypatch.setattr("bridge.executor.confirmation_secret", lambda: "")
-    gh = FakeGitHub()
-    session = httpx.AsyncClient(transport=gh.transport, base_url="https://api.github.com")
-    vault = VaultClient("owner/vault-repo", VAULT_TOKEN, session=session)
+    vault, gh = _vault()
     sent: list[tuple[str, dict]] = []
 
-    class Tunnel:
+    class RecordingTunnel:
         async def send_cmd(self, cmd, args, *, timeout_s=20.0):
             sent.append((cmd, dict(args)))
             return {"status": "ok", "detail": "executed", "audit_code": "PC-1"}
 
     notifier = Notifier()
-    coordinator = PCActionCoordinator(Tunnel(), vault, notifier)
+    coordinator = PCActionCoordinator(RecordingTunnel(), vault, notifier)
     assert await coordinator.request_power("sleep", origin="owner_chat") == (
         LaunchStatus.CONFIRMATION_REQUIRED
     )
@@ -322,6 +345,26 @@ async def test_the_core_refuses_rather_than_mint_an_unverifiable_id(monkeypatch,
     assert sent == [], "no command may leave without a verifiable id"
     assert not [p for p in gh.objects if p.startswith(CONFIRMATIONS_DIR)]
     assert any("مفتاح" in msg for msg in notifier.sent), notifier.sent
+
+
+async def test_two_confirmations_on_one_day_keep_two_notes(tmp_path: Path, monkeypatch):
+    """The audit trail must not be weakened by the new id shape. A signed id
+    begins with the fixed `cfm1.` version prefix, so naming the note by the id's
+    first 8 characters gives every same-day note the SAME name — and `upsert`
+    overwrites. Two approvals, two notes: that is the invariant."""
+    monkeypatch.setenv("BRIDGE_TOKEN", KEY)
+    vault, gh = _vault()
+    executor, _spy = _executor(tmp_path)
+    coordinator = PCActionCoordinator(TunnelDouble(executor), vault, Notifier())
+    for _ in range(2):
+        assert await coordinator.request_power("sleep", origin="owner_chat") == (
+            LaunchStatus.CONFIRMATION_REQUIRED
+        )
+        assert await coordinator.handle_owner_reply("نعم") == "sleep"
+    notes = sorted(p for p in gh.objects if p.startswith(CONFIRMATIONS_DIR))
+    assert len(notes) == 2, notes
+    ids = {split_frontmatter(gh.objects[path][1])[0]["confirmation_id"] for path in notes}
+    assert len(ids) == 2, "one note was overwritten"
 
 
 # -- 3. expiry -----------------------------------------------------------------------
@@ -336,7 +379,13 @@ async def test_executor_refuses_an_expired_id_with_an_injected_clock(tmp_path: P
 
     assert (await executor.power("sleep", confirmation_id=token)).status == "ok"
     clock.advance(CONFIRMATION_TTL - timedelta(seconds=1))
-    assert verify_confirmation_id(token, secret=KEY, now=clock()).ok is True
+    # a second approval minted at the same instant is still inside the window
+    assert (
+        verify_confirmation_id(
+            mint_confirmation_id(now=START, secret=KEY), secret=KEY, now=clock()
+        ).ok
+        is True
+    )
     clock.advance(timedelta(seconds=2))
     expired = await executor.power("shutdown", confirmation_id=token)
     assert expired.status == "error" and "expired" in expired.detail
@@ -415,9 +464,20 @@ def test_the_shared_secret_falls_back_to_settings(monkeypatch):
     `src/config.py` reads it from the `.env` FILE (the daemon already calls
     `get_settings()` for the same token). So the resolver must ask Settings too,
     or the daemon refuses every genuine confirmation in production while a dev
-    box with a `.env` stays green."""
+    box that owns a `.env` stays green. The Settings double keeps this hermetic:
+    CI runs the suite with no `.env` at all."""
     monkeypatch.delenv("BRIDGE_TOKEN", raising=False)
-    assert confirmation_secret(), "Settings fallback must resolve the daemon's secret"
+
+    class _Token:
+        @staticmethod
+        def get_secret_value() -> str:
+            return "your-settings-bridge-token"
+
+    class _Settings:
+        bridge_token = _Token()
+
+    monkeypatch.setattr("src.config.get_settings", lambda: _Settings())
+    assert confirmation_secret() == "your-settings-bridge-token"
 
     def _boom():
         raise RuntimeError("no settings reachable")
@@ -430,12 +490,17 @@ def test_the_shared_secret_falls_back_to_settings(monkeypatch):
 
 
 def test_no_truthiness_shortcut_survives_in_the_bridge():
-    """`git grep -n "if not confirmation_id" bridge/` must be empty — and so
-    must the second shape the pre-F-2 code used at all three executor sites."""
+    """`git grep -n "if not confirmation_id" bridge/` must be empty, and so must
+    the second gate shape the pre-F-2 executor used at all three sites. Both
+    GATES are named; the verifier's own `(confirmation_id or "").strip()`
+    input normalization is deliberately not a hit — it decides nothing, it only
+    turns None/blank into a string the grammar check can reject."""
     for rel in ("bridge/executor.py", "bridge/openclaw/breaker.py"):
         source = (ROOT / rel).read_text(encoding="utf-8")
         assert "if not confirmation_id" not in source, rel
-        assert '(confirmation_id or "").strip()' not in source, rel
+        assert "if not (confirmation_id" not in source, rel
+        assert "not (confirmation_id or" not in source, rel
+        assert "return bool((confirmation_id" not in source, rel
 
 
 # -- 7. the two riders ---------------------------------------------------------------
