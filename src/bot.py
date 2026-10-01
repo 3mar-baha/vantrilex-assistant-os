@@ -192,7 +192,17 @@ def make_bridge_greeter(*, bot, chat_id: int, gateway, vault=None, tzname: str =
     last_greet, so the next reconnect retries) — never a canned string."""
 
     async def _greet() -> None:
-        system = SARA_PERSONA_AR
+        # F-6 follow-up (owner decision 2026-10-01): the greeter is the THIRD
+        # owner-visible persona surface and was the LAST one still speaking MSA
+        # while Telegram and Terminal 1 spoke ar-JO. Unified on the BUILDER, not
+        # on a copied literal — a literal here would be a second source of truth,
+        # which is the drift this removes. The identity core is still
+        # byte-identical (`build_persona_joda` STARTS with it), so every
+        # byte-locked persona law is untouched. ONLY the system prompt changed:
+        # the greeting's own words, below, are the owner's and were NOT reworded,
+        # and are frozen byte-for-byte by
+        # tests/test_greeter_persona_parity.py::test_the_greeting_instruction_bytes_are_unchanged.
+        system = build_persona_joda()
         if vault is not None:
             try:
                 excerpt = " ".join((await vault.read("02_Areas/Profile/User_Info.md")).split())

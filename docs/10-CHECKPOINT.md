@@ -2677,7 +2677,9 @@ in F-6 opened a new P1 item.
 ### 1 — One assistant, one prompt (owner decision 2026-10-01: UNIFY)
 
 `src/bot.py:616` now calls `build_persona_joda()`, the same builder
-`src/bot_shell.py` uses. Rationale: ar-JO **is** Sara's voice, and the split
+`src/bot_shell.py` uses *(re-derived: the line is `src/bot.py:656` after the
+2026-10-01 follow-up below absorbed the greeter; 616 was true for the tree this
+milestone measured)*. Rationale: ar-JO **is** Sara's voice, and the split
 looked accidental. The identity core is untouched — `build_persona_joda()`
 *starts with* it, so every byte-locked persona law still holds, and
 `tests/test_persona_lines.py` stayed GREEN without being edited.
@@ -2812,26 +2814,170 @@ the pre-existing free-provider noise and were **not** weakened.
 
 ### Carried forward from F-6
 
-* **`make_bridge_greeter` (`src/bot.py:195`) is a THIRD persona surface and is
-  still core-only.** Measured: it assigns `SARA_PERSONA_AR` directly, so the
-  reconnect greeting runs on the bare identity core while Telegram's chat lane
-  now runs the composed prompt. It was **not** changed: the work order named one
-  line, and altering greeting style is an owner-visible change that was not
-  ordered. It is reported, not silently absorbed.
-* **`src/bot_shell.py:33` cites `src/bot.py:615`** for the system-prompt seam.
-  That reference was already off by one before this work order and is further
-  from the truth now. `src/bot_shell.py` is outside the write-set, so it stands.
-* **Three test files outside the write-set were edited, deliberately and
-  declared:** `tests/suite/tier1_resilience/test_phase6_integration.py` and
+* **CLOSED 2026-10-01 (F-6 follow-up) — the greeter is no longer a fourth voice.**
+  `make_bridge_greeter` (`src/bot.py:188`; its prompt line is `:205`) now builds
+  its system prompt with `build_persona_joda()`, so all **three** owner-visible
+  surfaces — Telegram, Terminal 1, and the reconnect greeting — send one composed
+  prompt. The identity core is still byte-identical (the builder *starts with* it)
+  and `src/persona.py` was **not touched**: `git hash-object` is
+  `8b972942e785880a3de66121e7f808666250ed2f` before and after.
+  * **Direction of the defect, stated plainly:** the greeter was not missing a
+    feature; it was the LAST surface still speaking MSA. MEASURED, the unified
+    prompt is **12 lines / 585 characters longer** than the core alone (1 line ->
+    13 lines: identity core + the JODA ar-JO exemplar block), so the greeting
+    the owner reads will change **in register**, not in content: the instruction
+    at `src/bot.py:218-219` is untouched and still asks for one or two warm
+    sentences naming the time of day and the return, and Sara's words are
+    generated, never a template. **This is an owner-visible change and it is the
+    authorised one** — F-6 already shipped the same change for Telegram. It is
+    reported, not shipped quietly.
+  * **The profile garnish survived, both directions guarded.** The vault read of
+    `02_Areas/Profile/User_Info.md`, the Arabic header and the 500-char
+    whitespace-collapsed cap are all byte-identical, and a read that raises
+    still logs and degrades to the bare composed prompt so the owner gets his
+    greeting. Mutant `b` deleted the garnish — 3 garnish guards RED, plus both
+    citation guards incidentally (the deletion moved `bot.py`'s lines); mutant
+    `c` made the failure fatal — 1 guard RED.
+  * **The greeting's own words are now FROZEN, not merely left alone.**
+    `test_the_greeting_instruction_bytes_are_unchanged` pins the instruction
+    byte-for-byte, so the next editor cannot reword it silently — it has to fail
+    the build. Mutant `d` reworded it and went RED.
+* **CLOSED 2026-10-01 (F-6 follow-up) — `src/bot_shell.py`'s citations.** The
+  carried-forward bullet said `src/bot_shell.py:33` cites `src/bot.py:615` and
+  that `src/bot_shell.py` was outside the write-set. It is now inside it, and
+  the check widened to **every** `file:line` in that docstring. **All four were
+  stale**, claimed vs re-derived from the tree:
+
+  | Claimed | Actual | What is actually on that line now |
+  |---|---|---|
+  | `src/dispatcher.py:744` | `src/dispatcher.py:805` | `class FrontDoorDispatcher` |
+  | `:824` | `src/dispatcher.py:885` | `async def handle` |
+  | `src/dispatcher.py:1076` | `src/dispatcher.py:1159` | `def _plain_messages` |
+  | `src/bot.py:615` | `src/bot.py:654` | `system = build_persona_joda()` (615 is `*,` — a parameter marker) |
+
+  `src/bot.py:654` is measured **after** the greeter edit, which added 10 lines
+  above it — so the `644` quoted in the work order was stale by the time it could
+  be written, and an earlier draft of this change (a 12-line comment) put it at
+  `656`. That is not sloppiness, it is the reason the numbers are now guarded
+  rather than trusted. The claimed-vs-actual numbers are deliberately **not**
+  restated in the docstring: a stale `file:line` is a false claim about the code
+  and does not belong there even labelled as history.
+* **Three test files outside the write-set were edited during F-6, deliberately
+  and declared:** `tests/suite/tier1_resilience/test_phase6_integration.py` and
   `tests/test_bot_shell.py` (re-anchors, plus two coordinator doubles gaining
   `pending_open()` — additive, return values and assertions unchanged).
-  `tests/test_persona_lines.py` was **read and left untouched**.
+  `tests/test_persona_lines.py` was **read and left untouched**, then re-run
+  GREEN by the follow-up as well.
 * **Alias coverage will drift when the owner installs new apps.** That is the
   point of naming the uncovered set — the guard will name the change rather
   than let the number move silently.
 * **`tests/test_coverage_gaps_p62.py::test_pending_expiry_clears_state` is a
   witness that `pending_active()` did not change meaning.** It stayed GREEN
   untouched, which is the evidence.
+
+#### F-6 follow-up mutation table (Directive 5 — every mutant SEEN red, every restore sha256-verified)
+
+| # | Mutant | Guard(s) that went RED | Restore |
+|---|---|---|---|
+| a | greeter reverted to `SARA_PERSONA_AR` | 4 — parity, not-the-core, garnish, degradation | `1a0f5473…` ✓ |
+| b | profile garnish deleted | 5 — incl. both citation guards (the deletion moved `bot.py`'s line) | `1a0f5473…` ✓ |
+| c | vault read failure made fatal | 1 — `test_a_failing_profile_read_still_degrades_to_a_greeting` | `1a0f5473…` ✓ |
+| d | the owner's greeting line reworded | 3 — wording freeze + both citation guards (one line shorter) | `1a0f5473…` ✓ |
+| e | stale citation restored (`dispatcher:744` / `:824`) | 1 — `test_every_docstring_line_citation_points_at_the_symbol_it_names` | `df572d31…` ✓ |
+| f | stale citation restored (`dispatcher:1076`) | 1 — same guard | `df572d31…` ✓ |
+| g | stale citation restored (`bot.py:615`) | 2 — citation guard + Telegram-lane guard | `df572d31…` ✓ |
+| h | Telegram citation slid onto the greeter's call site (`bot.py:205`) | 1 — Telegram-lane guard **only**; the plain anchor check passed it, which is exactly why that second guard exists | `df572d31…` ✓ |
+| i | the `bot.py` citation deleted outright | 2 — orphaned anchor + missing-citation | `df572d31…` ✓ |
+
+Nine of nine were RED. Two mutants were **expected** to leave the citation
+guards GREEN and did: `a` (a one-for-one line swap moves nothing) and `c` (two
+lines replaced by two). Mutants `b` and `d` incidentally moved `bot.py`'s line
+count and tripped the citation guards too — which is the point: those numbers are
+claims about the tree, not decoration.
+
+Every restore wrote the **captured bytes** back and was sha256-verified; the
+F-6 harness's restore bug (re-read instead of restore, asserting a stale sha) is
+not repeated.
+
+#### Two guards were GREEN before the fix, and say so on their face
+
+* `test_the_greeting_instruction_bytes_are_unchanged` is a **freeze** on the
+  owner's wording. It must be green on both trees; a freeze that could go red on
+  the current tree would be pinning a bug (Directive 5).
+* `test_the_profile_garnish_is_truncated_not_dropped` guards the 500-character
+  cap, which does not depend on which builder is called — the old core-only
+  prompt carried the garnish just as well.
+
+Both are reported as GREEN, not dressed up as RED evidence.
+
+#### Measured results (this follow-up)
+
+```
+tests/test_persona_lines.py                 2 passed   (GREEN, never edited)
+tests/test_greeter_persona_parity.py        8 passed
+full suite (excl live_harness)  2755 passed / 4 skipped / 1 xfailed / 0 failed
+  same suite before this change 2746 passed / 5 skipped / 1 xfailed / 0 failed
+tiered coverage        PASSED — TOTAL 92.39% (>= 90.0%), every CORE module OK
+ruff check                        All checks passed
+ruff format --check               436 files already formatted
+security_gate.py                  Security Gate OK (bandit + secret scan)
+docs_guard.py                     Docs Guard OK — 16 canonical files present
+git hash-object src/persona.py     8b972942e785880a3de66121e7f808666250ed2f
+                                   — identical before and after
+```
+
+Suite counts are derived from the tree, never from memory. **+8** is exactly the
+new file. The **9th** test is run-to-run variance in the live free-provider
+probes, not a change of any kind. `-rs` names every skip on this box: bridge
+offline, bridge daemon offline, live brain models exhausted, OmniRoute clone not
+fetched. Measured in isolation: `tests/live_probe/` → `7 passed, 1 skipped`;
+`tests/suite/tier2_live_probes/` + `tests/test_packaging.py` → `18 passed,
+3 skipped`; total **4**, which is what the full run reports. The earlier
+pre-change run reported 5, so one of those live probes did not fire on it —
+those probes skip or pass depending on whether a free provider answers. Zero new
+failures. The 2 `live_harness` flakes (`test_h04_ttft_monitor`,
+`test_h06_joda_dialogues`) surfaced again inside
+`check_tiered_coverage.py`, which does not exclude that directory — they are the
+pre-existing free-provider noise named in the work order and were **not**
+weakened.
+
+#### STALE CITATIONS FOUND BUT NOT FIXED — outside the write-set, reported not absorbed
+
+`tests/test_bot_shell_dialect.py` carries **seven** more stale `file:line`
+citations, all in its own docstrings. `tests/test_bot_shell_dialect.py` is not
+in this work order's write-set (which allowed `src/bot.py`'s greeter,
+`src/bot_shell.py`'s docstring, ONE new test file and this file), so they are
+reported rather than edited. Nothing here is asserted by any guard, so none of it
+fails the build — it is all prose.
+
+| Line in that file | Claimed | Actual |
+|---|---|---|
+| 4 | `src/bot_shell.py:90` calls `self._front_door.handle(...)` | `src/bot_shell.py:124` (**was** 117 before this follow-up — already stale; this change widened the gap by 7, see below) |
+| 5 | `src/dispatcher.py:1073` = `_plain_messages` | `src/dispatcher.py:1159` |
+| 8 | `src/bot.py:615` builds the persona | `src/bot.py:654` (615 is `*,`) — **F-6 made this stale**, not this follow-up |
+| 9 | `:689` passes `handle(..., system=system)` | `src/bot.py:728` |
+| 22 | `tests/test_bot_shell_repl.py:163` asserted the blanket ban | line 163 is a docstring closer; the assertion is at `:166-168` |
+| 225 | `src/dispatcher.py:828` = `FrontDoorDispatcher.handle` | `src/dispatcher.py:885` |
+| 225 | `src/bot.py:689` Telegram call site | `src/bot.py:728` |
+
+**This follow-up made one of them worse and it is stated rather than buried:**
+editing `src/bot_shell.py`'s docstring added 7 lines, moving
+`self._front_door.handle` from 117 to 124. The citation was already wrong (90),
+so this is not a new defect, but the gap grew. Avoiding it was not possible: the
+work order requires the docstring edit.
+
+The durable answer is not another hand-correction — it is extending the guard in
+`tests/test_greeter_persona_parity.py` to cover that file's docstrings too, which
+is a **third work order**. Ordered here, not started.
+
+#### Write-set
+
+Touched: `src/bot.py` (the greeter's system-prompt line + its comment),
+`src/bot_shell.py` (module docstring only — no code), ONE new test file
+(`tests/test_greeter_persona_parity.py`), `docs/10-CHECKPOINT.md`. Nothing else.
+`src/persona.py` hash-verified untouched. `tests/test_persona_lines.py` read and
+left untouched. No new environment variable and no new configuration knob. Zero
+new packages.
 
 ## Owner decisions — 2026-10-01 (authoritative ledger entries)
 

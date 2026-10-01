@@ -1,11 +1,14 @@
 """F-6 follow-up (2026-10-01) — the reconnect greeter is the THIRD persona
 surface, so "one assistant, one prompt" was not literally true yet.
 
-MEASURED, not assumed: `src/bot.py:195` assigned `SARA_PERSONA_AR` — the
-byte-locked identity CORE — straight into the greeter's system message, while
-Telegram's chat lane (`src/bot.py:644`) and Terminal 1 (`src/bot_shell.py`'s
-`TERMINAL_SYSTEM_PROMPT`) both ran `build_persona_joda()`. The defect was not a
-missing feature; it was that the greeter was the LAST surface still speaking MSA.
+MEASURED at d34d84a, not assumed: `src/bot.py:195` assigned `SARA_PERSONA_AR`
+— the byte-locked identity CORE — straight into the greeter's system message,
+while Telegram's chat lane (`src/bot.py:644`) and Terminal 1
+(`src/bot_shell.py`'s `TERMINAL_SYSTEM_PROMPT`) both ran `build_persona_joda()`.
+Those two line numbers are a HISTORICAL measurement of that commit, not a claim
+about the tree this file now runs against — the greeter edit added 12 lines
+above them. The defect was not a missing feature; it was that the greeter was
+the LAST surface still speaking MSA.
 
 Two things this file exists to protect:
 
@@ -44,12 +47,13 @@ import re
 from collections.abc import AsyncIterator
 from pathlib import Path
 
+import pytest
+
 from src.persona import JODA_EXEMPLARS_HEADER_AR, SARA_PERSONA_AR, build_persona_joda
 from tests.conftest import OWNER_ID, FakeGateway, StreamProgram, drain, make_update
 
 ROOT = Path(__file__).resolve().parents[1]
 BOT_PY = ROOT / "src" / "bot.py"
-DISPATCHER_PY = ROOT / "src" / "dispatcher.py"
 SHELL_PY = ROOT / "src" / "bot_shell.py"
 
 # The composed prompt every owner-visible surface must send. Byte-identical
@@ -137,7 +141,11 @@ async def test_all_three_owner_surfaces_send_the_same_composed_prompt(
         stream_programs=[StreamProgram(deltas=("هلق ببدأ",))],
     )
     shell = build_shell(shell_gateway, make_settings())
-    assert await _collect(shell.turn("شو رأيك")) == ["هلق ببدأ"]
+    # The shell yields the front door verbatim: the router's ack first, then the
+    # streamed answer. Asserting only the TAIL keeps this guard about the prompt
+    # it is named for and not about the ack/stream split.
+    terminal_out = await _collect(shell.turn("شو رأيك"))
+    assert terminal_out[-1] == "هلق ببدأ", f"the turn yielded {terminal_out}"
     terminal_system = shell_gateway.stream_calls[0][0][0]["content"]
 
     # --- The greeter: driven through its own factory, no vault, no garnish ---
@@ -150,11 +158,14 @@ async def test_all_three_owner_surfaces_send_the_same_composed_prompt(
         "greeter": greeter_system,
     }
     for name, system in surfaces.items():
-        assert system.startswith(COMPOSED), (
-            f"the {name} surface does not send the composed ar-JO prompt — "
-            f"one assistant, one prompt. It sends {system[:120]!r}… which is "
-            f"{'the bare identity core (MSA)' if system == SARA_PERSONA_AR else 'neither the composed prompt nor a superset of it'}"
-        )
+        if not system.startswith(COMPOSED):
+            which = (
+                "the bare identity core (MSA)" if system == SARA_PERSONA_AR else "something else"
+            )
+            pytest.fail(
+                f"the {name} surface does not send the composed ar-JO prompt — one "
+                f"assistant, one prompt. It sends {system[:160]!r}…, which is {which}."
+            )
         assert JODA_EXEMPLARS_HEADER_AR in system, (
             f"the {name} surface carries no JODA exemplars on the wire"
         )
@@ -195,8 +206,11 @@ async def test_the_greeter_does_not_send_the_identity_core(fake_bot):
 async def test_the_profile_garnish_still_rides_the_greeting(fake_bot):
     """The personalisation is NOT collateral damage of the unification.
 
-    RED before the fix: this passes on the old code too — it is here because the
-    change sits exactly on top of it, and a guard that only exists for the
+    RED before the fix, but for the WRONG reason if you read it alone: the old
+    core-only prompt also carried the garnish, so the garnish assertions pass on
+    both trees. What was red was `system.startswith(COMPOSED)` — the greeter had
+    no composed prompt for the garnish to ride. The guard is here because the
+    change sits exactly on top of this code: a guard that only exists for the
     behaviour being fixed is a guard that dies with the next edit.
     """
     vault = VaultStub("أ عمر — مهندس برمجيات، بيشتغل من البيت.\n\n.Supports Jordan.")
@@ -222,8 +236,15 @@ async def test_the_profile_garnish_still_rides_the_greeting(fake_bot):
 
 async def test_the_profile_garnish_is_truncated_not_dropped(fake_bot):
     """The 500-character cap is a law about the owner's vault note, and a cap is
-    the kind of number that rots. Pinned by MEASURED behaviour: a 900-character
-    note must land exactly the first 500 of its collapsed form."""
+    the kind of number that rots.
+
+    MEASURED, this is GREEN on both trees — the cap does not depend on which
+    builder is called, and it is reported here as GREEN on purpose rather than
+    dressed up as RED evidence. What it pins: a 2,589-character note must land
+    exactly the first 500 characters of its whitespace-collapsed form, so a
+    future "let's be generous, 2000" is a RED here and not a silent change to
+    what Sara is told about her owner.
+    """
     long_note = " ".join(f"عنده-{i}" for i in range(300))  # > 500 chars
     assert len(long_note) > 500, "the fixture must exceed the cap to mean anything"
 
@@ -269,11 +290,13 @@ async def test_a_failing_profile_read_still_degrades_to_a_greeting(fake_bot):
 
 
 async def test_the_greeting_instruction_bytes_are_unchanged(fake_bot):
-    """The line the owner reads when his machine comes back. The owner
-    authorised the SYSTEM prompt swap; he did not authorise a new greeting.
+    """The line the owner reads when his machine comes back. The owner authorised
+    the SYSTEM prompt swap; he did not authorise a new greeting.
 
-    Pinned byte-for-byte, including the emoji-free punctuation and the trailing
-    full stop, so \"I tidied the wording\" is impossible to land silently.
+    Pinned byte-for-byte — wording, punctuation and the trailing full stop — so
+    "I tidied the wording" is impossible to land silently. This guard is GREEN
+    before the fix and GREEN after it; that is what a freeze has to do, and a
+    freeze that could go red on the current tree would be pinning a bug.
     """
     gateway = FakeGateway(router_replies=["أهلين عمر، رجعت معك!"])
     await _greeted(gateway, fake_bot())
@@ -358,7 +381,7 @@ def test_every_docstring_line_citation_points_at_the_symbol_it_names():
     citations = _citations(_module_docstring(SHELL_PY))
     assert citations, "the docstring cites no line numbers any more — re-derive this guard"
 
-    claimed: set[str] = set()
+    claimed: set[tuple[str, str]] = set()
     for path, line_no in citations:
         anchors = CITATION_ANCHORS.get(path)
         assert anchors, (

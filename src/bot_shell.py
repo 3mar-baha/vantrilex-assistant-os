@@ -1,7 +1,7 @@
 """Terminal 1 — Sara's clean chat REPL: the front door with no transport around it.
 
 This module owns PRESENTATION ONLY. Every turn is handed to `FrontDoorDispatcher`
-(`src/dispatcher.py:744`, `handle` at `:824`) and the dispatcher's deltas are
+(`src/dispatcher.py:805`, `handle` at `:885`) and the dispatcher's deltas are
 yielded back verbatim, token by token. There is deliberately no second code path:
 
   * it binds EXACTLY ONE symbol from `src.persona` — `build_persona_joda`, the
@@ -27,15 +27,23 @@ this file with `ast` and assert exactly that, so the constraint is checked
 rather than remembered.
 
 Dialect, closed (owner decision 2026-09-30): the terminal used to pass no
-`system` prompt at all. `_plain_messages` (`src/dispatcher.py:1076`) emits a
+`system` prompt at all. `_plain_messages` (`src/dispatcher.py:1159`) emits a
 system message only when `system` is truthy, so the FAST conversation call left
 the model with a bare user turn and it answered in MSA. The seam already existed
-and the Telegram route already used it (`src/bot.py:615`); the terminal never
+and the Telegram route already used it (`src/bot.py:654`); the terminal never
 supplied it. `build_shell` now takes an injected `system` and `Shell.turn`
 forwards that exact object on every turn, and `_live_shell` — the sole
 production constructor behind `sara.bat -Chat` — supplies
 `system=build_persona_joda()`. The default is the same composed prompt, so a
 future caller that forgets the keyword gets ar-JO rather than MSA.
+
+Every `file:line` number in this docstring is re-derived, not remembered:
+`tests/test_greeter_persona_parity.py` fails if one drifts off the symbol it
+names. Four of them were stale when the reconnect greeter was unified with these
+two surfaces (2026-10-01), so all four were rewritten from the tree. The
+claimed-vs-actual table lives in `docs/10-CHECKPOINT.md`; a stale `file:line`
+is a false claim about the code, and a false claim does not belong in a docstring
+even when labelled as historical.
 
 Honest failure: a turn that dies lands one Amman-colloquial line — never a
 traceback, never an exception class name, never nothing at all. What the shell
