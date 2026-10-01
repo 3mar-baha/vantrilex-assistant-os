@@ -94,12 +94,62 @@ POWER_ARGV = {
 }
 
 # double-click equivalents: opening one of these IS launching it, so it must
-# go through the app whitelist, never through open_path
-OPEN_BLOCKED_SUFFIXES = {".exe", ".bat", ".cmd", ".com", ".scr", ".msi", ".ps1", ".vbs", ".js"}
+# go through the app whitelist, never through open_path.
+# `.lnk` runs its target, `.url` navigates to an attacker-chosen page, `.jar`
+# executes, `.hta`/`.html`/`.htm` run script, `.wsf`/`.wsh` run Windows Script
+# Host. F-3: the pre-F-3 set held the first nine and let every one of these
+# through, so the set failed to match the rule stated above it.
+OPEN_BLOCKED_SUFFIXES = {
+    ".exe",
+    ".bat",
+    ".cmd",
+    ".com",
+    ".scr",
+    ".msi",
+    ".ps1",
+    ".vbs",
+    ".js",
+    ".lnk",
+    ".url",
+    ".jar",
+    ".hta",
+    ".html",
+    ".htm",
+    ".wsf",
+    ".wsh",
+}
 
 # M2 (directive §3-A): the file-drop wall. Uploads land in the FIRST root
 # (the owner's Downloads); downloads may read inside ANY listed root only.
 DEFAULT_FILE_ROOTS: tuple[str, ...] = (str(Path.home() / "Downloads"),)
+
+
+def default_open_roots() -> tuple[Path, ...]:
+    """The seed set for `open_path`'s containment wall (F-3).
+
+    It is deliberately NOT `DEFAULT_FILE_ROOTS`: that is the file-drop landing
+    zone (Downloads), and reusing it would confine every open to Downloads and
+    break the verb for the whole project. This set is the owner's own machine:
+    their home (Desktop, Documents, Pictures, Downloads all live under it), the
+    repo this bridge ships from, and the process CWD (`data/inbox` is itself
+    CWD-relative). Deduped, and never the home's PARENT -- the whole `C:/Users`
+    would "reach the home" while admitting every other profile on the box, which
+    is a containment failure dressed as convenience.
+
+    The Executor takes these as a CONSTRUCTOR ARGUMENT (`open_roots=`), not an
+    env var, following F-5's `bridge_path` precedent: the daemon's wiring in
+    `bridge/__main__.py` is the single producer, and it is the owner's own code.
+    """
+    candidates = (Path.home(), Path(__file__).resolve().parents[1], Path.cwd())
+    seen: set[str] = set()
+    roots: list[Path] = []
+    for candidate in candidates:
+        key = str(candidate).casefold()
+        if key not in seen:
+            seen.add(key)
+            roots.append(candidate)
+    return tuple(roots)
+
 
 # M2 (§3-B): Windows virtual-key codes for volume/media (ctypes user32 —
 # zero new dependency, the $0.00 invariant held).
@@ -125,11 +175,29 @@ def sanitize_filename(raw: str) -> str:
     return "" if name in {"", ".", ".."} else name
 
 
+def _under(root: Path, target: Path) -> bool:
+    """Is `target` inside `root` — by PATH COMPONENT, never by string prefix.
+
+    F-3 (measured): the pre-F-3 check was `str(resolved).startswith(
+    str(base_resolved))`, which admits `Downloads-evil` as "inside" `Downloads`
+    — a sibling that shares the root's name is outside it. WindowsPath compares
+    case-insensitively, so `C:/USERS/x` still matches `C:/Users`.
+    """
+    try:
+        target.relative_to(root)
+    except ValueError:
+        return False
+    return True
+
+
 def resolve_in_roots(raw: str, roots: tuple[Path, ...], *, preferred: Path | None = None):
     """Resolve a read/write target INSIDE the whitelisted roots. A bare name
     resolves in `preferred` (or the first root); a relative path must stay
     inside one of the roots; absolute paths must already live under a root.
-    Anything escaping -> None (the caller refuses loudly)."""
+    Anything escaping -> None (the caller refuses loudly).
+
+    Containment is component-wise (see `_under`), so a sibling directory that
+    shares a root's name is refused rather than admitted."""
     raw = (raw or "").strip()
     if not raw:
         return None
@@ -148,15 +216,16 @@ def resolve_in_roots(raw: str, roots: tuple[Path, ...], *, preferred: Path | Non
             target = Path(raw)  # absolute — must land under a root to pass
             try:
                 resolved = target.resolve()
-                base_resolved = Path(base).resolve()
-                if str(resolved).startswith(str(base_resolved)):
-                    return resolved
             except OSError:
                 continue
+            if _under(Path(base).resolve(), resolved):
+                return resolved
         else:
-            target = (Path(base) / raw).resolve()
-            base_resolved = Path(base).resolve()
-            if str(target).startswith(str(base_resolved)):
+            try:
+                target = (Path(base) / raw).resolve()
+            except OSError:
+                continue
+            if _under(Path(base).resolve(), target):
                 return target
     return None
 
@@ -183,6 +252,7 @@ class Executor:
         *,
         file_roots: tuple[Path, ...] = (),
         blocked_suffixes: tuple[str, ...] = (),
+        open_roots: tuple[Path, ...] | None = None,
     ):
         self._guard = guard
         self._spawn = self._spawn_real
@@ -192,6 +262,12 @@ class Executor:
         # root; downloads may read from ANY listed root and nowhere else.
         self._file_roots = tuple(Path(r) for r in file_roots)
         self._blocked_suffixes = set(blocked_suffixes)
+        # F-3: open_path has its OWN wall. `None` means "seed it" (home, the
+        # repo, the CWD); an explicit `()` means the owner configured nothing
+        # and therefore NOTHING opens (fail-closed, never "the wall is off").
+        self._open_roots = tuple(
+            Path(r) for r in (default_open_roots() if open_roots is None else open_roots)
+        )
 
     async def screenshot(self, audit_code: str | None = None) -> ExecResult:
         """Pass-1 (v2.0 §3-د/2): ONE full-screen capture, entirely in memory —
@@ -314,9 +390,27 @@ class Executor:
     async def open_path(
         self, path: str, confirmation_id: str | None = None, audit_code: str | None = None
     ) -> ExecResult:
-        del confirmation_id  # open_path is never auto-approved past these checks
+        """Open a file/folder on the owner's PC, behind three walls.
+
+        SHAPE — no UNC, no relative traversal.
+        SUFFIX — a double-click equivalent (`.lnk`, `.url`, `.jar`, `.exe`, …)
+        never opens here: opening it IS launching it, so it goes through the app
+        whitelist instead. The refusal names the suffix, the reason, and that
+        route, so an owner whose `.url` open bounced is not left guessing.
+        CONTAINMENT — the resolved path must land inside a configured open root
+        (`open_roots=`; see `default_open_roots`). Component-wise, so a sibling
+        sharing a root's name is outside it. Unconfigured roots open nothing.
+
+        `confirmation_id` is kept for wire symmetry with launch/close/power and
+        is NOT a bypass: no id value moves a path past any of the three walls.
+        Whether an id is even VALID is F-2's work (the executor's confirmation
+        verifier) and is deliberately not duplicated here.
+        """
         code = audit_code or mint_audit_code()
-        win = PureWindowsPath(path)
+        raw = (path or "").strip()
+        if not raw:
+            return ExecResult(status="error", detail="empty path: refused", audit_code=code)
+        win = PureWindowsPath(raw)
         if win.drive.startswith("\\\\"):
             return ExecResult(
                 status="error", detail="outside_allowed_roots: UNC paths refused", audit_code=code
@@ -330,10 +424,43 @@ class Executor:
         if win.suffix.casefold() in OPEN_BLOCKED_SUFFIXES:
             return ExecResult(
                 status="error",
-                detail="executable must go through the app whitelist",
+                detail=(
+                    f"executable must go through the app whitelist: opening a "
+                    f"{win.suffix.casefold()} file IS launching it, so launch the app by name "
+                    f"(or add it to config/whitelist.json) instead"
+                ),
                 audit_code=code,
             )
-        await self._open(str(win))
+        if not self._open_roots:
+            return ExecResult(
+                status="error",
+                detail="outside_allowed_roots: open roots not configured — refused",
+                audit_code=code,
+            )
+        # A bare name is CWD-relative, exactly as `os.startfile` would read it
+        # (`data/inbox` is itself CWD-relative). Re-homing it into the first
+        # open root would open a DIFFERENT file of the same name.
+        base = Path.cwd() if not win.is_absolute() else None
+        try:
+            resolved = (Path(raw) if base is None else base / raw).resolve()
+        except OSError as exc:
+            return ExecResult(
+                status="error",
+                detail=f"outside_allowed_roots: unresolvable path refused ({exc})",
+                audit_code=code,
+            )
+        if not any(_under(root.resolve(), resolved) for root in self._open_roots):
+            where = ", ".join(str(r) for r in self._open_roots)
+            return ExecResult(
+                status="error",
+                detail=(
+                    "outside_allowed_roots: refused — open_path only reaches "
+                    f"{where}; put the file under one of those, or open its "
+                    "folder through the app whitelist"
+                ),
+                audit_code=code,
+            )
+        await self._open(str(resolved))
         return ExecResult(status="ok", detail="opened", audit_code=code)
 
     async def _spawn_real(self, argv: list[str]) -> None:

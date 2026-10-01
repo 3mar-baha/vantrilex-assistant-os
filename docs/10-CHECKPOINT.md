@@ -1707,6 +1707,217 @@ every path it *added*; capping the pre-existing ones is a separate item and woul
 in tests outside this write-set. Also open: the `ws://` plaintext-dial warning on the daemon side
 is informational only, and TLS remains Caddy's job per `docs/09-DECISIONS.md` §7.
 
+## F-3 — the `open_path` holes (S-1): containment, the double-click set, the discarded id
+
+Owner-approved P0 phase 2. Two commits: a RED barrier (`tests/test_open_path_containment_f3.py`
+plus the AC6 extension) then the implementation. **42 guards, 19 mutants, 19 RED, 0 survived.**
+
+Report §43 is at `Sara Agent - Full Analysis Report/part-f-errors.md:152` (a gitignored reading
+copy, not committed). Every `file:line` it gives was re-measured against the tree; the file wins
+where they disagree, and two of them did (below).
+
+#### The report's containment draft was a NO-OP — re-scoped, not built as written
+
+§43 step 2 says to "reuse the `_require_roots` semantics from `:357`". Measured, `_require_roots`
+(`bridge/executor.py:355-357` pre-change) is:
+
+```python
+if not self._file_roots:
+    return ExecResult(status="error", detail="file roots not configured", ...)
+```
+
+It asserts that roots are **CONFIGURED**. It never inspects the path, and it returns `None` —
+which reads as *admitted* — so the draft taken literally leaves the hole exactly as wide while a
+comment claims it closed. Re-scoped per Directive 3: the real mechanism is component-wise
+containment, and the shipped version is `_under()` + an explicit per-path check, not
+`resolve_in_roots`.
+
+**`resolve_in_roots` was measured and was not sufficient on its own.** It is where the containment
+lives for `file_download`, so fixing it fixed that path too, and the same fix is what makes
+`open_path` sound. Its predicate was `str(resolved).startswith(str(base_resolved))` — a **string**
+prefix, so `Downloads-evil` passed as "inside" `Downloads`. It is now `Path.relative_to`
+(`bridge/executor.py:_under`), which is component-wise and still case-insensitive on Windows.
+The prefix hole was a live hole in `file_download`, not a theoretical one.
+
+#### The suffix set failed to match its own comment
+
+The comment above `OPEN_BLOCKED_SUFFIXES` already said the rule — *"double-click equivalents:
+opening one of these IS launching it"* — and the set did not implement it. Added: `.lnk` (runs its
+target), `.url` (navigates to an attacker-chosen page), `.jar` (executes), `.hta`/`.html`/`.htm`
+(run script), `.wsf`/`.wsh` (Windows Script Host). `.htm` is a byte-for-byte alias of `.html`;
+omitting it would re-open the same hole through the other spelling. The original nine are still
+there, and `test_blocked_set_is_a_superset_of_the_pre_f3_set` holds the pre-F-3 nine as a
+**literal in the test file**, so a future edit cannot drop one silently.
+
+**The refusal is not a dead end, per the report's regression risk (a).** The owner legitimately
+opens `.url` shortcuts and jars. The message now names the suffix, the reason (*"IS launching
+it"*), and the route that works (*"launch the app by name (or add it to `config/whitelist.json`)
+instead"*). `src/tools.py:_do_open_path` returns the executor's `detail` to the owner verbatim, so
+this text is what they actually read. A guard asserts the containment wall and the suffix wall do
+**not** share copy — the first draft of that guard was blind, because grepping one keyword could
+not tell which wall fired (measured; see the mutation table `f3`).
+
+#### `confirmation_id`: stopped being discarded, honestly
+
+`del confirmation_id` is gone. The id is kept for wire symmetry with launch/close/power and is
+**not** a bypass — no id value moves a path past any wall, and two guards pin both directions: an
+id neither helps (`is_not_a_bypass`) nor gates a legitimate open
+(`does_not_gate_a_legitimate_open`; mutant `e2` demands an id for every open and turns it RED).
+
+**The situation is made honest, not papered over:** `open_path` does not *require* a
+confirmation, and the docstring says so plainly. Whether an id is *valid* is F-2's work (the
+executor-wide verifier); implementing it here would duplicate and then collide with F-2. The
+pre-F-3 comment (`open_path is never auto-approved past these checks`) was true but was attached
+to a `del`, which is the one thing that made it read as a dropped confirmation.
+
+#### The roots design — a constructor argument, and a new knob the owner should know about
+
+**`open_roots=` on the `Executor` constructor is a new configuration surface.** Following F-5's
+`bridge_path` precedent it is a constructor argument, **not** an env var and not a settings field,
+and `src/config.py` was not touched. The seed (`default_open_roots()`) is home + the repo this
+bridge ships from + the process CWD — the last because `data/inbox` is itself CWD-relative. It is
+never the home's **parent**: `C:/Users` would "reach the home" while admitting every other profile
+on the box, which is a containment failure dressed as convenience. `DEFAULT_FILE_ROOTS` is
+**not** reused — it is Downloads-only, so reusing it would confine every open to Downloads and
+break the verb for the whole project (mutant `c6`).
+
+Semantics of the knob: omit it → the seed applies. Pass `()` → **nothing opens** (fail-closed, never
+"the wall is off"). `bridge/__main__.py:68` does not pass it today, so the shipped daemon runs on
+the seed; wiring an explicit set there is a one-line change the owner may want.
+
+#### `file:line` audit against §43's claims
+
+| §43 claim | Tree | Verdict |
+|---|---|---|
+| `OPEN_BLOCKED_SUFFIXES` at `:98` | `:98` | matches |
+| `del confirmation_id` at `:315-317` | `:317` | matches |
+| UNC/traversal/suffix walls at `:320-357` | `:319-337` | matches |
+| `_require_roots` at `:357` | `:355-357` | matches — and is the no-op, as measured above |
+| `resolve_in_roots` used by `file_download` at `:391` | `:391` | matches |
+| AC6 at `tests/test_whitelist_guardrail.py:183-196` | **`:182-197`, and the file is `tests/test_whitelist_guardrail.py` — NOT `tests/suite/tier1_resilience/`** | **moved + path wrong** |
+| `src/tools.py:592-611` sends `exec.open` | `:592-611` | matches |
+| `bridge/daemon.py:178-182` routes it | `:178-183` | matches (+1 line, F-5 drift) |
+
+The work order and the report both place the AC6 test under `tests/suite/tier1_resilience/`. There
+is no such file; the test is `tests/test_whitelist_guardrail.py`. The report is otherwise accurate
+about the executor.
+
+**Not done here, and it is not a silent skip:** §43 step 4 asks for the
+`src/tools.py:596-597` comment (*"this lane adds no checks of its own"*) to be updated to describe
+the post-fix contract. `src/tools.py` is outside this write-set. The comment is now **stale in
+substance but not false** — the lane still adds no checks of its own, and the daemon's walls are
+still authoritative; it simply no longer enumerates them exhaustively. F-2 or a docs pass should
+name the containment wall there.
+
+#### Directive 5 — one test repaired, and the write-set exceeded on purpose
+
+`tests/test_coverage_gaps_p63c.py::test_open_path_walls_and_open` asserted **the hole**: it built an
+`Executor` with no roots and then *required* `C:\Users\note.txt` to open. Name and assertion
+disagree, so the test is what moved (Directive 5) — **the fix was not reverted to keep it green**.
+This exceeds the stated write-set, recorded per Directive 7; the AC6 test in
+`tests/test_whitelist_guardrail.py` was extended, never weakened, and no other file outside the
+sanctioned set is touched.
+
+#### Mutation run — 19 mutants, 19 RED, 0 survived
+
+| Mutant | Guard that went RED |
+|---|---|
+| a containment reverted to a config-only check | `test_absolute_path_outside_every_root_is_refused` |
+| a2 restore the string-prefix predicate (`Downloads-evil` hole) | `test_sibling_directory_sharing_the_root_name_is_refused` |
+| b remove all eight added suffixes | `test_double_click_equivalents_never_open` |
+| b2 drop only `.url` (the owner's own regression risk) | `test_double_click_equivalents_never_open` |
+| c drop the empty-roots refusal (wall off when unconfigured) | `test_no_open_roots_configured_fails_closed` |
+| c2 the report's draft: substitute `_require_roots` semantics | `test_absolute_path_outside_every_root_is_refused` |
+| c3 reuse `DEFAULT_FILE_ROOTS` (the over-blocking bug) | `test_executor_seed_reaches_the_owner_home_and_the_project` |
+| c4 re-home a bare relative name into the FIRST root (decoy swap) | `test_relative_bare_name_resolves_against_the_process_cwd` |
+| c5 seed the roots with the home's PARENT | `test_default_open_roots_are_deduplicated_and_dont_include_user_profile` |
+| c6 seed the roots with Downloads only (draft, over-blocking) | `test_executor_seed_reaches_the_owner_home_and_the_project` |
+| d restore `del confirmation_id` | `test_open_path_never_deletes_its_confirmation_id` |
+| e let a `confirmation_id` bypass the suffix wall | `test_confirmation_id_is_not_a_bypass` |
+| e2 **demand** a `confirmation_id` for every open | `test_confirmation_id_does_not_gate_a_legitimate_open` |
+| f bare `error:` suffix refusal (dead end) | `test_suffix_refusal_names_the_reason_and_the_working_route` |
+| f2 name the whitelist but not the file | `test_suffix_refusal_names_the_reason_and_the_working_route` |
+| f3 reuse the suffix copy for the containment wall | `test_containment_refusal_is_distinguishable_from_the_suffix_refusal` |
+| g2 drop the relative-branch `OSError` arm in `resolve_in_roots` | `test_resolve_in_roots_refuses_when_the_relative_resolve_raises` |
+| g let an unresolvable path reach `os.startfile` unvalidated | `test_unresolvable_path_fails_closed_without_raising` |
+| h accept an empty path | `test_empty_path_is_refused_by_the_empty_wall_not_by_containment` |
+
+**Six of these 18 guards were BLIND on the first mutation pass and were repaired — the guards, not
+the production code.** Named, because a guard that has never been seen to fail is not a guard:
+
+1. `test_no_open_roots_configured_fails_closed` passed a mutant that removed the empty-roots branch
+   entirely, because the per-path `any()` over an empty tuple refuses anyway. Now asserts the
+   message (`not configured`), which is what the core maps to Arabic.
+2. `test_default_open_roots_reach_the_owner_home_and_the_project` asserted the *helper*;
+   `c3` swapped the constructor's default and left the helper correct. Added
+   `test_executor_seed_reaches_the_owner_home_and_the_project`, which reads the Executor's own
+   roots and then exercises the verb.
+3. `test_relative_bare_name_resolves_against_the_process_cwd` had no decoy, so "resolve against
+   CWD" and "resolve against `root[0]`" were indistinguishable. A decoy of the same name now sits
+   in the first root.
+4. `test_confirmation_id_is_not_a_bypass` put the `.exe` **outside** the roots, where containment
+   refuses it either way. The payload moved inside so the suffix wall is the only thing that can
+   be speaking.
+5. `test_suffix_refusal_names_the_reason_and_the_working_route` grepped `whitelist` in `detail` —
+   which the containment message also contains, so a mangled suffix message sailed through. Each
+   clause is now pinned to an exact phrase.
+6. `test_empty_path_is_refused` passed a mutant that dropped the empty check, because `Path("")`
+   resolves to the CWD and containment refused it. Now asserts the empty-wall message.
+
+The mutation driver honours the F-5 lesson: it reads and writes **bytes** (never
+`Path.write_text`, so Windows newline translation cannot rewrite the file on restore), verifies
+every restore by sha256, and **refuses to report a mutant whose anchor is not unique** rather than
+measuring nothing. All 18 restores verified byte-exact.
+
+#### Not red before the fix — stated plainly
+
+* `test_absolute_path_inside_a_root_is_admitted`,
+  `test_every_configured_root_is_reachable` and
+  `test_open_roots_constructor_argument_overrides_the_seed` assert the fix does **not** over-block.
+  They were green pre-fix (nothing was contained) and go RED if containment is built wrongly.
+  That is their job: they are the guards a containment fix breaks first.
+* `test_open_path_documents_the_confirmation_contract` is green pre-fix by construction — it pins a
+  policy that the pre-fix code did not state. `d` is what makes it real.
+* `test_confirmation_id_does_not_gate_a_legitimate_open` guards the hazard the fix **introduces**
+  (a well-meaning "require confirmation" fix), same shape as F-5's QW-6 guard.
+
+#### Measured, re-derived by script
+
+| Measurement | Before (HEAD `61b9228`) | After |
+|---|---|---|
+| `tests/test_open_path_containment_f3.py` | absent | **42 guards, all green** |
+| `OPEN_BLOCKED_SUFFIXES` | 9 | **17** |
+| Suite excluding `live_harness`/`live_probe` | 2,560 passed / 2 skipped / 1 xfailed | **2,601 passed / 2–3 skipped / 1 xfailed / 0 failed** |
+| `bridge/executor.py` coverage | 98.5% | **98.7%** (gate ≥ 98.0%) |
+| TOTAL branch coverage | 91.9% | **92.0%** (gate ≥ 90.0%) |
+| ruff check / format | clean / clean | **clean / clean** |
+
+`IRREVERSIBLE_TOOLS` 7 · `TOOL_CAPABILITIES` 45 · routed 46 · `INTERNAL_ONLY_TOOLS {"none"}` —
+all unchanged, verified by `scripts/security_gate.py`. F-3 touches no tool registry, no dispatcher
+and no capability entry, which is why the census is identical.
+
+The count wobbles by one between runs because a **network-dependent** test is sometimes skipped
+(`tier2_live_probes/test_omniroute.py` free-provider pool, `live_probe/test_bridge_live.py`
+against an offline core) — it is reported separately from passes and was never skipped or weakened
+to make a number look right. Both exclusion shapes, re-derived from the tree:
+
+| Command | Result |
+|---|---|
+| `--ignore=tests/live_harness` (the work order's exact command) | **2,607 passed / 5 skipped / 1 xfailed / 0 failed** |
+| `--ignore=tests/live_harness --ignore=tests/live_probe` | **2,601 passed / 2–3 skipped / 1 xfailed / 0 failed** |
+
+Against the work order's stated 2,566 baseline the first row is **+41** (2,566 + 42 new guards
+− the repairs) and the second **+35**: the 2,566 figure was measured with `live_probe` **included**,
+so the two rows are not directly comparable and only the first is. The 2 `live_harness` failures
+seen in the coverage run remain the pre-existing free-provider flakes.
+
+#### Still open, deliberately not folded in
+
+The `src/tools.py:596-597` comment (above). V-9 (`security_log` unbounded on non-bad-token
+paths) is out of scope per the work order. F-2 — the executor-wide confirmation verifier — is the
+next work order and is **gated on the owner's review of this entry**; `open_path` deliberately does
+not pre-empt it.
+
 - [07 — Implementation Plan](./07-IMPLEMENTATION-PLAN.md)
 - [11 — Testing](./11-TESTING.md)
 - [Objectives Ledger](./reports/OBJECTIVES_LEDGER_MET_VS_PENDING.md)

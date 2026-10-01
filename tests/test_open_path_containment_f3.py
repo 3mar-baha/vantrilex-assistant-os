@@ -49,15 +49,19 @@ def _guard(tmp_path: Path) -> Guard:
     return Guard(str(wl))
 
 
-def _executor(tmp_path: Path, roots: tuple[Path, ...]) -> tuple[Executor, list[str]]:
+def _executor(tmp_path: Path, roots: tuple[Path, ...] | None) -> tuple[Executor, list[str]]:
     """A real Executor with only the OS edge replaced by a spy (never a real
-    `os.startfile` — this suite must never touch the owner's desktop)."""
+    `os.startfile` — this suite must never touch the owner's desktop).
+
+    `roots=None` passes NO `open_roots` at all, so the shipped seed applies —
+    that is how the over-blocking guard exercises the real default wiring."""
     opened: list[str] = []
 
     async def _open(path: str) -> None:
         opened.append(path)
 
-    ex = Executor(_guard(tmp_path), open_roots=roots)
+    kwargs = {} if roots is None else {"open_roots": roots}
+    ex = Executor(_guard(tmp_path), **kwargs)
     ex._open = _open  # type: ignore[method-assign]
     return ex, opened
 
@@ -88,10 +92,15 @@ async def test_blocked_set_is_a_superset_of_the_pre_f3_set():
 
 
 async def test_suffix_refusal_names_the_reason_and_the_working_route(tmp_path: Path):
-    """MUTANT (b') — a bare "error" teaches the owner nothing. The refusal
-    must say WHY (opening it IS launching it) and name the route that works
-    (the app whitelist). The owner's legitimate `.url`/`.jar` opens must not
-    dead-end on an unexplained error."""
+    """MUTANT (f) — a bare "error" teaches the owner nothing. The refusal must
+    say WHY (opening it IS launching it) and name the route that works (the app
+    whitelist). The owner's legitimate `.url`/`.jar` opens must not dead-end on
+    an unexplained error.
+
+    Each clause is asserted SEPARATELY and on the EXACT phrases. Asserting only
+    "whitelist" in detail is not a guard: the containment refusal also mentions
+    the whitelist, so a mangled suffix message would slip through (measured —
+    this guard was blind until the phrases were pinned)."""
     root = tmp_path / "open_root"
     root.mkdir()
     ex, _ = _executor(tmp_path, (root,))
@@ -99,9 +108,52 @@ async def test_suffix_refusal_names_the_reason_and_the_working_route(tmp_path: P
         result = await ex.open_path(str(root / f"thing{suffix}"))
         assert result.status == "error", suffix
         detail = result.detail
-        assert "whitelist" in detail, (suffix, detail)
-        assert "launch" in detail.casefold(), (suffix, detail)  # the WHY
-        assert suffix in detail, (suffix, detail)  # which file, so the owner knows
+        # the WHY — the suffix, and that opening it is launching it
+        assert suffix in detail, (suffix, detail)
+        assert "IS launching it" in detail, (suffix, detail)
+        # the ROUTE that does work — the app whitelist, by name and by file
+        assert "app whitelist" in detail, (suffix, detail)
+        assert "whitelist.json" in detail, (suffix, detail)
+
+
+async def test_containment_refusal_is_distinguishable_from_the_suffix_refusal(tmp_path: Path):
+    """The two walls must not share copy, and each must be the one that fires.
+
+    The shipped order is SUFFIX then CONTAINMENT (checked, not incidental: the
+    suffix wall must not be reachable only after a path walk, and "launch the
+    app instead" is the more actionable message for a blocked file). So the
+    isolating shapes are a BENIGN suffix outside the roots (containment alone)
+    and a BLOCKED suffix inside them (suffix alone). A single `.exe` outside the
+    roots would report the suffix wall under this order, so it cannot
+    discriminate — asserted separately rather than smuggled in here."""
+    root = tmp_path / "open_root"
+    root.mkdir()
+    outside = tmp_path / "elsewhere"
+    outside.mkdir()
+    ex, opened = _executor(tmp_path, (root,))
+    contained = await ex.open_path(str(outside / "notes.txt"))
+    assert "outside_allowed_roots" in contained.detail, contained.detail
+    assert "IS launching it" not in contained.detail, contained.detail
+    suffix = await ex.open_path(str(root / "payload.exe"))
+    assert "outside_allowed_roots" not in suffix.detail, suffix.detail
+    assert "IS launching it" in suffix.detail, suffix.detail
+    assert opened == []
+
+
+async def test_a_blocked_suffix_outside_the_roots_reports_the_suffix_wall(tmp_path: Path):
+    """The order law, pinned: the suffix wall fires FIRST, so a `.exe` anywhere
+    is refused as a launcher even when its location would also fail
+    containment. Both are refusals, so nothing is admitted — but the message
+    tells the owner the thing that would actually help them."""
+    root = tmp_path / "open_root"
+    root.mkdir()
+    outside = tmp_path / "elsewhere"
+    outside.mkdir()
+    ex, opened = _executor(tmp_path, (root,))
+    result = await ex.open_path(str(outside / "payload.exe"))
+    assert result.status == "error"
+    assert "IS launching it" in result.detail, result.detail
+    assert opened == []
 
 
 async def test_case_folded_suffix_is_still_refused(tmp_path: Path):
@@ -176,6 +228,30 @@ async def test_sibling_directory_sharing_the_root_name_is_refused(tmp_path: Path
     assert opened == []
 
 
+async def test_resolve_in_roots_refuses_when_the_relative_resolve_raises(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    """The RELATIVE branch of `resolve_in_roots` has its own OSError arm, added
+    with the containment rewrite. An unresolvable relative path must skip that
+    base and keep looking — never raise out of the helper, which `file_download`
+    and the file-drop wall both call on the owner's request."""
+    root = tmp_path / "Downloads"
+    root.mkdir()
+    calls: list[int] = []
+    real_resolve = Path.resolve
+
+    def _counting_resolve(self, *args, **kwargs):
+        calls.append(1)
+        if "bad" in self.name:
+            raise OSError("unresolvable")
+        return real_resolve(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "resolve", _counting_resolve)
+    assert resolve_in_roots("bad.txt", (root,)) is None
+    assert calls, "the helper never attempted a resolve"
+    assert resolve_in_roots("good.txt", (root,)) == real_resolve(root / "good.txt")
+
+
 async def test_resolve_in_roots_refuses_the_sibling_prefix_escape(tmp_path: Path):
     """The shared helper is the containment primitive — it carries the same
     wall for `file_download`, so its prefix hole is F-3's hole too.
@@ -201,46 +277,62 @@ async def test_roots_refusal_names_the_roots_that_do_work(tmp_path: Path):
     assert str(root) in result.detail, result.detail
 
 
-async def test_relative_bare_name_resolves_against_the_process_cwd(tmp_path: Path):
-    """A bare name must NOT silently re-home itself into the first open root:
-    that would open a DIFFERENT file of the same name than the one the daemon
-    was pointed at (today `os.startfile("report.pdf")` means CWD-relative, and
-    `data/inbox` is itself a CWD-relative file root)."""
-    root = tmp_path / "open_root"
-    root.mkdir()
-    (root / "report.pdf").write_bytes(b"decoy")
+async def test_relative_bare_name_resolves_against_the_process_cwd(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    """MUTANT (c4) — a bare name must NOT silently re-home itself into the
+    first open root. That would open a DIFFERENT file of the same name than the
+    daemon was pointed at: today `os.startfile("report.pdf")` means CWD-relative
+    (`data/inbox` is itself a CWD-relative file root), and a decoy of the same
+    name sitting in the first root would be opened instead.
+
+    The decoy is the whole point: without one, "resolve against CWD" and
+    "resolve against root[0]" are indistinguishable, and this guard measured
+    itself blind to that mutant until the decoy landed."""
+    first = tmp_path / "open_root"
+    first.mkdir()
+    (first / "report.pdf").write_bytes(b"decoy")
     work = tmp_path / "work"
     work.mkdir()
     (work / "report.pdf").write_bytes(b"real")
-    ex, opened = _executor(tmp_path, (root, work))
-    monkey = pytest.MonkeyPatch()
-    monkey.chdir(work)
-    try:
-        result = await ex.open_path("report.pdf")
-    finally:
-        monkey.undo()
+    ex, opened = _executor(tmp_path, (first, work))
+    monkeypatch.chdir(work)
+    result = await ex.open_path("report.pdf")
     assert result.status == "ok", result.detail
-    assert opened == [str((work / "report.pdf").resolve())]
+    assert opened == [str((work / "report.pdf").resolve())], "opened the wrong file of the two"
 
 
 async def test_no_open_roots_configured_fails_closed(tmp_path: Path):
-    """MUTANT (c'') — 'unconfigured' must mean 'nothing opens', never 'the
-    wall is off'. Fail-closed, and the token `src/tools.py` maps to the
-    owner's Arabic message is still present."""
+    """MUTANT (c) — 'unconfigured' must mean 'nothing opens', never 'the wall
+    is off'. Fail-closed, and the token `src/tools.py` maps to the owner's
+    Arabic message is still present.
+
+    The token is asserted for a REASON, not decoration: dropping the explicit
+    empty-roots branch would fall through to the per-path loop, which on an
+    empty tuple happens to refuse too. Same outcome, different message — and a
+    refusal whose copy the core cannot map is a dead end, so the branch is
+    pinned."""
     ex, opened = _executor(tmp_path, ())
     result = await ex.open_path(str(tmp_path / "report.txt"))
     assert result.status == "error"
     assert "outside_allowed_roots" in result.detail
+    assert "not configured" in result.detail, result.detail
     assert opened == []
 
 
-async def test_empty_path_is_refused(tmp_path: Path):
-    """`os.startfile("")` used to be the answer for an empty request."""
+async def test_empty_path_is_refused_by_the_empty_wall_not_by_containment(tmp_path: Path):
+    """MUTANT (h) — `os.startfile("")` used to be the answer for an empty
+    request. An empty path must hit the empty-wall refusal, NOT fall through to
+    the containment wall: `Path("")` resolves to the CWD, so containment would
+    refuse it too and the owner would be told 'outside_allowed_roots' for a
+    request that never named a path at all."""
     root = tmp_path / "open_root"
     root.mkdir()
     ex, opened = _executor(tmp_path, (root,))
-    result = await ex.open_path("   ")
-    assert result.status == "error"
+    for blank in ("", "   ", "\t\n"):
+        result = await ex.open_path(blank)
+        assert result.status == "error", repr(blank)
+        assert "empty path" in result.detail, (repr(blank), result.detail)
     assert opened == []
 
 
@@ -266,10 +358,32 @@ async def test_unresolvable_path_fails_closed_without_raising(
 # -- the seeded roots: no over-blocking, no over-broadness -------------------------
 
 
+async def test_executor_seed_reaches_the_owner_home_and_the_project(tmp_path: Path):
+    """MUTANT (c3) — the over-blocking guard, asserted on the EXECUTOR, not on
+    the seed helper.
+
+    Asserting only `default_open_roots()` was blind: swapping the constructor's
+    default for `DEFAULT_FILE_ROOTS` leaves the helper correct and confines
+    every open to Downloads, breaking the tool for the whole project. The law
+    is about what the shipped Executor does, so the guard reads the Executor.
+
+    No file is written under the home or the repo: `open_path` only resolves and
+    hands the path to the `_open` seam, which is spied here."""
+    ex, _opened = _executor(tmp_path, None)
+    assert ex._open_roots, "an unconfigured Executor must still be seeded"
+    assert Path.home() in ex._open_roots, ex._open_roots
+    repo_root = Path(executor_mod.__file__).resolve().parents[1]
+    assert repo_root in ex._open_roots, ex._open_roots
+    # and the real verb agrees with the attribute
+    assert (await ex.open_path(str(Path.home() / "desktop_probe.txt"))).status == "ok"
+    assert (await ex.open_path(str(repo_root / "probe.txt"))).status == "ok"
+    assert (await ex.open_path("C:/Windows/System32/drivers/etc/hosts")).status == "error"
+
+
 async def test_default_open_roots_reach_the_owner_home_and_the_project():
-    """MUTANT (c''') — the over-blocking guard. A default that confines every
-    open to Downloads breaks the tool for the whole project; the seeded set
-    must include the owner's home AND the repo this bridge ships from."""
+    """The seed helper itself carries the same two entries (the constructor
+    guard above is the one that survives a wiring swap; this one pins the
+    helper's contract independently)."""
     roots = default_open_roots()
     home = Path.home()
     assert any(root == home for root in roots), roots
@@ -325,6 +439,21 @@ def test_open_path_never_deletes_its_confirmation_id():
     assert "del confirmation_id" not in source
 
 
+async def test_confirmation_id_does_not_gate_a_legitimate_open(tmp_path: Path):
+    """MUTANT (e') — the counter-mutant to `..._is_not_a_bypass`. An id must
+    neither HELP nor HURT: a path inside the roots opens with and without one.
+    This pins the other half of the contract, so a fix cannot satisfy
+    `is_not_a_bypass` by demanding an id and breaking every ordinary open."""
+    root = tmp_path / "open_root"
+    root.mkdir()
+    doc = root / "report.txt"
+    doc.write_text("x", encoding="utf-8")
+    without, _ = _executor(tmp_path, (root,))
+    with_id, _ = _executor(tmp_path, (root,))
+    assert (await without.open_path(str(doc))).status == "ok"
+    assert (await with_id.open_path(str(doc), confirmation_id="cid-123")).status == "ok"
+
+
 async def test_open_path_documents_the_confirmation_contract():
     """The id is kept for wire symmetry with launch/close, and it is NOT a
     bypass. That is a policy statement, so it must be TRUE OF THE CODE and
@@ -342,13 +471,24 @@ async def test_confirmation_id_is_not_a_bypass(tmp_path: Path):
     root.mkdir()
     outside = tmp_path / "elsewhere"
     outside.mkdir()
-    (outside / "payload.exe").write_bytes(b"MZ")
+    # The blocked path sits INSIDE the roots on purpose. An `.exe` outside the
+    # roots is refused by the containment wall whichever way the suffix check
+    # reads, so that shape cannot tell whether the id moved it — measured, this
+    # guard was blind until the payload moved inside. The walls are separate
+    # laws and a guard must isolate one of them.
+    (root / "payload.exe").write_bytes(b"MZ")
+    (outside / "plain.txt").write_text("x", encoding="utf-8")
     for cid in ("cid-123", "a" * 64, ""):
-        ex, opened = _executor(tmp_path, (root,))
-        assert (await ex.open_path(str(root / "ok.txt"), confirmation_id=cid)).status == "ok"
-        ex2, opened2 = _executor(tmp_path, (root,))
-        assert (await ex2.open_path(str(outside / "a.txt"), confirmation_id=cid)).status == "error"
-        ex3, opened3 = _executor(tmp_path, (root,))
-        blocked = await ex3.open_path(str(outside / "payload.exe"), confirmation_id=cid)
+        inside, inside_opened = _executor(tmp_path, (root,))
+        assert (await inside.open_path(str(root / "ok.txt"), confirmation_id=cid)).status == "ok"
+        assert len(inside_opened) == 1, cid
+        escaped, escaped_opened = _executor(tmp_path, (root,))
+        out = await escaped.open_path(str(outside / "plain.txt"), confirmation_id=cid)
+        assert out.status == "error", cid
+        assert "outside_allowed_roots" in out.detail, (cid, out.detail)
+        assert escaped_opened == [], (cid, escaped_opened)
+        blocked_exec, blocked_opened = _executor(tmp_path, (root,))
+        blocked = await blocked_exec.open_path(str(root / "payload.exe"), confirmation_id=cid)
         assert blocked.status == "error", cid
-        assert "whitelist" in blocked.detail, (cid, blocked.detail)
+        assert "app whitelist" in blocked.detail, (cid, blocked.detail)
+        assert blocked_opened == [], (cid, blocked_opened)
