@@ -492,7 +492,7 @@ no Node runtime, the gateway child could never start. Closed loop on `main`:
 
 ### 14.3 Documentation wave (`5f07db9`, `7e49f85`)
 
-- **`docs/09-ORACLE-DEPLOY.md`** — the owner's Arabic hand-held guide: account (home
+- **`docs/15-ORACLE-DEPLOY.md`** — the owner's Arabic hand-held guide: account (home
   region PERMANENT) → VM (Ubuntu 24.04, A1.Flex 2/12, ingress 22/80/443) → DuckDNS →
   Docker → build from `v1.0.1` + OmniRoute clone → `~/sara-secrets/sara.env` (21 vars +
   `PORT=8080`) → compose + Caddy TLS → verification → PC bridge → maintenance +
@@ -514,7 +514,7 @@ The owner's Oracle signup was blocked at card verification ("Your credit card ha
 declined") — a bank-side card flag in the overwhelming majority of cases (online/
 international transactions disabled, OTP, name/address mismatch). The owner paused work
 for 2026-08-31 and will contact the bank on 2026-09-01; the recovery checklist is
-documented in `docs/09-ORACLE-DEPLOY.md` §1. All machine-side work is complete and
+documented in `docs/15-ORACLE-DEPLOY.md` §1. All machine-side work is complete and
 pushed; only the owner-side Oracle deploy (docs/09) waits on the card. PHASE-STATE
 marker: **v1.0.1 shipped — HALT pending Oracle card resolution**.
 

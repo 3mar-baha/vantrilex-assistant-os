@@ -132,7 +132,7 @@ Supersedes draft preference for Google Cloud Run deployment.
   the disposable-filesystem rule STAYS as a design principle (vault remains the only
   durable store — redeploys are trivial), but the OAuth client JSON may now live on the VM
   (never in git), which RESOLVES the Space-era Google gap (03: Google features fully work
-  on the VM). Owner deploy guide: `docs/09-ORACLE-DEPLOY.md`. v1.0.1 ships the Node-24
+  on the VM). Owner deploy guide: `docs/15-ORACLE-DEPLOY.md`. v1.0.1 ships the Node-24
   layer the gateway always needed.
 
 ## ADR-16: Three-Tier Brain via OmniRoute (Gemini retired) — **Accepted** (2026-08-29, MASTER DIRECTIVE; amended 2026-08-30)

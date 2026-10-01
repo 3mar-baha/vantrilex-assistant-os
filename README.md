@@ -51,7 +51,7 @@ Telegram, reasoning through a 3-tier multi-model brain behind a fast front-door 
 Owner ⇄ Telegram ⇄ [Oracle VM 24/7 (ADR-15)]       [Windows PC]
                      ├─ Aiogram 3.x core             └─ Bridge daemon (outbound-only WSS)
                      ├─ Dispatcher → OmniRoute :20128    ├─ Windows-MCP executor
-                     │   ├─ Tier1 fast (reflex, <250ms)  ├─ Wake-on-LAN sender
+                     │   ├─ Tier1 fast (converse/ack)    ├─ Wake-on-LAN sender
                      │   ├─ Tier2 medium (tools)         └─ Idle monitor (20 min)
                      │   └─ Tier3 heavy (DAG/tutoring)
                      ├─ Fish Audio s2.1 → ffmpeg → Opus
@@ -61,6 +61,60 @@ Owner ⇄ Telegram ⇄ [Oracle VM 24/7 (ADR-15)]       [Windows PC]
 
 Details: [`docs/04-ARCHITECTURE.md`](docs/04-ARCHITECTURE.md) · decisions:
 [`docs/09-DECISIONS.md`](docs/09-DECISIONS.md).
+
+### Measured first-token latency, not vendor marketing
+
+There is no sub-second reflex tier. The `Tier1 fast` label describes **role**, not
+speed: it is the conversation and acknowledgment lane. Under real free-tier provider
+load, measured across 14 probe samples on 2026-09-30
+([`benchmarks/CANDIDATE_MODELS_PROBE_REPORT.md`](benchmarks/CANDIDATE_MODELS_PROBE_REPORT.md)):
+
+| Model | Samples | Best | Worst |
+|---|---|---|---|
+| `google/gemma-4-31b-it:free` (Tier 1 fallback) | 6 | 1.6 s | **102.1 s** |
+| `openrouter/*` (Tier 2/3 primaries + fallbacks) | 8 | 3.6 s | 47.3 s |
+
+The spread is the point: **1.6 s and 102 s are the same model on the same free pool.**
+A slow first token is a provider queue, not a Sara bug, and the gateway answers it with a
+first-token guillotine plus quarantine-and-cascade rather than a three-minute stall. If you
+need a latency SLA, the free tier cannot give you one.
+
+## Dual terminal
+
+Two independent processes, either or both running:
+
+```cmd
+sara.bat -Chat          REM clean interactive console  -> src/bot_shell.py
+sara.bat -Trace         REM live shadow tracer HUD     -> scripts/live_shadow_tracer.py
+sara.bat --tracer       REM alias of -Trace
+```
+
+Terminal 1 answers in authentic Amman dialect with a fixed masculine address anchor for
+Omar, and routes every turn through the same front-door dispatcher Telegram uses — it is a
+second *window*, not a second code path, so there is no route by which an invariant can
+bypass the dispatcher.
+
+Terminal 2 streams the mechanics live: model tier, TTFT, per-tool latency, `$0.00` cost
+checks, Fish audio spans, and invariant results. It reads the same log sink the runtime
+writes, so it observes the real system rather than replaying a report.
+
+## Self-evolution engine — what is actually built
+
+Three stages are **shipped and tested**; the fourth is **not**.
+
+| Stage | State |
+|---|---|
+| **P3-A** gap detection | LIVE — `EvolutionTask`, append-only JSONL backlog, marker-vs-tool gap classification |
+| **P3-B** AST security gate | LIVE — 5 rules; rejects non-allow-listed imports, dynamic execution, `importlib`, and ambient-authority references (`confirmation_id`, `.env`, `getattr`, …) |
+| **P3-C** registration overlay | LIVE — a merge layer that makes tool registration editable, **shipping empty** |
+| **P3-D** live registration | **NOT BUILT** — barrier tests committed; no implementation |
+
+**Sara does not synthesize or register tools autonomously today.** The overlay exists and
+is empty by design: registering a tool requires four coordinated edits, and three
+unguarded ones fail *silently* — the tool simply never becomes reachable, with no
+exception raised. P3-C exists to remove that trap before P3-D allows anything through it.
+A pass from the AST gate means *structurally admissible*, never *correct* — the gate does
+not execute the code it inspects.
 
 ## Quickstart
 

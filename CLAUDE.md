@@ -10,7 +10,8 @@ You are strictly governed by the four-tier operational lifecycle ratified in
      requirements, check `docs/10-CHECKPOINT.md` and `docs/04-ARCHITECTURE.md`,
      formulate a phased plan, and stop for owner sign-off.
    - `/code` -> **TDD Implementation Mode**: Write tests first (Red), implement
-     minimal clean code (Green), run `pytest -q`, and ensure all 1,457+ tests pass.
+     minimal clean code (Green), run `pytest -q`, and confirm no UNEXPLAINED failure is
+     introduced. Derive the current count from the tree; never type it from memory.
    - `/audit` -> **Security & Invariants Audit Mode**: Run
      `scripts/security_gate.py`, verify SARA's 5 Invariants (Immersion ar-JO,
      Masculine address, Zero Edge-TTS, Zero unconfirmed cmd, $0.00 cost), and
@@ -33,7 +34,10 @@ You are strictly governed by the four-tier operational lifecycle ratified in
    - Never skip the `/plan` approval gate.
    - Never commit secrets, `.env`, `opencode.json`, or temporary logs.
    - Zero deletions without explicit human confirmation.
-   - The test suite (1,457+ tests) must remain 100% green before any `/sync` commit.
+   - A `/sync` commit must introduce no UNEXPLAINED test failure. Derive the suite
+     count from the tree, never from memory. A committed RED barrier is legitimate and
+     MUST NOT be "fixed" — that would be a Directive-5 violation, pinning the barrier's
+     own bug as correct behaviour.
 
 ## 1. System Identity & Core Philosophy
 
@@ -105,9 +109,10 @@ strictly-zero-cost executive AI assistant named **Sara (سارة)**.
 
 1. **Zero-Cost Invariant ($0.00/month, absolute)**: All LLM calls route through OmniRoute free pools;
    all speech synthesizes through Fish Audio `s2.1-pro-free:free` via OpenRouter's speech API
-   (owner directive 2026-09-03: Fish is Sara's ONLY voice — NO Microsoft/Edge fallback; a Fish
-   failure lands the honest text reply; unconfigured deployments stay pure local Edge-TTS
-   `ar-EG-SalmaNeural`), dialect-shaped via `src/dialect.py shape_for_tts` (owner directive
+   (owner directive 2026-09-03: Fish is Sara's ONLY voice — NO Microsoft/Edge fallback, with no
+   carve-out for unconfigured deployments; `src/voice_policy.py` BANS `edge_tts` outright and
+   Edge was purged 2026-09-12; a Fish failure lands the honest text reply),
+   dialect-shaped via `src/dialect.py shape_for_tts` (owner directive
    2026-09-02: emoji/quote/laughter strip + lexicon + تسكين الأواخر on EVERY engine);
    all storage and compute on verified free tiers. Any dependency introduced MUST be free/open-source.
 2. **Never Hardcode Secrets**: All tokens, keys, IDs and MAC addresses load strictly from environment
@@ -144,7 +149,7 @@ strictly-zero-cost executive AI assistant named **Sara (سارة)**.
 |---|---|---|
 | Python | **3.12** (`py -3.12`) | 3.14 default has wheel gaps for aiogram/pytgcalls ecosystem |
 | Bot framework | Aiogram 3.x | long polling (outbound-only) |
-| Voice | Edge-TTS `ar-EG-SalmaNeural` (switchable `VOICE_NAME`) -> dialect TTS shaper (emoji strip + pronunciation lexicon + تسكين الأواخر) -> `io.BytesIO` -> ffmpeg -> Ogg Opus 64k audio-mode | <600ms first-chunk target |
+| Voice | Fish Audio `fish-audio/s2.1-pro-free:free` (سمسم reference voice) via OpenRouter `/api/v1/audio/speech` -> dialect TTS shaper (`src/dialect.py shape_for_tts`) -> ffmpeg -> Ogg Opus | Fish is the ONLY voice; no Edge fallback ever (`src/voice_policy.py:assert_no_edge`, purged 2026-09-12) |
 | LLM gateway | OmniRoute OpenAI-compatible `/v1` | 3-tier brain (ADR-16): `FAST_MODEL` / `MEDIUM_MODEL` / `HEAVY_MODEL` behind the ADR-18 dispatcher |
 | Typing/config | Pydantic v2 settings | |
 | Logging | Loguru, structured | never swallow exceptions silently |
@@ -217,48 +222,3 @@ file locally and for nobody else. Every contract pointer must resolve inside the
 CI. The first version of this very section claimed a vendored skill shipped with the repo
 when `.gitignore` had excluded it, and the commit message asserted what the diff did not
 contain.
-
-
-
-## Active Components (runner=opencode model=inclusionai/ling-3.0-flash-vl:free effort=medium)
-
-### Agents (1)
-- Backend Architect — Senior backend architect specializing in scalable system design, database architecture, API development, and cloud infrastructure. Builds robust, secure, performant server-side applications and microservices
-
-### Skills (11)
-- ask-matt — Ask which skill or flow fits your situation. A router over the skills in this repo.
-- code-review — Review the changes since a fixed point (commit, branch, tag, or merge-base) along two axes: Standards (does the code follow this repo's documented coding standards?) and Spec (does the code match what the originating issue/spec asked for?)…
-- dev-agent-skills — Git and GitHub workflow skills for commits, PRs, and code reviews
-- diagnosing-bugs — Diagnosis loop for hard bugs and performance regressions. Use when the user says "diagnose"/"debug this", or reports something broken/throwing/failing/slow.
-- find-skills — Helps users discover and install agent skills when they ask questions like "how do I do X", "find a skill for X", "is there a skill that can...", or express interest in extending capabilities. This skill should be used when the user is loo…
-- ponytail — Lazy senior dev mode for any coding task (write, refactor, fix, review): YAGNI, stdlib first, no unrequested abstractions. Not for non-coding requests.
-- skill-creator — Create new skills, modify and improve existing skills, and measure skill performance. Use when users want to create a skill from scratch, edit, or optimize an existing skill, run evals to test a skill, benchmark skill performance with vari…
-- verification-loop — Verification Loop Skill
-- wayfinder — Plan a huge chunk of work (more than one agent session can hold) as a shared map of decision tickets on your issue tracker, and resolve them one at a time until the way to the destination is clear.
-- writing-for-agents — Writing documents for agents. Use when creating or editing skills, or modifying AGENTS.md or CLAUDE.md.
-- writing-plans — Create strategic documentation
-
-### Plugins (7)
-- code-review — Code review
-- code-simplifier — Refactor code
-- commit-commands — Git workflow
-- context7 — Live documentation lookup
-- feature-dev — Feature development
-- pyright-lsp — Python type checking
-- typescript-lsp — TypeScript intelligence
-
-### Hooks (5)
-- block-dev-servers-outside-tmux-ensures-you-can-access-logs — Block dev servers outside tmux - ensures you can access logs
-- pre-compact — PreCompact Hook - Save state before context compaction
-- save-state-before-context-compaction — Save state before context compaction
-- session-start — SessionStart Hook - Load previous context on new session
-- suggest-compact — Strategic Compact Suggester
-
-### MCP Servers (6)
-- 06ketan/slideshot — Convert HTML to PDF/PNG/WebP/PPTX slide carousels with 11 themes (LinkedIn, Instagram, pitch decks, infographics). Pixel-perfect Puppeteer rendering, dimension-aware reflow for portrait/landscape, token-efficient JSON mode. `npx slideshot-mcp`.
-- fetch — HTTP fetch and content extraction.
-- filesystem — Secure scoped filesystem read/write.
-- memory — Persistent knowledge-graph memory.
-- openrouter — OpenRouter remote MCP: models, chat, and credits over HTTPS.
-- sequential-thinking — Structured step-by-step reasoning server.
-

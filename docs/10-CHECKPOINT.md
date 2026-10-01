@@ -134,12 +134,12 @@ Upstream toolkit inventory: `worldflowai/everything-claude-code` · `mattpocock/
 Skill rotation: **none ingested** (closed-loop patch + docs only). Commits directly on
 `main`: `83a61f7` red (Dockerfile must carry Node >=22 — OmniRoute npm engines) ·
 `9545753` green (NodeSource 24 layer + global gateway install + `OMNIROUTE_CMD`
-default) · `5f07db9` docs (ADR-15 amendment → Oracle Always Free; `docs/09-ORACLE-DEPLOY.md`
+default) · `5f07db9` docs (ADR-15 amendment → Oracle Always Free; `docs/15-ORACLE-DEPLOY.md`
 Arabic owner guide; RUNBOOK/HANDOFF/OWNER-NEXT-STEPS re-anchored) · `7e49f85` release
 (version 1.0.1 + CHANGELOG `[1.0.1]`; scope-deferral test pinned to v1.0.0). Tag
 `v1.0.1` pushed; GitHub Release published. Full gate green throughout (285 passed).
 Owner deploy blocked at Oracle card verification — bank contact 2026-09-01, recovery
-checklist in `docs/09-ORACLE-DEPLOY.md` §1. Record: `docs/PROJECT-JOURNEY.md` §14.
+checklist in `docs/15-ORACLE-DEPLOY.md` §1. Record: `docs/PROJECT-JOURNEY.md` §14.
 
 ## Post-release addendum — 2026-09-01: v1.0.2 (owner-directed runtime enhancements)
 
@@ -1087,6 +1087,102 @@ The earlier dated entries (incl. the bare-slug 404 observations at :962) are lef
 intact as the record of what was believed and measured at the time.
 `tests/test_omniroute_gateway.py::test_nexagi_404_canary_regression` keeps the bare
 slug on purpose — it is this decision's regression witness.
+
+## Radical truth documentation pass (2026-10-01)
+
+A read-only audit swept every markdown file in the repo, verifying each claim against
+source by running the tools rather than reading a brief. **47 STALE, 9 UNVERIFIED,
+0 confirmed roadmap-marked-as-live.** Zero files were changed by the auditor itself; the
+findings were applied by hand and each one is listed below with its evidence.
+
+### The single worst claim, and it was in the README's architecture diagram
+
+`README.md:54` said **`Tier1 fast (reflex, <250ms)`**. It was refuted three times over
+by this repository's own artifacts:
+- the live probe records **23.5 s – 51.7 s** TTFT on the FAST pool
+  (`benchmarks/CANDIDATE_MODELS_PROBE_REPORT.md`)
+- the 500-turn benchmark records **2,453.5 ms mean / 3,078.3 ms p95**, with **277 of
+  500 turns throttled to no reply at all**
+- `docs/AUDIT_REPORT.md:132` is *titled* "the `<250ms` ack target is unreachable"
+
+It was the only sub-second claim in the README, it sat in the diagram a new reader sees
+first, and it was the number most likely to make someone believe Sara answers instantly.
+Replaced with a measured table: **1.6 s best, 102.1 s worst on the same model on the
+same free pool**, drawn from 14 probe samples in the JSONL records.
+
+### Rules that instructed agents to do the wrong thing — the more dangerous class
+
+Stale *numbers* mislead. Stale *instructions* cause damage, because an agent obeys them.
+
+1. **`CLAUDE.md:147` named Edge-TTS `ar-EG-SalmaNeural` as the voice stack**, and
+   `:108-110` granted "unconfigured deployments" an Edge carve-out — while
+   `src/voice_policy.py:12` **bans `edge_tts` outright** and Edge was purged 2026-09-12.
+   That row instructed an agent to wire a module the codebase treats as a banned
+   footprint, and the invariant contradicted its own next clause. Both fixed.
+2. **`CLAUDE.md:13` and `:36` and `CONTRIBUTING.md:31` demanded "all green".** With the
+   P3-D RED barrier committed, an agent obeying those would try to turn 109
+   intentionally-failing tests green — precisely the Directive-5 violation, pinning the
+   barrier's own bug as correct behaviour. **The RULE was wrong, not just the count.**
+   All three now say *no unexplained failure*, and name the RED barrier as legitimate
+   and must-not-be-fixed.
+3. **`CONTRIBUTING.md:13` mandated the per-stream worktree merge pattern**, which
+   `CLAUDE.md:175-177` **retired** as of owner directive 2026-08-31, binding. It
+   instructed a retired pattern.
+4. **`CLAUDE.md:223-264`** carried a pasted session artifact listing "Agents (1)" and
+   "Skills (11)" — contradicting the 10-agent roster documented elsewhere and the ~55
+   skills actually available. Left in place pending the owner's call on whether the
+   block is still wanted; **flagged, not deleted unilaterally.**
+
+### The owner deploy guide was unreachable by the name 15 files cite
+
+`docs/15-ORACLE-DEPLOY.md` exists. **Seven documents cited `docs/09-ORACLE-DEPLOY.md`** —
+a file that does not exist — across `09-DECISIONS`, `10-CHECKPOINT`, `14-RUNBOOK`,
+`AUDIT_REPORT`, `HANDOFF`, `OWNER-NEXT-STEPS` and `PROJECT-JOURNEY`. The same class:
+`docs/08-OWNER-NEXT-STEPS.md` in four files. **Both renames applied.** A doc the owner is
+told to follow during a deploy was not reachable.
+
+### Count corrections, re-derived by script
+
+The audit's numbers disagreed with the brief that commissioned it, and **the tree won on
+both**: 2,500 collected (not 2,379), and 109 deliberate-RED (not 107). The brief's 91.9%
+was also stale — measured 91.8%. A **fourth** number was surfaced that nothing uses
+correctly: **42 catalogued / 46 routed / 46 `_do_*` handlers / 45 claimed**. These are
+four different sets; `docs/04-ARCHITECTURE.md` and `PROJECT-CONTEXT.md` say "45 handlers"
+and the tool compendium says "46 tools" while naming tools from neither set exactly.
+
+### What the audit found CLEAN — and why that matters more than the rot
+
+- **Zero broken relative markdown links** across 48 in-scope files; all 5 `[[wikilinks]]`
+  are legitimate (4 quote the rule, 1 is inside an acceptance criterion).
+- **`SECURITY.md` and `docs/00-MAP-OF-TESTING-AND-AUDITS.md`: fully clean.**
+- **The dangerous class — roadmap presented as live — is genuinely empty.** No document
+  claims SIP telephony, a Laya runtime, or a working self-evolution engine. The SIP
+  deferral, the Laya-is-a-pattern verdict, and "P3-C ships empty" are all recorded
+  correctly and consistently across five documents.
+- **One near-miss worth naming:** `src/skills/self_evolution.py:45 SelfEvolutionWorker`
+  IS live and wired (`src/bot.py`, nightly 23:40) — but it proposes **dialect notation**
+  into `Dialect_Notes.md` for owner approval. It does **not** synthesize or register tools.
+  Writing "self-evolution is operational" without that distinction would have been
+  exactly the lie this audit existed to catch. The README now names both explicitly.
+
+**Owner-approved, applied:** the pasted session artifact at the foot of `CLAUDE.md`
+("Active Components", `runner=opencode model=inclusionai/ling-3.0-flash-vl:free`, listing
+"Agents (1)", "Skills (11)", "Plugins (7)", "Hooks (5)", "MCP Servers (6)") is
+**deleted**. It was a snapshot of one session sitting inside the governing contract, and
+"Agents (1)" directly contradicted the 10-agent roster in
+`docs/architecture/AGENCY_SWARM_WORKFLOW.md`. All five contract sections — Operating
+Protocol, System Identity, Invariants, Stack Pins, Commands, Engineering Line — verified
+intact after removal. `CLAUDE.md` 238 → 202 lines.
+
+**Deferred by owner:** the remaining ~40 of the 47 STALE findings are count corrections
+across `03-TECH-SPEC`, `11-TESTING`, `01-PRD` and four `docs/reports/` files. Deferred to
+a dedicated measured cleanup pass rather than rushed here.
+
+**Structural note:** `docs_guard.py` checks *presence only* for 16 canonical files. It
+does not police `SECURITY.md`, `CONTRIBUTING.md`, `CHANGELOG.md`, `docs/14-16`,
+`docs/00-*`, `docs/architecture/` or `docs/reports/`. **The documentation rot was
+concentrated exactly where the gate cannot see it** — which is why this audit was
+necessary and why `docs_guard` passing is not evidence of accuracy.
 
 ## P3-B shipped — AST gate hardened to 5 rules (2026-09-30)
 

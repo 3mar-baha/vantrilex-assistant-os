@@ -58,9 +58,9 @@ record: `docs/01-ARCHITECTURE.md` §1. Vision: `docs/00-VISION.md`.
 | Quality gate | `make gate` green: Ruff (lint+format) → pytest → security gate (bandit + vendored secret scanner) → docs guard (16 canonical files) |
 | Repo | github.com/3mar-baha/vantrilex-assistant-os — everything on `main`, clean tree, pushed |
 | Vault repo | github.com/3mar-baha/vantrilex-vault (private, git-backed, PARA dirs created by first-boot `ensure_mandatory_dirs()`) |
-| Host decision | **Oracle Cloud Always Free** (owner, 2026-08-31, ADR-15 amendment) — HF Docker Spaces went paid ($9/mo), Render/Koyeb free can't carry the stack. Deploy guide: `docs/09-ORACLE-DEPLOY.md` |
+| Host decision | **Oracle Cloud Always Free** (owner, 2026-08-31, ADR-15 amendment) — HF Docker Spaces went paid ($9/mo), Render/Koyeb free can't carry the stack. Deploy guide: `docs/15-ORACLE-DEPLOY.md` |
 | Owner steps done | `.env` filled with real keys (local, gitignored); health probe green (`python -m src.main --health` → `overall: ok`); all 4 brain pins verified present in the local OmniRoute pools (1066 models) |
-| **NOT done yet** | **No deployment exists yet** — the Oracle VM, DuckDNS record, `sara.env` and compose-up are the owner's next physical steps per `docs/09-ORACLE-DEPLOY.md`. See §9 gaps + `docs/08-OWNER-NEXT-STEPS.md`. |
+| **NOT done yet** | **No deployment exists yet** — the Oracle VM, DuckDNS record, `sara.env` and compose-up are the owner's next physical steps per `docs/15-ORACLE-DEPLOY.md`. See §9 gaps + `docs/OWNER-NEXT-STEPS.md`. |
 
 ## 4. Architecture in one page
 
@@ -162,7 +162,7 @@ record: `docs/01-ARCHITECTURE.md` §1. Vision: `docs/00-VISION.md`.
   scope-lock test, verify-then-tag script, tag + GitHub Release executed) →
   **v1.0.1 + Oracle migration** (HF Docker Spaces discovered paid at deploy time →
   owner ruled Oracle Always Free; ADR-15 amended; Dockerfile gains the Node-24 layer +
-  global gateway install the npm gateway always needed; `docs/09-ORACLE-DEPLOY.md`
+  global gateway install the npm gateway always needed; `docs/15-ORACLE-DEPLOY.md`
   written; RUNBOOK/HANDOFF re-anchored).
 - Full narrative with commit hashes: `docs/PROJECT-JOURNEY.md` (§10-13) and
   `docs/10-CHECKPOINT.md` (per-sprint skill-rotation ledger).
@@ -177,11 +177,11 @@ record: `docs/01-ARCHITECTURE.md` §1. Vision: `docs/00-VISION.md`.
 | `docs/02-BACKLOG.md` | Task list with ACs + per-task done records; Deferred Backlog (v1.1+) |
 | `docs/03-DECISIONS.md` | **ADRs 1-21+** — every architectural decision with rationale (ADR-15 host + Oracle amendment, ADR-16 brain, ADR-17 biometrics, ADR-18 dispatcher, ADR-19 TokenJuice, ADR-21 vault) |
 | `docs/04-RUNBOOK.md` | Setup, env vars, deploy (§4 Oracle primary / §4b keep-alive legacy / §4c other hosts), smokes, troubleshooting, dated validation checklists |
-| `docs/09-ORACLE-DEPLOY.md` | The owner's Arabic step-by-step Oracle Cloud deploy guide (account → VM → DuckDNS → Docker → build → sara.env → compose+Caddy → verify → PC bridge) |
+| `docs/15-ORACLE-DEPLOY.md` | The owner's Arabic step-by-step Oracle Cloud deploy guide (account → VM → DuckDNS → Docker → build → sara.env → compose+Caddy → verify → PC bridge) |
 | `docs/05-TEST-PLAN.md` | Test strategy, coverage gates, sacred floor, AC→pytest index |
 | `docs/06-API-SPECIFICATION.md` | Wire contracts: bridge v1 protocol, LAN surface, vault API usage |
 | `docs/07-HANDOFF.md` | THIS FILE |
-| `docs/08-OWNER-NEXT-STEPS.md` | The exact step-by-step the OWNER must execute to make Sara live (Arabic) |
+| `docs/OWNER-NEXT-STEPS.md` | The exact step-by-step the OWNER must execute to make Sara live (Arabic) |
 | `docs/10-CHECKPOINT.md` | Per-sprint skill-rotation + teardown ledger |
 | `docs/PROJECT-JOURNEY.md` | Full narrative history §1-13 with commit hashes |
 | `docs/specs/sprint-{1..4}.md` | Implementation specs — interfaces, ACs, error modes (THE contract) |
@@ -206,7 +206,7 @@ make run-bridge   # PC bridge daemon
 
 1. **No deployment exists yet.** Code/packaging/tests are complete and tagged; creating
    the Oracle VM + secrets + pools is the owner's next physical step — hand-held in
-   `docs/09-ORACLE-DEPLOY.md` (Arabic) + `docs/08-OWNER-NEXT-STEPS.md`.
+   `docs/15-ORACLE-DEPLOY.md` (Arabic) + `docs/OWNER-NEXT-STEPS.md`.
 2. ~~Dockerfile cannot start OmniRoute~~ **FIXED in v1.0.1**: OmniRoute is a **Node/npm**
    application (`npm install -g omniroute` → `omniroute run`, port 20128) whose engines
    demand node >=22.22; the image now installs **Node 24 via NodeSource** and installs the

@@ -130,7 +130,7 @@ Sara accepts new scheduled background tasks at runtime (M4). The owner flow:
 Production deploys pin a release tag — checkout `v1.0.1` (or later) before building;
 never deploy an untagged `main` tip.
 
-**Owner hand-holding guide (Arabic, step by step): `docs/09-ORACLE-DEPLOY.md`** — this
+**Owner hand-holding guide (Arabic, step by step): `docs/15-ORACLE-DEPLOY.md`** — this
 section is the engineering summary. Why Oracle: HF made Docker Spaces paid ($9/mo,
 breaks the $0.00 invariant) and Render/Koyeb free tiers (512 MB) cannot carry the full
 stack. The always-free Ampere A1 VM is truly always-on (no keep-alive pinger, no sleep).
@@ -151,7 +151,7 @@ works with zero variables.
    (`.dockerignore` re-includes `scripts/omniroute/` + `scripts/supervise.py`; everything
    else — tests, docs, `.env`, sessions — never enters the build context). `docker build -t sara-os .`
 4. Environment on the VM (`~/sara-secrets/sara.env`, never committed): the 21 variables
-   listed in `docs/08-OWNER-NEXT-STEPS.md` + `PORT=8080`. The OAuth client JSON may live
+   listed in `docs/OWNER-NEXT-STEPS.md` + `PORT=8080`. The OAuth client JSON may live
    on the VM (`config/google_oauth_client.json`) — a persistent VM resolves the Space-era
    Google gap; the file itself still NEVER enters git or the image.
 5. Serve TLS: Caddy 2 in the same compose project (auto-HTTPS via a free DuckDNS
@@ -186,7 +186,7 @@ alarm that also alerts if the VM is down.
 
 ### 4-validation. Dated deploy validation (2026-08-31, sprint-4 task 4.4b AC10; re-anchored to Oracle with the ADR-15 amendment)
 
-Executed order on a fresh VM deploy (guide: `docs/09-ORACLE-DEPLOY.md`); every box
+Executed order on a fresh VM deploy (guide: `docs/15-ORACLE-DEPLOY.md`); every box
 verified before ticking:
 
 - [ ] `docker build` of the repo root succeeds on the VM (or `test_docker_build_succeeds`

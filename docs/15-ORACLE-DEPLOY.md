@@ -90,7 +90,7 @@ docker build -t sara-os .
 mkdir -p ~/sara-secrets && chmod 700 ~/sara-secrets
 nano ~/sara-secrets/sara.env
 ```
-انسخ إليه **نفس الـ 21 متغيراً** الموثقة في `docs/08-OWNER-NEXT-STEPS.md`
+انسخ إليه **نفس الـ 21 متغيراً** الموثقة في `docs/OWNER-NEXT-STEPS.md`
 (تلك نفسها التي أضفتها لـ Render — منها في `.env` المحلي). أضف سطراً واحداً إضافياً:
 
 ```env

@@ -10,7 +10,10 @@ Work runs on a tripartite hierarchy: **Leader** (decomposition, sequencing) ->
 
 1. **Specification before code** — open with acceptance criteria, get them agreed, then implement.
 2. **Tests are the contract** — red -> green -> refactor. No production code without a failing test first.
-3. **One concern per worktree** — parallel work uses `git worktree add` (or `uos dispatch`); merge only after review.
+3. **One item, one commit** — commits land directly on `main` and are pushed
+   immediately (`CLAUDE.md` §5, owner directive 2026-08-31, binding). The
+   per-stream worktree/branch merge pattern is retired; `core-foundation` is a
+   reference checkout only.
 4. **Docs ship with behavior** — documentation changes land in the same commit as the code it describes.
 5. **Minimalism** — smallest abstraction that satisfies the specification. No speculative features or configuration.
 6. **Zero-cost rule** — every dependency added must be free/open-source and run on free tiers.
@@ -25,10 +28,12 @@ is updated in the same commit for anything user-visible.
 ```bash
 make lint    # ruff check + ruff format --check
 make test    # pytest (>=85% branch coverage enforced via addopts)
-make gate    # lint + test + security (bandit + secret scan) + docs guard
+make gate    # lint + test + security (bandit + secret scan) + docs guard + tiered coverage
 ```
 
-All green before merge, no exceptions. Findings are fixed or waived explicitly in `docs/09-DECISIONS.md`.
+No **unexplained** failure before merge. A committed RED barrier is legitimate and
+must not be "fixed" — that pins the barrier's own bug as correct behaviour. Findings
+are fixed or waived explicitly in `docs/09-DECISIONS.md`.
 
 ## Environment
 
