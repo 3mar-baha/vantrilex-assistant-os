@@ -340,22 +340,29 @@ Therefore:
     *after* the base, preserving base order, and returns a `tuple` because the importing
     call sites depend on `in`, iteration and `set()` over it.
 
-  The overlay **ships empty**. This phase registers nothing and is revertible in one
-  commit; P3-D enables an actual tool. `tests/test_tool_overlay.py` pins the merge with a
-  parametrized guard over all **46** routed names (the capability registry holds 42 — the
-  four routed-but-uncatalogued names are `analytics`, `cloud_backup`, `none` and
-  `quota_safety`), so a dropped name names itself rather than surfacing as a set difference.
+  The overlay **ships empty**, and still does: P3-D added the entry point and the guards,
+  and **nothing in the repository calls `register_tool` at runtime**. `tests/test_tool_overlay.py`
+  pins the merge with a parametrized guard over all **46** routed names (the capability
+  registry holds 42 — the four routed-but-uncatalogued names are `analytics`,
+  `cloud_backup`, `none` and `quota_safety`), so a dropped name names itself rather than
+  surfacing as a set difference.
 
-  Two constraints are **latent and, today, blind to the overlay** — both are stated at
-  their call sites in `src/` rather than here, and both are P3-D's to close:
+  Two constraints were **latent and blind to the overlay** — both are stated at their call
+  sites in `src/` rather than here, and both were **P3-D's to close, and are now closed**:
   `tests/suite/tier1_resilience/test_contextual_routing.py:37` requires every valid tool to
-  appear in `_ROUTER_PROMPT_AR`, which is a static literal, so an overlay tool passes that
-  guard while being *unemittable by the router* — the router may only name tools its
-  catalog lists; and `tests/suite/tier1_resilience/test_skill_standard.py:25` requires every
-  `_TOOL_GOALS` key to exist in `TOOL_CAPABILITIES`, which would let an overlay tool skip
-  the capability schema, the narration guide and the `_do_<name>` handler that
-  `ToolRegistry.call` `getattr`s. Passing either guard is therefore *not* evidence the tool
-  runs.
+  appear in `_ROUTER_PROMPT_AR`, which is a static literal, so an overlay tool passed that
+  guard while being *unemittable by the router* — the router may only name tools its catalog
+  lists; and `tests/suite/tier1_resilience/test_skill_standard.py:25` requires every
+  `_TOOL_GOALS` key to exist in `TOOL_CAPABILITIES`, which let an overlay tool skip the
+  capability schema, the narration guide and the `_do_<name>` handler that
+  `ToolRegistry.call` `getattr`s. Passing either guard was therefore *not* evidence the tool
+  ran. **P3-D closed both**: the prompt the gateway receives is now composed live by
+  `src/dispatcher.router_prompt()` — byte-identical to the static literal on an empty
+  overlay, appended with one line per registered tool otherwise — and `register_tool`
+  writes all six surfaces or none. Note the fix is *composition*, not editing the `Final`
+  literal: splicing the overlay into `_ROUTER_PROMPT_AR` would keep the literal's text
+  pinned by three other guards, and a composition that reads live is what makes a release
+  observable.
 - **3.5.2 — Two distinct failure modes, two distinct fixes.** If the verb cluster *is*
   reachable but scored low, the fix is one line in `_TOOL_GOALS`. If the verb cluster is
   unreachable, it is a synthesis candidate. The classifier in §3.1 must decide which, and
@@ -545,22 +552,56 @@ set is green and the checkpoint ledger is updated.
 - A tool present in the overlay but absent from `TOOL_CAPABILITIES` is rejected at
   registration time.
 - With an empty overlay, the full suite passes unchanged — **this phase ships with zero
-  dynamic tools enabled**, and is revertible in one commit.
+  dynamic tools enabled**, and is revertible in one commit. (P3-D widened the merge layer
+  into a registration API without unfreezing either base; the empty-overlay law is now
+  re-asserted against the *composed* prompt as well as the literal.)
 
-### P3-D — First live registration, owner-gated
+### P3-D — The registration API, owner-gated — BUILT (2026-10-01)
 
-- `promotion_decision` requires all three inputs; each single-input omission is tested
-  independently, not as one combined case.
-- A hot-loaded tool is callable within the same session with no daemon restart, and
-  `importlib.invalidate_caches()` is asserted to have run.
-- A module that raises at import time fails the load and leaves the previous binding
-  intact — the bot keeps serving.
-- `CompositionCache.clear()` and a process restart both fully reset dynamic bindings, with
-  no persistence file written.
-- Post-promotion: `docs_guard.py` 16/16, `check_tiered_coverage.py` PASSED, the new
-  module added to the 98% list, and `docs/10-CHECKPOINT.md` updated in the same commit.
-- The **four invariants are asserted, not assumed**: feminine/masculine forms, no Edge-TTS
-  import in the new module, no `confirmation_id` minted, no paid model referenced.
+**Status: the API and its guards shipped. The hot-load half below did NOT, and is
+recorded here as not built rather than folded into what did.** §3.5.3's subprocess
+import, `importlib.invalidate_caches()`, and the module-level-`raise` containment are
+**unbuilt**: they belong to the synthesis producer, which does not exist, and
+`register_tool` takes an already-imported handler.
+
+What shipped, and what each claim is anchored on:
+
+- `register_tool(name, markers, handler, *, goals, needs, reversible, chains_with)` and
+  `unregister_tool(name)` on `src/tool_overlay.py`. **SIX** registration points, not the
+  four the table names: the `ToolRegistry._do_<name>` binding, `TOOL_CAPABILITIES[<name>]`,
+  `valid_tools()`, `tool_goals()`, the `sara_tool_skills._SKILLS` narration guide, and the
+  collision surface. The fifth was found by measurement, not design — a capability record
+  with no guide turns `test_skill_standard.py:50` red in whatever test runs *next*.
+- **All six or none.** The capability registry is written FIRST because it is the one
+  surface a caller can make unwritable, so an unreachable point is discovered before
+  anything is written; everything after it is unwound through one `_rollback`.
+- **The irreversible tier is closed by construction, twice.** `reversible=False` is refused
+  (R4), *and* a post-condition re-checks the whole live registry after the write and rolls
+  back if any non-deny-listed key carries the irreversible flag. The second half is what
+  makes the claim structural rather than a promise about one argument list. Guarded by
+  `tests/test_p3d_irreversible_backstop.py`.
+- **Seam 1** — the prompt handed to the gateway is composed live. Empty overlay ⇒
+  byte-identical to the `Final` literal; a registered tool is nameable by the router;
+  releasing one tool removes exactly its own line.
+- **Seam 2** — `ToolRegistry.call(<registered tool>, arg)` returns the handler's exact reply
+  including the echoed argument. `staticmethod(handler)` is load-bearing: a plain class
+  attribute becomes a *bound method*, the extra `self` raises `TypeError`, and the
+  registry's blanket `except` turns it into `TOOL_FAIL_AR` — a tool that is registered and
+  does nothing.
+- **Seam 3** — `evolution.is_valid_task_name` unions the live overlay inside the predicate.
+  `_COLLIDING_TOOL_NAMES` comes out byte-identical; liveness is a *second* `in` check, not
+  a rewritten snapshot.
+- **Idempotency, ordered deliberately**: a name this module registered is a no-op BEFORE any
+  refusal is consulted, so registering twice is not an error and a cleanup path cannot fail.
+
+Still true, and deliberately so: **no tool is registered at runtime, and nothing in this
+repository calls `register_tool`.** Sara does not autonomously synthesize tools. The overlay
+ships empty; what shipped is the all-or-nothing entry point and the guards that hold it
+honest.
+
+Not built, and not deferred silently: the synthesis producer, the subprocess import gate
+(§3.4), `importlib.invalidate_caches()`, and any `promotion_decision` call site. `promotion_decision`
+itself already exists and is tested (P3-B); what is missing is a caller.
 
 ### Explicitly not in P3
 
@@ -581,8 +622,12 @@ set is green and the checkpoint ledger is updated.
   form. Every other pin is still untouched.
 - It does not read or modify `.env`.
 - It does not create a runtime synthesizer. Synthesis is a maintainer action in a separate
-  process.
-- It does not register any tool. P3-C ships with an empty overlay by design.
+  process. P3-D added the *registration* entry point; the synthesizer that would call it is
+  still unbuilt, and §3.4's subprocess import gate is still unbuilt with it.
+- It does not register any tool. P3-C shipped with an empty overlay by design, and P3-D
+  **kept that law** — `register_tool` exists and is tested, and nothing in the repository
+  calls it. "The seam exists" is not "the capability is live", and this document does not
+  claim the second.
 - It does not adopt an external runtime dependency. Zero new packages, unchanged.
 
 ---

@@ -22,7 +22,7 @@ from src.cognition import CompositionCache, ReflectiveTrace
 from src.config import Settings
 from src.gateway import GatewayError, OmniRouteClient, Tier
 from src.openclaw.intents import INTENT_PATTERNS, ROUTER_TOOL_LINES, VALID_OPENCLAW_TOOLS
-from src.tool_overlay import valid_tools
+from src.tool_overlay import router_catalog_lines, valid_tools
 
 DEFAULT_ACK_AR: Final[str] = "من عيوني هسا ببدأ..."
 MAX_ACK_CHARS: Final[int] = 30
@@ -105,6 +105,32 @@ _ROUTER_PROMPT_AR: Final[str] = (
     '- "rag_domains": قائمة من المفردات المغلقة فقط (dialect|humor|grace|kb|'
     'personal|none) — أي قيمة خارجها تُهمل؛ اتركها ["none"] للدردشة الصرفة.\n'
 )
+
+
+def router_prompt() -> str:
+    """`_ROUTER_PROMPT_AR` plus a live catalog line per runtime-registered tool.
+
+    SEAM 1 (`src/dispatcher.py:868`). A router model may only name a tool its
+    catalog lists, so before this existed a runtime-registered tool was parsed
+    but UNEMITTABLE: `_parse_router` accepted the name because the allow-list
+    reads `valid_tools()`, yet nothing ever told the model the name existed. The
+    overlay name was in the allow-list and not in the prompt — the same silent
+    loss as the original `"none"` rewrite, one layer up.
+
+    Three properties this function must hold, and each has a guard:
+
+    * EMPTY overlay ⇒ the return is the static literal BYTE FOR BYTE. A fix that
+      rewrites the base changes the catalog for every turn, registered or not.
+    * NON-EMPTY overlay ⇒ every registered name is present, so the router can
+      name what `valid_tools()` lets it name.
+    * PER TOOL, not all-or-nothing: releasing one tool removes exactly its own
+      line. Composed on every call and never memoised — a baked or cached
+      composition is the import-time-snapshot defect again, one layer up.
+    """
+    extra = router_catalog_lines()
+    if not extra:
+        return _ROUTER_PROMPT_AR
+    return f"{_ROUTER_PROMPT_AR}\n" + "".join(extra)
 
 
 _ROUTES: Final[dict[str, Tier]] = {
@@ -730,13 +756,10 @@ def _parse_router(reply: str) -> tuple[str, str, str, str, bool] | None:
     tool = str(verdict.get("tool") or "none").strip().lower()
     # P3-C: the allow-list reads through the overlay merge (src/tool_overlay.py),
     # so a runtime-registered tool is no longer silently rewritten to "none" here.
-    # BUT — Directive 4, unreachability stated at the call site: this check is
-    # necessary and NOT sufficient. `_ROUTER_PROMPT_AR` above is a static literal
-    # that still enumerates the base tool set, and a router model may only name
-    # tools its catalog lists. An overlay tool is therefore still UNEMITTABLE
-    # until the prompt is extended — the missing producer is the P3-D prompt line,
-    # and `tests/suite/tier1_resilience/test_contextual_routing.py:37` reads the
-    # STATIC `_VALID_TOOLS`, so it will not catch the omission either.
+    # P3-D: the check is now NECESSARY *AND* SUFFICIENT for emit-ability — the
+    # prompt handed to the gateway is `router_prompt()` (:905), which names every
+    # tool `valid_tools()` admits, so a router model has a catalog entry to
+    # produce. `tests/test_p3d_seams.py` holds both halves as one claim.
     if tool not in valid_tools():
         logger.warning("dispatcher unknown tool {!r} from router", tool)
         tool = "none"
@@ -865,7 +888,7 @@ class FrontDoorDispatcher:
             try:
                 reply = await self._gateway.chat(
                     [
-                        {"role": "system", "content": _ROUTER_PROMPT_AR},
+                        {"role": "system", "content": router_prompt()},
                         {"role": "user", "content": user_text},
                     ],
                     tier=Tier.FAST,

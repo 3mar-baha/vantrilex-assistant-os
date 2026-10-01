@@ -239,17 +239,21 @@ def promotion_decision(report: PromotionReport, *, owner_approved: bool, suite_g
 #: "gold_rate\n" as a task name and put a newline inside an identifier.
 NAME_RE: Final = re.compile(r"^[a-z][a-z0-9_]{2,39}$")
 
-#: Both collision surfaces, unioned, read from the live registries. The union
-#: is load-bearing and NOT symmetric: `TOOL_CAPABILITIES` is a strict subset of
-#: the routed set, so a guard reading only the capabilities registry provably
-#: leaks every routed-but-uncatalogued name (`analytics`, `cloud_backup`,
-#: `none`, `quota_safety` as of this writing). Snapshotting the union at import
-#: keeps `is_valid_task_name` a pure predicate — no registry import per call.
-#: P3-C: the routed half now reads the merged overlay view, so the snapshot still
-#: equals `_VALID_TOOLS` today (the overlay ships empty). Directive 4: it stays an
-#: IMPORT-TIME snapshot — a tool registered after import is not yet a collision
-#: surface here. P3-D must re-decide that lifecycle if a name is ever registered
-#: before a task is proposed for it.
+#: Both collision surfaces, unioned, SNAPSHOTTED at import. The union is
+#: load-bearing and NOT symmetric: `TOOL_CAPABILITIES` is a strict subset of the
+#: routed set, so a guard reading only the capabilities registry provably leaks
+#: every routed-but-uncatalogued name (`analytics`, `cloud_backup`, `none`,
+#: `quota_safety` as of this writing). P3-C moved the routed half onto the merged
+#: overlay view, so with the overlay empty the snapshot still equals
+#: `_VALID_TOOLS`.
+#:
+#: P3-D: this snapshot stays EXACTLY as it is — it is a `Final` the registration
+#: tests assert comes out byte-identical, and ten test modules read the base
+#: registries it was derived from. Liveness comes from `is_valid_task_name`
+#: unioning the live overlay INSIDE the predicate, which is why a name registered
+#: after import is a collision without the snapshot ever moving. Rewriting the
+#: snapshot from a registration would change the meaning of every module that
+#: reads it mid-suite.
 _COLLIDING_TOOL_NAMES: Final[frozenset[str]] = frozenset(TOOL_CAPABILITIES) | frozenset(
     valid_tools()
 )
@@ -276,13 +280,28 @@ _TOOL_TOKEN_RE: Final = re.compile(r"[0-9A-Za-z_]+")
 
 
 def is_valid_task_name(name: str) -> bool:
-    """snake_case shape AND no collision with EITHER registry.
+    """snake_case shape AND no collision with EITHER registry, live.
 
     A new capability must be nameable without shadowing a live tool: the
     dispatcher routes on the name, so a collision is a silent takeover of
     someone else's behaviour, not a style complaint.
+
+    P3-D — the collision half has TWO parts, and the second is the live one:
+
+    * `_COLLIDING_TOOL_NAMES`, the import-time union of the capability registry
+      and the routed set. It is a `Final` snapshot and is read HERE, at call time,
+      never captured into a local at import — a captured copy is the seam-3 bug.
+    * `valid_tools()`, the merged overlay view, consulted on every call. Without
+      it a tool registered after import is not yet a collision surface, so a task
+      could be proposed for a capability Sara already has, and this predicate is
+      the structural backstop for the paraphrase blind spot in the forced safety
+      tier (see the module docstring). Both halves are kept: `TOOL_CAPABILITIES`
+      is a strict subset of the routed set, so consulting either alone leaks
+      names.
     """
-    return NAME_RE.fullmatch(name) is not None and name not in _COLLIDING_TOOL_NAMES
+    if NAME_RE.fullmatch(name) is None:
+        return False
+    return name not in _COLLIDING_TOOL_NAMES and name not in valid_tools()
 
 
 def _names_irreversible_tool(intent: str, evidence: list[str]) -> bool:

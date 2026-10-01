@@ -58,6 +58,13 @@ EXPECTED_GOAL_KEY_COUNT = 37
 #: provably additive and provably not a rename of something real.
 SENTINEL = "p3c_synthetic_probe"
 SENTINEL_MARKER = "p3c_probe_marker"
+SENTINEL_GOALS = "فحص الاستعلام التجريبي"
+
+
+async def _sentinel_handler(arg: str) -> str:
+    """The `async (str) -> str` shape `ToolRegistry.call` awaits. Never invoked by
+    the guards below — registration binds a handler, it does not call it."""
+    return f"sentinel:{arg}"
 
 
 def _overlay():
@@ -476,36 +483,77 @@ def test_both_overlay_target_modules_import_without_a_cycle():
 # --------------------------------------------------------------------------------------
 
 
-def test_router_prompt_constraint_holds_today_and_blind_to_the_overlay():
-    """tests/suite/tier1_resilience/test_contextual_routing.py:37 requires every
-    valid tool to appear in `_ROUTER_PROMPT_AR`.
+def test_router_prompt_constraint_holds_and_now_tracks_the_overlay():
+    """INVERTED 2026-10-01 (P3-D). The old claim was: the router prompt is BLIND to
+    the overlay, so a registered tool "can never be emitted, because the router may
+    only name tools its catalog lists". That was the DEFECT, not the law — and its
+    own assertion said so ("if this now passes, the prompt was extended and this
+    doc-test is stale"). The static literal is still blind, deliberately; the
+    COMPOSED prompt is not.
 
-    It reads the STATIC `_VALID_TOOLS`, so it will NOT catch an overlay tool. A
-    tool registered in P3-D is therefore invisible to the LLM router — it can never
-    be emitted, because the router may only name tools its catalog lists. P3-D
-    must extend the prompt (and that guard) in the same change.
+    Why the literal stays blind, and why that is not a hole: `_ROUTER_PROMPT_AR` is
+    a `Final` hand-maintained catalog whose text other guards pin, so the overlay is
+    APPENDED at the call site by `router_prompt()` instead of spliced into it. The
+    law is therefore about the prompt the gateway actually receives — which is what
+    `tests/test_p3d_seams.py` asserts on `gw.router_calls`. Composing at the call
+    site is also what keeps that byte-identity guard NON-VACUOUS: it compares the
+    base literal the module still holds against what is sent, so an implementation
+    that rebinds the module attribute would satisfy the comparison against itself.
+
+    Three claims, in order: the base still names every static tool; a registered
+    tool is named; and releasing it removes exactly that one name.
     """
-    from src.dispatcher import _ROUTER_PROMPT_AR
+    from src.dispatcher import _ROUTER_PROMPT_AR, router_prompt
 
     ov = _overlay()
     missing = [t for t in _VALID_TOOLS if t not in _ROUTER_PROMPT_AR]
     assert not missing, f"tools invisible to the router: {missing}"
 
-    ov.OVERLAY[SENTINEL] = (SENTINEL_MARKER,)
+    assert ov.OVERLAY == {}, "precondition: the overlay is empty"
+    assert router_prompt() == _ROUTER_PROMPT_AR, (
+        "an empty overlay must compose to the static base byte for byte — a fix that "
+        "rewrites the base changes the catalog for every turn, registered or not"
+    )
+
+    ov.register_tool(
+        SENTINEL,
+        (SENTINEL_MARKER,),
+        _sentinel_handler,
+        goals="فحص الاستعلام التجريبي",
+        needs="none",
+        reversible=True,
+        chains_with=(),
+    )
     try:
-        still_missing = [t for t in ov.valid_tools() if t not in _ROUTER_PROMPT_AR]
-        assert still_missing == [SENTINEL], (
-            "expected the router prompt to be blind to the overlay today; if this "
-            "now passes, the prompt was extended and this doc-test is stale"
+        assert SENTINEL in router_prompt(), (
+            f"{SENTINEL!r} is registered and absent from the composed router prompt — the "
+            "router may only name a tool its catalog lists, so an unnameable tool is "
+            "UNREACHABLE from the router lane however well the allow-list accepts it"
         )
+        missing_after = [t for t in ov.valid_tools() if t not in router_prompt()]
+        assert not missing_after, f"routable but unnameable by the router: {missing_after}"
     finally:
         ov.reset_overlay()
 
+    assert SENTINEL not in router_prompt(), (
+        "the composed prompt still advertises a released tool — the composition is "
+        "memoised or baked rather than read live"
+    )
+    assert router_prompt() == _ROUTER_PROMPT_AR
 
-def test_capability_constraint_holds_today_and_blind_to_the_overlay():
-    """tests/suite/tier1_resilience/test_skill_standard.py:25 requires every
-    `_TOOL_GOALS` key to exist in `TOOL_CAPABILITIES`. Same blindness: it reads the
-    static dict, so an overlay tool skips the capability schema entirely."""
+
+def test_capability_constraint_holds_for_every_registered_tool():
+    """INVERTED 2026-10-01 (P3-D). The old claim was: the capability guard is blind
+    to the overlay, "so an overlay tool skips the capability schema entirely". Same
+    inversion, same reason: blindness was the defect and the guard said so itself.
+
+    What is NOT inverted is the hazard the old test documented. A name written
+    straight into `OVERLAY` — bypassing `register_tool` — is still routable and
+    still selectable with no capability record, no handler and no narration guide.
+    That is a real half-registration, and the honest post-P3-D law is that
+    `register_tool` is what closes it: the low-level seam is reachable, and the
+    public entry point is the thing that keeps the five other surfaces in step.
+    """
     from src.skills.capabilities import TOOL_CAPABILITIES
 
     ov = _overlay()
@@ -516,11 +564,32 @@ def test_capability_constraint_holds_today_and_blind_to_the_overlay():
     try:
         still_missing = [t for t in ov.tool_goals() if t not in TOOL_CAPABILITIES]
         assert still_missing == [SENTINEL], (
-            "expected the capability guard to be blind to the overlay today; if this "
-            "now passes, the guard was migrated and this doc-test is stale"
+            "a raw OVERLAY write is expected to leave a tool with no capability record "
+            "— that bypass is the hazard `register_tool` exists to close, and if this "
+            "now passes the low-level seam changed shape"
         )
     finally:
         ov.reset_overlay()
+
+    ov.register_tool(
+        SENTINEL,
+        (SENTINEL_MARKER,),
+        _sentinel_handler,
+        goals="فحص الاستعلام التجريبي",
+        needs="none",
+        reversible=True,
+        chains_with=(),
+    )
+    try:
+        still_missing = [t for t in ov.tool_goals() if t not in TOOL_CAPABILITIES]
+        assert not still_missing, f"registered tools without capabilities: {still_missing}"
+        record = TOOL_CAPABILITIES[SENTINEL]
+        assert record["markers"] == (SENTINEL_MARKER,), record
+        assert record["reversible"] is True, record
+    finally:
+        ov.reset_overlay()
+
+    assert SENTINEL not in TOOL_CAPABILITIES, "reset_overlay left the capability record"
 
 
 def test_capability_registry_is_a_strict_subset_of_valid_tools():

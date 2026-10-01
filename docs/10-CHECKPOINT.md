@@ -1232,6 +1232,131 @@ exhausted… streamed zero deltas in 4s`); h04 passed this run. Zero code
 regressions. Tiered coverage PASSED, security OK, quality 7/7, docs 16/16,
 ruff clean.
 
+---
+
+## P3-D shipped — live tool registration, and it still ships EMPTY (2026-10-01)
+
+The RED barrier (`b506315`) went **107 red / 5 green → 115 green / 0 red**, and the
+barrier's own claims were correct on every point I could check. Read the numbers as
+they were measured, not as the brief stated them: the barrier is **112 tests** across
+the two files (29 + 83), **not 112 with 107 red** — measured **107 failed / 5 passed**,
+so the brief's "25 red / 4 green" and "82 red / 1 green" were both off by the same
+single test in the same direction. The target "107 red → green" is exact; the split
+between the two files was not.
+
+**What shipped.** `register_tool(name, markers, handler, *, goals, needs, reversible,
+chains_with)` and `unregister_tool(name)` on `src/tool_overlay.py`, writing **SIX**
+surfaces or NONE. The brief said five; measurement found a sixth that the four-point
+table does not name — the `sara_tool_skills._SKILLS` narration guide, without which a
+capability record turns the green guard `test_skill_standard.py:50` red in *whatever
+test runs next*, not in the test that registered the tool. That is the sixth point,
+and it is the one an implementer working from the four-point table alone would miss.
+
+**The overlay still ships EMPTY, and nothing registers at runtime.** No tool is
+registered at import; **no production code path in this repository calls
+`register_tool`.** Sara does not autonomously synthesize tools. What shipped is the
+all-or-nothing entry point and the guards that hold it honest. Both the
+`src/tool_overlay.py` module docstring and §7 of the cross-framework doc were
+corrected in the same commit — the old sentence "SHIPS EMPTY. This phase registers
+nothing" was true of P3-C and false of P3-D.
+
+**Three seams, closed by measurement, not by assertion:**
+
+- **Seam 1** — the prompt sent at `src/dispatcher.py:868` is now `router_prompt()`, composed
+  live. Empty overlay ⇒ **byte-identical** to the `Final` literal (measured `==` against
+  the module attribute, not "equivalent"); a registered name is in the prompt the gateway
+  actually receives; releasing one tool removes exactly that one line. **Composition, not
+  surgery on the literal** — splicing the overlay into `_ROUTER_PROMPT_AR` would move a
+  string three other guards pin, and a live read is what makes the release observable at
+  all. `src/decision_loop.py:322` sends the same prompt and is on the same seam; it was
+  **not** touched and is flagged below.
+- **Seam 2** — `ToolRegistry.call(<registered>, arg)` returns the handler's exact reply
+  including the echoed argument. `staticmethod(handler)` is load-bearing and was proved it:
+  the bound-method mutant returns `TOOL_FAIL_AR` — a tool that is registered and does
+  nothing, with no exception anywhere along the way.
+- **Seam 3** — `evolution.is_valid_task_name` unions the live overlay **inside** the
+  predicate and reads the module global at call time. `_COLLIDING_TOOL_NAMES` comes out
+  **byte-identical**; the registration tests assert that surface is unmoved. Ten modules
+  read the base registries, and rewriting the snapshot would change their meaning
+  mid-suite.
+
+**Owner condition #1, enforced in this commit, not deferred.** `IRREVERSIBLE_TOOLS` is a
+`Final` frozenset built at import, so a dynamic tool declaring `reversible=False` would
+enter `TOOL_CAPABILITIES` and NOT the deny-list, and every downstream confirmation gate
+would miss it — blueprint §3.6's "closed by construction" was a sentence in a document.
+Both halves shipped: **R4** refuses `reversible=False` outright, and a **post-condition**
+re-checks the whole live registry after the capability write and rolls the registration
+back if any non-deny-listed key carries the irreversible flag. The second half is what
+makes the claim structural rather than a promise about one function's argument list, and
+it has its own guard file (`tests/test_p3d_irreversible_backstop.py`, written RED first).
+
+**Two guards inverted, in `tests/test_tool_overlay.py`, and why.** Both asserted the
+router/capability surfaces were *blind to the overlay* — which is the defect, not the law.
+`test_router_prompt_constraint_holds_today_and_blind_to_the_overlay` became
+`test_router_prompt_constraint_holds_and_now_tracks_the_overlay`, and
+`test_capability_constraint_holds_today_and_blind_to_the_overlay` became
+`test_capability_constraint_holds_for_every_registered_tool`. Each keeps its intent and
+inverts its claim; neither was deleted, and each docstring records what changed and why.
+The first did **not** mechanically go red under this implementation — the static literal
+is still blind, deliberately — which is stated in the guard rather than left for the next
+reader to discover. **Reported, not hidden:** the brief predicted both would go red.
+
+**Measured results** (all re-derived by running the commands, none typed from memory):
+
+| Measurement | Value |
+|---|---|
+| P3-D barrier files | **115 passed**, 0 failed |
+| `tests/test_tool_overlay.py` | **119 passed**, 0 failed |
+| Suite excluding the 3 P3-D files | **2,378 passed** / 2 failed / 7 skipped / 1 xfailed |
+| Full suite | **2,493 passed** / 2 failed / 7 skipped / 1 xfailed |
+| `src/tool_overlay.py` branch coverage | **98.4%** (CORE list, threshold 98.0%) |
+| TOTAL branch coverage | **91.9%** (was 91.8%) |
+| ruff check / format | clean / clean |
+| `security_gate.py` / `docs_guard.py` | OK / 16/16 OK |
+| Mutation run | **12 mutants, 12 RED** |
+
+The 2 failures are `tests/live_harness/test_h04_ttft_monitor` and
+`test_h06_joda_dialogues` — the pre-existing free-provider-pool flake
+(`GatewayError: all models exhausted… streamed zero deltas in 4s`), reproduced on the
+baseline before this work started. **Not weakened, not skipped, not touched.**
+
+**Mutation run — every guard proved non-vacuous** (Directive 5; each mutant applied,
+run, and reverted from a byte-copy backup):
+
+| Mutant | Guard that went RED |
+|---|---|
+| M1 drop the R4 refusal | `test_registration_never_makes_a_tool_irreversible` |
+| M2 drop the P5 narration guide | `test_registration_keeps_every_capability_covered_by_a_narration_guide` |
+| M3 memoise the seam-1 composition | `test_router_prompt_with_an_empty_overlay_is_the_static_base_byte_for_byte` + **3 more**, incl. both per-tool release guards |
+| M4 bind the handler as a plain class attribute | `test_registration_point_1_is_reachable_through_tool_registry_call` |
+| M5 collision check before the idempotency check | `test_registering_the_same_name_twice_is_a_no_op` |
+| M6 collision reads only the capabilities half | `test_registration_refuses_a_name_that_collides_with_a_live_tool[analytics]` |
+| M7 drop the irreversible post-condition | `test_an_undenied_irreversible_entry_makes_the_registration_refuse_and_roll_back` |
+| M8 `is_valid_task_name` reads only the snapshot | `test_a_registered_name_is_no_longer_a_valid_task_name` |
+| M9 write the overlay before the capability record | `test_registration_refuses_and_names_the_point_it_cannot_reach` |
+| M10 `reset_overlay` keeps the registrations | `test_router_prompt_sent_to_the_gateway_names_a_registered_overlay_tool` |
+| M11 `unregister_tool` clears the whole overlay | `test_two_registered_tools_are_both_named_and_release_one_by_one` |
+| M12 R1 accepts a non-snake_case name | `test_a_refused_registration_leaves_no_registration_point_half_populated[R1-bad-shape]` |
+
+M3 was run twice: with `-x` (byte-identity guard first) and without, which is how the
+**per-tool** guards were confirmed to catch memoisation independently — four guards red,
+not one.
+
+**Holes found, NOT fixed (out of scope, gated on the next item):**
+
+1. **`src/decision_loop.py:322` sends `_ROUTER_PROMPT_AR` directly** — the same seam-1 call
+   site, one layer over. A registered tool is unemittable from the decision loop exactly as
+   it was from the dispatcher before this commit. **F-1's territory**: the decision loop's
+   tool lane, not the router catalog, is the real gate. Not touched.
+2. **`register_tool` is the only thing in the tree that can `setattr` `ToolRegistry`,** and
+   the P3-B AST gate's `AMBIENT_AUTHORITY_NAMES` does not police it. A registered handler
+   could rewrite a *shipped* `_do_*` and hijack the tool lane. The asymmetry is recorded
+   in the module docstring rather than fixed.
+3. **R3 is unobservable at this boundary, by construction** — the deny-list is a subset of
+   both live registries, so R2 refuses all six names first. Kept as an explicit law so a
+   future reordering that weakened R2 cannot reopen the tier; the enforceable form is R4.
+   Recorded in the barrier's own docstring before this commit, and confirmed here.
+
 - [07 — Implementation Plan](./07-IMPLEMENTATION-PLAN.md)
 - [11 — Testing](./11-TESTING.md)
 - [Objectives Ledger](./reports/OBJECTIVES_LEDGER_MET_VS_PENDING.md)
