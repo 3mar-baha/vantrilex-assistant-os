@@ -2516,10 +2516,10 @@ pre-existing failure.** Not weakened, not skipped, not xfailed.
 ### Carried forward from F-4
 
 * ~~**`test_run_bot_boots_all_components_and_shuts_down` is RED for a pre-existing
-  reason and is NOT F-4's to fix.**~~ **RESOLVED by F-5 (2026-10-01) — and this
-  note's diagnosis was WRONG in its mechanism.** It was never a retry problem: the
-  real status is 401, which never enters the 429/403 retry branch. Full measurement
-  and fix in the F-5 milestone below.
+  reason and is NOT F-4's to fix.**~~ **RESOLVED by the boot-path hermeticity work
+  order (2026-10-01) — and this note's diagnosis was WRONG in its mechanism.** It was
+  never a retry problem: the real status is 401, which never enters the 429/403 retry
+  branch. Full measurement and fix in the boot-path milestone below.
 * **The probe adds up to 8s to boot when Google is slow.** Bounded and deliberate, but
   it is real latency the owner will see. If it ever becomes objectionable the fix is a
   shorter bound or a background re-probe, not removing the probe.
@@ -2541,9 +2541,19 @@ pre-existing failure.** Not weakened, not skipped, not xfailed.
 * **Two live-harness flakes** (`test_h04_ttft_monitor`, `test_h06_joda_dialogues`) —
   free-provider pool variance, never weakened.
 
-## F-5 SHIPPED — the boot-path guard boots offline, and hermeticity is now enforced (2026-10-01)
+## BOOT-PATH HERMETICITY SHIPPED — the boot-path guard boots offline, and hermeticity is enforced (2026-10-01)
 
-Two commits: `ccd0ed7` (the fix), `e6098eb` (the guard). HEAD `e6098eb`.
+> **NAMING CORRECTION.** This section and its three commits were originally
+> labelled **"F-5"**, which is WRONG. This is the **boot-path hermeticity work
+> order**, opened by owner decision on 2026-10-01 after F-4 surfaced a pre-existing
+> red test. The real **F-5** is the bridge-acceptor work order at `60f6f5d` /
+> `61b9228`, recorded above under "F-5 — the bridge acceptor's two auth gaps".
+> The pushed commit messages (`ccd0ed7`, `e6098eb`, `3d4857a`) carry the wrong
+> "F-5" label and are **left as history, deliberately** — rewriting pushed history
+> to fix a label would cost more than the confusion it removes. Two distinct
+> artefacts were briefly called F-5; this note is the correction.
+
+Three commits: `ccd0ed7` (the fix), `e6098eb` (the guard), `3d4857a` (the checkpoint).
 
 ### The finding (measured first, as the brief required)
 
@@ -2593,8 +2603,8 @@ empty.
 
 ### Hermeticity is now a guard, not a promise
 
-F-5 made ONE test hermetic; nothing stopped the next one from reaching the
-internet, which is how this defect existed at all. `tests/conftest.py` gains an
+The boot-path work order made ONE test hermetic; nothing stopped the next one from
+reaching the internet, which is how this defect existed at all. `tests/conftest.py` gains an
 autouse fixture refusing every non-loopback `socket.connect`/`getaddrinfo` with
 `SuiteNetworkBlocked`. Loopback stays open (bridge binds `127.0.0.1`; a blanket
 ban broke 4 tests, measured), and the `live_probe` / `live_harness` markers
@@ -2628,7 +2638,7 @@ Suite counts are derived from the tree, never from memory. The 2
 stashing this work's `conftest.py` change and re-running: they fail identically
 without it (Gemma `streamed zero deltas in 4s — cascade`). Never weakened.
 
-### Carried forward from F-5
+### Carried forward from the boot-path work order
 
 * **The 429/403 retry conflation is a REAL but SEPARATE latent defect** and
   deserves its own work order. `_get_with_rate_limit` retries any 403 carrying
@@ -2639,8 +2649,8 @@ without it (Gemma `streamed zero deltas in 4s — cascade`). Never weakened.
   rather than bundle. The correct discriminator is the `X-RateLimit-Remaining:
   0` header plus the `x-ratelimit-reset`/`Retry-After` pair, not the status code
   alone.
-* **Boot is still 31 sequential GitHub round trips in production.** F-5 removed
-  the network from the TEST, not the boot path. With a real token those calls
+* **Boot is still 31 sequential GitHub round trips in production.** This work order
+  removed the network from the TEST, not the boot path. With a real token those calls
   succeed but still cost boot latency, and one transient 5xx aborts the guide
   sync. Batching or backgrounding `sync_skill_guides` is a real improvement that
   this work order did not measure and did not attempt.
@@ -2648,6 +2658,54 @@ without it (Gemma `streamed zero deltas in 4s — cascade`). Never weakened.
   The confinement list also forbids both; the finding is what made that
   constraint cost-free.
 * **F-6 remains sealed by owner decision.** Not started.
+
+## Owner decisions — 2026-10-01 (authoritative ledger entries)
+
+### (a) The two F-4 deployment items — ACCEPTED as landed
+
+F-4's brief carried two deployment items that were later deferred when Oracle was
+shelved. The owner reviewed them post-landing and **accepted both as landed**:
+
+* **The OAuth secret is NOT baked into the image.** `config/` holds only the tracked
+  `whitelist.json`; `google_oauth_client.json` is a **runtime mount**. The implementer
+  declined the obvious `COPY config/ /app/config/` precisely because baking an OAuth
+  secret into a layer is permanent — `docker save` preserves it forever — which
+  `CLAUDE.md` §2.2 forbids. `.gitignore:6` (`config/google_*.json`) is **pre-existing**,
+  `git ls-files config/` lists only `whitelist.json`, and **two guards pin the COPY
+  semantics** so a future edit cannot quietly re-bake the secret.
+* **The mount-shadows trap is documented, not left for the next deployer.** A
+  `/app/config` mount **shadows** whatever the image baked, so the host directory must
+  now hold both files; `docs/15-ORACLE-DEPLOY.md:106-112` says so in Arabic with the
+  corrected `scp` carrying both paths.
+* **The README/MOC Oracle narrative correction stays a SEPARATE docs work order.**
+  It was deliberately **not** folded into a safety commit. Rationale: a half-fix —
+  one header changed while the architecture diagram's first line and four other places
+  still say Oracle-as-production — is worse than a clean deferral, because it produces
+  a document that contradicts itself and looks maintained.
+
+### (b) Oracle is SHELVED — local-first is the day-to-day doctrine
+
+**Owner decision, 2026-10-01. All services are Google Cloud APIs. The target right now
+is running Sara locally.** Oracle is **future work, not current scope.**
+
+**This SETTLES report Part C §24.7 Q4** — the open question the repo itself could not
+answer: *which host runs day-to-day, local or Oracle?* The analysis report listed it as
+unresolved because no repository can determine it; the owner has now answered it, and
+local-first is the doctrine.
+
+Consequences recorded:
+
+| Item | Status |
+|---|---|
+| `Dockerfile` `COPY config/whitelist.json` | correctness for a future deploy, **inert now** |
+| `docs/15-ORACLE-DEPLOY.md` `/app/config` + `/app/vault` mounts | correctness for a future deploy, **inert now** |
+| The `Dockerfile` omission that preceded them (no `COPY config/` at all → an image built from it **cannot authenticate to Google**) | fixed, recorded |
+| README + `docs/00-MAP-OF-ARCHITECTURE.md` Oracle-as-production narrative | **deferred**, separate measured docs work order |
+| The boot-path hermeticity work order | in scope regardless — hermeticity is a local-machine property |
+
+The last row matters: the Oracle shelving did **not** deprioritise the hermeticity
+guard. That guard is about *this* machine's suite reaching the internet, which is a
+local-first concern, not a deployment one.
 
 - [07 — Implementation Plan](./07-IMPLEMENTATION-PLAN.md)
 - [11 — Testing](./11-TESTING.md)
