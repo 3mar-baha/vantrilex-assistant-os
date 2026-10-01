@@ -106,8 +106,7 @@ def test_the_changelog_announces_no_terminal_dialect_limitation_the_tree_refutes
     assert not refuted, (
         f"CHANGELOG.md announces an MSA limitation for Terminal 1, but src/bot_shell.py "
         f"imports {JODA_BUILDER!r} — the terminal speaks ar-JO. Correct or remove the "
-        f"entry; a false known-limitation is worse than none.\n"
-        + "\n---\n".join(refuted)
+        f"entry; a false known-limitation is worse than none.\n" + "\n---\n".join(refuted)
     )
 
 

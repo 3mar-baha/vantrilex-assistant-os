@@ -32,11 +32,18 @@ product release tags start independently at v1.0.0.)
   code:** only the tool lane's failure path emits a marker, so the counters count recorded
   tool-lane events, not total tool traffic.
 
-### Known limitation — Terminal 1 answers in MSA, not ar-JO
-The shell carries the front door's default prompt, not Sara's persona, because importing
-`src.persona` is what the safety rule forbids. Adding the dialect would reopen a second
-path for the gender and dialect invariants. Awaiting an owner decision between a
-persona-free engineering surface and a composed persona.
+### Resolved — Terminal 1 answers in ar-JO, not MSA (owner decision 2026-09-30)
+This entry previously announced an MSA limitation. It was stale: the safety rule it named
+as the cause has since been narrowed, and `src/bot_shell.py` binds EXACTLY ONE symbol from
+`src.persona` — `build_persona_joda`, the builder — composing it into
+`TERMINAL_SYSTEM_PROMPT` at import and into the `system` default of `_live_shell`
+(`tests/test_bot_shell_dialect.py` asserts that binding). There is no second dialect path:
+the builder composes the byte-locked identity core with the JODA ar-JO few-shot exemplars,
+so the terminal and Telegram share one dialect and one masculine-address contract. What
+remains banned is the other persona literals — the raw core and the exemplars — because a
+copied literal is a second source of truth.
+`tests/test_changelog_dialect_claims.py` now re-derives this binding from the source and
+fails if the changelog re-announces the limitation the tree refutes.
 
 ### Added — 10-agent agency swarm + binding Precision Workflow (2026-09-30)
 - **`.claude/skills/vantrilex-precision-workflow/SKILL.md`** — vendored
