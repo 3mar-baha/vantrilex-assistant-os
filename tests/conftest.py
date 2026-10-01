@@ -10,6 +10,7 @@ import asyncio
 import dataclasses
 import datetime
 import os
+import socket
 from time import perf_counter
 from types import SimpleNamespace
 
@@ -120,6 +121,62 @@ ENV_EXAMPLE: dict[str, str] = {
     "TZ": "Asia/Amman",
     "LOG_LEVEL": "INFO",
 }
+
+
+class SuiteNetworkBlocked(RuntimeError):
+    """A test tried to reach the public internet. The suite must stay hermetic."""
+
+
+_LOOPBACK_HOSTS = {"127.0.0.1", "::1", "localhost", "0.0.0.0", "", "testserver"}
+_REAL_CONNECT = socket.socket.connect
+_REAL_GETADDRINFO = socket.getaddrinfo
+
+
+def _as_host(value: object) -> str:
+    return value.decode("ascii", "replace") if isinstance(value, bytes) else str(value)
+
+
+def _is_loopback(address: object) -> bool:
+    if isinstance(address, tuple) and address:
+        return _as_host(address[0]) in _LOOPBACK_HOSTS
+    return False
+
+
+def _blocked_connect(self, address):
+    if not _is_loopback(address):
+        raise SuiteNetworkBlocked(f"suite network blocked: connect {address!r}")
+    return _REAL_CONNECT(self, address)
+
+
+def _blocked_getaddrinfo(host, *args, **kwargs):
+    if _as_host(host) not in _LOOPBACK_HOSTS:
+        raise SuiteNetworkBlocked(f"suite network blocked: resolve {host!r}")
+    return _REAL_GETADDRINFO(host, *args, **kwargs)
+
+
+@pytest.fixture(autouse=True)
+def _hermetic_network(request):
+    """Prove, rather than assume, that the suite performs no live network I/O.
+
+    The $0.00 invariant is absolute and CI is hermetic, so a test that reaches
+    the public internet is a defect even when it passes — it is slow, it is
+    non-deterministic, and it can spend money or leak a credential. Every
+    external `connect`/`getaddrinfo` raises `SuiteNetworkBlocked`.
+
+    Loopback stays open (bridge/live-probe tests bind and dial 127.0.0.1), and
+    the two live lanes are exempt by marker: `live_probe` and `live_harness`
+    exist precisely to talk to real infrastructure.
+    """
+    if any(request.node.get_closest_marker(name) for name in ("live_probe", "live_harness")):
+        yield
+        return
+    saved = (socket.socket.connect, socket.getaddrinfo)
+    socket.socket.connect = _blocked_connect
+    socket.getaddrinfo = _blocked_getaddrinfo
+    try:
+        yield
+    finally:
+        socket.socket.connect, socket.getaddrinfo = saved
 
 
 @pytest.fixture(autouse=True)
