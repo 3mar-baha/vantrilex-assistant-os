@@ -2086,6 +2086,129 @@ corrected AC5 against the FINISHED fix, which the RED probe could not do. Betwee
 and `9dc30ce` main carried one red test. No production line moved in the follow-up, and
 no assertion was weakened.
 
+## P0 COMPLETE — and P1 goes SEQUENTIAL (owner decision 2026-10-01)
+
+### P0 closed: F-5 → F-3 → F-2, in that order
+
+| Stage | Work order | Landed | Substance |
+|---|---|---|---|
+| P0-1 | **F-5** + QW-6 + QW-4 | `60f6f5d` → `61b9228` | WSS upgrade refused on any path but the bridge path (404, pre-upgrade); bounded auth backoff 20/300 s → 900 s; `hmac.compare_digest` on the LAN compare; the colliding `S-n` code comments retagged `AUTHZ-*` |
+| P0-2 | **F-3** | `e4f913d` → `b570371` | `open_path` contained by real component-wise roots; double-click set 9 → 17; the discarded `confirmation_id` no longer deleted. **Found and fixed a pre-existing prefix bug in the shared helper** — `str(resolved).startswith(str(root))` admitted `Downloads-evil` as inside `Downloads`, in `file_download` too |
+| P0-3 | **F-2** | `cbbb37e` → `5f6aa3c` → `9dc30ce` → `750eb87` | forged confirmation ids refused at every site via an HMAC-SHA256 MAC over `BRIDGE_TOKEN`, with expiry; AC5 corrected; the audit note named by nonce after the fix created a same-day overwrite |
+
+**P0 gate met.** `git grep "if not confirmation_id" bridge/` → zero. A forged id is
+refused by every executor site and by the OpenClaw breaker. AC5 and AC6 were
+*corrected*, never weakened.
+
+**Two production-break risks were caught before they shipped, and both are worth
+remembering as a class:**
+
+1. **The daemon's process environment does not carry `BRIDGE_TOKEN`.** `src/config.py`
+   reads it from the `.env` FILE. An `os.environ`-only secret resolver would have
+   passed every test and **refused every genuine confirmation in production**.
+   `bridge/executor.py:66-72` resolves env, then settings, and fails CLOSED when
+   neither resolves.
+2. **The vault note is not the trust anchor.** Nothing reads it. It is the audit
+   trail; the MAC is the enforcement. Any future claim that confirmations are
+   "verified against the vault" is wrong.
+
+**What F-2 delivers, and what it explicitly does not** (measured, unsparing):
+
+| Guarantee | Delivered? |
+|---|---|
+| Forgery | **YES** — constant-time MAC; any shape refused, including the old `uuid4().hex[:12]` |
+| Expiry | **YES** — age-only upper bound, so core↔PC clock skew cannot refuse a live confirmation |
+| Single-use | **PARTIAL** — verified tokens are burned **in memory**; a daemon restart re-opens the window |
+| Target binding | **NO** — a captured live token can be replayed against a *different* app inside the TTL |
+| Vault-note existence | **NO** — nothing reads the note |
+
+Target binding and a durable single-use store are **design work with a wire
+implication**, not bugs. Both are deferred, not forgotten.
+
+### P1 is SEQUENTIAL — owner decision, overriding the report's parallel DAG
+
+The analysis report's §52 DAG put F-1, F-4 and F-6 in one parallel band. The owner
+overrode it:
+
+```
+F-1  →  F-4  →  F-6        (sequential, 2026-10-01)
+```
+
+**Provenance and reason.** F-1 rewrites the irreversible gate in the shared choke
+point `ToolRegistry.call`, and F-6 changes the persona builder on the Telegram
+surface — the same live request path. The parallel band assumed disjoint files;
+F-1 and F-6 do not have disjoint files. F-4 runs after F-1 so its honest-offline
+behaviour is observed against a gate that actually holds.
+
+### F-1's scope, verbatim from the owner's decision
+
+> "a mitigation that exists only in disabled code, with zero enforcement on the
+> path that actually runs."
+
+The deny-list gate lives at `src/decision_loop.py:428-434`, on the **dormant**
+ReAct branch (`react_loop_enabled()` returns False unless `SARA_REACT_LOOP` is
+explicitly set; `src/bot.py:674-689` routes everything else to `front.handle`).
+The live path — `FrontDoorDispatcher.handle` → `ToolRegistry.call` — consults
+nothing. `ToolRegistry.call` is the single choke point both paths share, so one
+insertion closes both.
+
+**Approved signature:** keyword-only `confirmation_id: str = ""`. Backward
+compatible with all four call sites; F-2 strengthens the semantics later without
+re-shaping it. (The report's own draft assumed a `context` dict — §41 said "adapt
+to reality"; reality differed.)
+
+**The four `ToolRegistry.call` sites** (line numbers as of `b570371`):
+
+| Site | Path | F-1's obligation |
+|---|---|---|
+| `src/dispatcher.py:1056` | the **live** path | thread a real id |
+| `src/dispatcher.py:1062` | the healing retry | thread the same id, or record why not |
+| `src/decision_loop.py:437` | **dormant** ReAct | already gated upstream at `:428` — do not double-gate |
+| `src/agent_manager.py:213` | **autonomous** — the agent acting with no owner present | **no confirmation channel exists, so irreversible commands must REFUSE fail-closed.** Phrase the refusal as *"until a confirmation channel exists for this path"* — NOT a permanent ban. §33B.5's plan-level confirmation is the designed future channel and F-1 must not paint §33B into a corner |
+
+### OpenClaw lane — a decision F-1 must make DELIBERATELY
+
+F-2 left `openclaw_browse` and `openclaw_desktop` (two of the seven irreversible
+tools) **refused fail-closed**. Verified at `b570371`: `src/pc_actions.py:284` is
+the only `mint_confirmation_id` caller in the repository, and it mints for
+`launch` / `close` / `power` only. Nothing mints for `openclaw.act`, so
+`bridge/openclaw/controller.py:87` → `breaker.authorize()` refuses every
+irreversible openclaw op.
+
+**This is safe but it is a capability gap.** F-1 must either:
+
+* **(A)** extend minting so the lane is covered, or
+* **(B)** leave it refused as an **explicit owner-accepted decision**, documented
+  where the next agent will read it rather than rediscovering it as a bug.
+
+If (A), a small work order lands immediately after F-1 and **before F-4**.
+Default to (B) unless coverage is genuinely cheap — refusing is honest, and
+silently widening a confirmation path during a safety commit is the worse risk.
+
+### Future plan — SCHEDULED ONLY, not implemented
+
+* **MCP-Atlas — evaluate, do not adopt.** Post-P1 evaluation of Sara's `$0.00`
+  model-matrix candidates against a sampled subset of the public tasks. **External
+  harness; nothing ships inside Sara.** An evaluation, not a dependency.
+* **Fraise — CONDITIONAL DEFERRED CANDIDATE, not approved for adoption.** Its
+  gates, all four required and in order: F-1 green → F-7 memory safety → upstream
+  persistence landed → security review. Naming it here records that it was
+  considered and *withheld*, so no later agent mistakes it for an approved plan.
+
+### Carried forward, still open
+
+* **V-9** — `security_log` unbounded on the pre-existing non-bad-token paths.
+* **F-2 residuals** — target binding; durable single-use store.
+* **P3 gate's second half (D-1)** — a live tool registered through `register_tool`.
+  **Held by owner decision until P1 is green**: a live tool registered before the
+  irreversible gate is live sits on an ungated path. After P1, register the first
+  deliberate, owner-approved tool. That is not autonomous synthesis.
+* **`_TOOL_GOALS` gap** — `analytics`, `cloud_backup`, `quota_safety` are routed and
+  catalogued but **not deducible**. Any future claim that a tool's markers reach
+  `deduce` must carry this caveat.
+* **Two live-harness flakes** (`test_h04_ttft_monitor`, `test_h06_joda_dialogues`) —
+  free-provider pool variance, never weakened.
+
 - [07 — Implementation Plan](./07-IMPLEMENTATION-PLAN.md)
 - [11 — Testing](./11-TESTING.md)
 - [Objectives Ledger](./reports/OBJECTIVES_LEDGER_MET_VS_PENDING.md)
