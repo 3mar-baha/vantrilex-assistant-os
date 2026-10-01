@@ -2035,7 +2035,7 @@ overwrite would have shipped silently.
 | `bridge/executor.py` coverage | 98.7% | **98.9%** (gate ≥ 98.0%) |
 | `bridge/openclaw/breaker.py` coverage | 100% | **100%** |
 | `src/pc_actions.py` coverage | 100% | **100%** |
-| TOTAL branch coverage | 92.0% | **92.1%** (gate ≥ 90.0%) |
+| TOTAL branch coverage | 92.0% | **92.0%** (gate â¥ 90.0%; measured 92.02â92.05% across runs) |
 | ruff check / format | clean / clean | **clean / clean** |
 | `scripts/security_gate.py` / `docs_guard.py` | OK | **OK / OK** |
 
@@ -2075,6 +2075,16 @@ Target binding (bind the MAC to `kind`+`target`) and a durable single-use store 
 residuals above; both are design work with a wire implication, not a bug. The core-side truthiness
 gates are F-1's write-set. F-1, F-4, F-6, F-8, 33B, Part E and V-9 are untouched per the work
 order.
+
+**Three commits, one item, and the third is recorded rather than hidden.** `cbbb37e` is the RED
+barrier, `5f6aa3c` the fix, `9dc30ce` a follow-up that repairs **two defects in the AC5 test I
+had just rewritten**: an over-narrow reason assertion (it demanded `does not verify` where the
+fix correctly answers `malformed` for `"cid-123"`, because shape is judged before the MAC)
+and a single-use replay aimed at `shutdown`, which that fixture's whitelist refuses *before* the
+id is read, so it proved nothing about single-use. Both were caught only by running the
+corrected AC5 against the FINISHED fix, which the RED probe could not do. Between `5f6aa3c`
+and `9dc30ce` main carried one red test. No production line moved in the follow-up, and
+no assertion was weakened.
 
 - [07 — Implementation Plan](./07-IMPLEMENTATION-PLAN.md)
 - [11 — Testing](./11-TESTING.md)
