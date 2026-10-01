@@ -789,11 +789,21 @@ dispatcher's deltas **verbatim**. It imports none of `src.persona`,
 `bridge.executor` — a guard parses the module with `ast` and asserts it. The
 invariant guarantee is therefore structural: no second code path exists.
 
-### OWNER DECISION — Terminal 1 answers in MSA, not ar-JO
+### ~~OWNER DECISION~~ — SUPERSEDED 2026-10-01 — Terminal 1 answers in ar-JO
 
-The directive asked Terminal 1 for "authentic Amman dialect (ar-JO)". **It cannot
-have that without importing `src.persona`, which the safety rule forbids.** Live
-proof: asked about programming, the shell replied MSA. The gap is stated in the
+> **This section is retained as the record of the question, not as its answer.** The
+> decision landed the same day: `src/bot_shell.py` now binds **exactly one** symbol from
+> `src.persona` — `build_persona_joda`, the builder — so resolution **2** was taken over
+> resolution **1**, and Terminal 1 speaks ar-JO. Nothing about a second dialect path was
+> reopened: the builder composes the byte-locked identity core with the JODA few-shot
+> exemplars, so the terminal and Telegram share **one** dialect contract. The CHANGELOG
+> entry that announced this as a live limitation was corrected in the same milestone
+> (`tests/test_changelog_dialect_claims.py` now re-derives the binding and fails if the
+> changelog re-announces it). See *Phase 0 — analysis-report catalogue (2026-10-01)* below.
+
+The directive asked Terminal 1 for "authentic Amman dialect (ar-JO)". **At the time it
+could not have that without importing `src.persona`, which the safety rule forbade.** Live
+proof: asked about programming, the shell replied MSA. The gap was stated in the
 module docstring, not papered over. Two honest resolutions:
 
 1. **Persona-free shell** (current) — ar-JO arrives only where the full pipeline
@@ -1383,6 +1393,164 @@ not one.
    both live registries, so R2 refuses all six names first. Kept as an explicit law so a
    future reordering that weakened R2 cannot reopen the tier; the enforceable form is R4.
    Recorded in the barrier's own docstring before this commit, and confirmed here.
+
+---
+
+## Phase 0 — analysis-report programme: catalogue + docs (2026-10-01)
+
+Owner-approved Phase 0. Three work orders, three commits, each RED-first. **F-1's soundness
+depends on the outcome of QW-7** — see the explicit statement at the end of this section.
+
+### QW-1 — the MSA "known limitation" was stale
+
+`CHANGELOG.md` announced *"Known limitation — Terminal 1 answers in MSA, not ar-JO"*, naming
+the cause as importing `src.persona` being forbidden. Both halves were false: the safety rule
+has since been narrowed, and `src/bot_shell.py` binds **exactly one** symbol from
+`src.persona` — `build_persona_joda`, the builder — composing it into
+`TERMINAL_SYSTEM_PROMPT` at import and into the `system` default of `_live_shell`.
+`tests/test_bot_shell_dialect.py` asserts that binding with `ast`, so the entry named as the
+cause of a limitation the suite forbids. There is also **no second dialect path**: the builder
+composes the byte-locked identity core with the JODA ar-JO few-shot exemplars, so the
+terminal and Telegram share one dialect and one masculine-address contract.
+
+Corrected in place — CHANGELOG history is not rewritten, so a reader who remembers the entry
+can find where it went. New guard `tests/test_changelog_dialect_claims.py` (4 tests) re-derives
+the binding from source and fails only on a *contradiction*: it matches an announced
+limitation heading naming the terminal that also makes an MSA claim, never the bare token, so
+the two truthful "MSA" entries (G2P tanween, prompt bias) are untouched. Break-verified
+in-process against the exact removed entry.
+
+The superseded **OWNER DECISION** section above is struck through and annotated rather than
+deleted — it is the record of the question, and its resolution is the mirror of it.
+
+### QW-3 — `src/vault.py`'s docstring contradicted its own loop
+
+The docstring claimed *"409 after one GET->PUT retry"*; the shipped loop is
+`for attempt in (1, 2, 3)` — **three** attempts, each a full re-merge (re-read sha, re-run the
+caller's `merge`, re-PUT), which the inline comment on that line already stated correctly.
+Docstring only; **no behaviour change, retry logic untouched** — the code is the authority
+(Directive 6). The corrected text also adds the claim the old one omitted: a 429/403 on a
+*read* is retried at most once (`_get_with_rate_limit`), which is the one-retry rule that
+actually exists and was presumably what the stale sentence was a garbled memory of.
+
+New guard `tests/test_vault_docstring_conflicts.py` (4 tests) reads the attempt count from the
+loop's own integer-tuple literal via `ast`, located by structure — it cannot be satisfied by
+rewording, and a refactor makes the guard say so instead of letting the docstring drift. The
+re-merge half is checked separately (and derived from the code) because a count-only check
+would pass a docstring claiming three attempts of a *stale* re-PUT, a different and wrong law.
+
+### QW-7 — the four routed-but-uncatalogued tools (load-bearing)
+
+**Why Phase 0 and not P2.** `IRREVERSIBLE_TOOLS` is derived from `TOOL_CAPABILITIES`
+(`src/skills/capabilities.py`). An uncatalogued tool is therefore not "absent from the
+deny-list" — it is **structurally incapable of being in it**. Three of the four had live
+`_do_<name>` handlers. `cloud_backup` uploads a Fernet-sealed vault snapshot to Cloud Storage,
+and F-1's upcoming irreversible gate would have waved it through unconfirmed because it reads
+a set those names are not in.
+
+**Reversibility decisions, with evidence.**
+
+| Tool | Decision | Evidence |
+|---|---|---|
+| `cloud_backup` | **IRREVERSIBLE** (owner decision) | `_do_cloud_backup` → `GoogleCloudClient.cloud_backup` → an `objects.insert` upload to `b/state-backups/o`. Nothing in the tree deletes the object; an uploaded snapshot cannot be recalled. Honest degradation (unconfigured session → `False`) is not reversal. |
+| `analytics` | REVERSIBLE (a read) | `_do_analytics` → `sqlite_life_analytics` over **local** SQLite. No write, no network. Honest limit recorded in the catalog: that function does not exist yet, so the tool degrades to `None` — a read that cannot yet answer is still a read. |
+| `quota_safety` | REVERSIBLE (a read) | `_do_quota_safety` → `QuotaGuard.allow` → `free_tier_usage_percent`, a Service Usage API **read**. The breaker only decides whether to proceed. |
+| `none` | **Not a tool** | The dispatcher's rewrite target for "no tool selected" and for an unknown router verdict (`src/dispatcher.py:763-765`); no handler. |
+
+`none` gets an explicit machine-visible `INTERNAL_ONLY_TOOLS` marker rather than a capability
+record: a record would assert a handler that does not exist and drag a narration guide and an
+audit-matrix prompt into existence for a non-tool. The guard resolves the marker lazily by name
+so its absence **fails** rather than aborting collection — a bare `ImportError` would mean no
+guard in the file is ever seen failing (Directive 2).
+
+**What `test_audit_safety.py:31-32` forced.** The guard asserts
+`not (IRREVERSIBLE_TOOLS & LIVE_TOOLS)` — an irreversible tool must not be marked
+`LIVE_EXEC`, because that tier fires real backends. **Measured before writing the record:
+`cloud_backup` was not in `LIVE_TOOLS`, so nothing was forced.** It was added to `PROMPTS`
+only, which places it at the `CONSTRUCT+DEGRADE` tier — a bare-registry call that must answer
+honestly and never upload. The guard was **not** weakened; the new audit rows keep the matrix
+equal to the catalog (zero exclusions) and the irreversible/LIVE intersection empty.
+
+**Directive 4, unreachability stated in-tree.** None of the three new tools is in
+`cognition._TOOL_GOALS`, so `deduce` — which iterates `tool_goals()`, not the catalog — never
+scores them, and their new markers do not reach deduction today. They are read by
+`markers_for`, which `src/cognition.py:393` unions into `_goal_markers` for any tool that *is*
+selectable. Adding `_TOOL_GOALS` entries is a **routing behaviour change** and is deliberately
+**not** done here — this phase is catalog + docs. The missing producer is named in the catalog
+comment itself, not in a report.
+
+**One guard rewritten, loudly.** `tests/test_tool_overlay.py::
+test_capability_registry_is_a_strict_subset_of_valid_tools` asserted the routed-but-
+uncatalogued set was exactly `{analytics, cloud_backup, none, quota_safety}`. Read its **name**
+against its **assertion**: the name states the law — the registry is a *strict subset* of the
+routed set — while the assertion pinned one week's measurement of the gap. It therefore encoded
+a snapshot as a law, and enforcing it made the defect permanent (Directive 5: a test that pins
+a bug is worse than no test). What survives is the law, now **derived**: the gap must equal
+`INTERNAL_ONLY_TOOLS`, and it must stay non-empty. Both neighbouring guards that lean on the
+asymmetry (`test_evolution_task.py:264`, `test_p3d_seams.py:693`) still pass. The four-name
+literal is gone so that a **fifth** uncatalogued tool fails the completeness guard instead of
+being absorbed here.
+
+**Measured, re-derived by script — nothing typed from memory.**
+
+| Measurement | Before | After |
+|---|---|---|
+| `TOOL_CAPABILITIES` | 42 | **45** |
+| `INTERNAL_ONLY_TOOLS` | (absent) | **1** (`none`) |
+| `valid_tools()` (routed) | 46 | 46 |
+| `IRREVERSIBLE_TOOLS` | 6 | **7** |
+| `PROMOTABLE_TOOLS` | 8 | 8 (∩ irreversible = ∅) |
+| Routed, uncatalogued, unaccounted | **4** | **0** |
+| Executable routed tools outside the catalog | **3** | **0** |
+| `PROMPTS` == `TOOL_CAPABILITIES` | 42 == 42 | 45 == 45 |
+| Catalogued without a handler / without a guide | 0 / 0 | 0 / 0 |
+| tier1_resilience suite | 458 passed | **459 passed** |
+| Suite excluding `tests/live_harness` | 2,485 passed / 0 failed | **2,548 passed / 0 failed** |
+| TOTAL branch coverage | 91.9% | **91.9%** (gate ≥ 90.0%) |
+| ruff check / format | clean / 1 pre-existing | clean / 1 pre-existing |
+| `security_gate.py` / `docs_guard.py` | OK / 16/16 | OK / 16/16 |
+
+`ruff format --check` still reports `scripts/attribute_p3d_guards.py` unformatted. That file is
+committed and untouched at `d4e4420` — a **pre-existing baseline failure**, outside all three
+work orders, reported rather than silently folded into an unrelated commit.
+
+**Mutation run — 4 mutants, 4 RED** (Directive 5; each applied, run, reverted from a
+byte-copy backup, and the tree re-verified green after each revert):
+
+| Mutant | Guard(s) that went RED |
+|---|---|
+| A `cloud_backup` → `reversible: True` | `test_every_external_state_writer_is_deny_listed` |
+| B remove the `analytics.md` narration guide | `test_every_catalogued_tool_carries_real_markers_and_a_guide[analytics]` |
+| C de-catalogue `analytics` again | `test_every_routed_tool_is_either_catalogued_or_explicitly_internal_only` **+** `test_the_accounting_holds_for_the_EXECUTABLE_routed_names_specifically` |
+| D *(extra)* empty `INTERNAL_ONLY_TOOLS` | `test_every_routed_tool_is_either_catalogued_or_explicitly_internal_only` **+** `test_the_internal_only_marker_matches_what_the_dispatcher_rewrites_to` |
+
+A first attempt at mutant B deleted only the tuple's `"analytics.md",` line rather than the
+whole entry, which broke the literal and reddened **45** tests. Reported because it is the
+honest reading order: the *narrow* mutant is the informative one (1 test, named
+`[analytics]`), and the broad one only proves the file fails to import.
+
+### F-1's entry gate now depends on this catalog being complete
+
+**This is the load-bearing statement of the milestone.** F-1's irreversible-action gate reads
+`IRREVERSIBLE_TOOLS`, and that set is *derived* from `TOOL_CAPABILITIES`. Before this commit an
+executable routed tool could sit outside the catalog entirely and be invisible to the gate by
+construction — which is what `cloud_backup` did, uploading a vault snapshot with nothing asked.
+The invariant now established and guarded is:
+
+> `IRREVERSIBLE_TOOLS ⊇ {every routed tool whose handler changes external state}`
+
+Today it holds structurally: **zero executable routed tools outside the catalog**, and every
+external-state writer is deny-listed. **F-1 may proceed on the basis that the catalog is
+complete — and that basis is now an enforced, mutation-tested invariant rather than a claim.**
+A future routed tool that omits its capability record will fail
+`tests/test_tool_catalog_completeness.py` before it can reach F-1's gate.
+
+### Not started, by instruction
+
+F-1, F-2, F-3, F-5, F-6, F-8, 33B and Part E remain untouched. No file in
+`src/decision_loop.py`, `src/pc_actions.py`, `src/bot.py`, `src/dispatcher.py`, `src/tools.py`
+or `bridge/` was modified — Phase 0 is catalog + docs, and no edit outside that boundary proved
+necessary.
 
 - [07 — Implementation Plan](./07-IMPLEMENTATION-PLAN.md)
 - [11 — Testing](./11-TESTING.md)

@@ -80,6 +80,15 @@ PROMPTS: dict[str, str] = {
     "openclaw_desktop": "اكتبي بالنافذة التقرير النهائي",
     "openclaw_fetch": "اجلبي محتوى الصفحة https://example.com/x",
     "openclaw_inspect": "افحصي عناصر النافذة",
+    # Phase 0 (2026-10-01): the three previously-uncatalogued tools that now hold
+    # capability records. `cloud_backup` is IRREVERSIBLE, so it is deliberately
+    # NOT in LIVE_TOOLS — the audit fires real backends there, and
+    # `tests/suite/tier1_resilience/test_audit_safety.py:31` asserts the two sets
+    # never overlap. These run at the CONSTRUCT+DEGRADE tier: a bare-registry call
+    # that must answer honestly and never upload.
+    "cloud_backup": "احفظي نسخة احتياطية بالسحابة",
+    "analytics": "وريني تحليل استخدام جهازي",
+    "quota_safety": "طمنيني عن الكوتا",
 }
 
 # Execution tier per tool (see module docstring). LIVE = read-only real backend.

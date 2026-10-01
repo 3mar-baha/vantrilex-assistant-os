@@ -593,17 +593,38 @@ def test_capability_constraint_holds_for_every_registered_tool():
 
 
 def test_capability_registry_is_a_strict_subset_of_valid_tools():
-    """Documents the asymmetry both existing guards lean on: 42 capabilities vs 46
-    routed names, with four routed-but-uncatalogued. `cap - valid` is empty."""
-    from src.skills.capabilities import TOOL_CAPABILITIES
+    """Documents the asymmetry both existing guards lean on: fewer capabilities than
+    routed names, with the difference non-empty. `cap - valid` is empty.
+
+    GUARD REWRITTEN 2026-10-01 (Phase 0, QW-7), loudly. This test previously
+    asserted the routed-but-uncatalogued set was exactly
+    `{analytics, cloud_backup, none, quota_safety}`. Read its name against its
+    assertion: the NAME states the law — the capability registry is a STRICT
+    subset of the routed set — while the assertion pinned one week's measurement
+    of the gap. It therefore encoded a snapshot as if it were a law, and
+    enforcing it made the defect it documented permanent: three of those four had
+    live `_do_<name>` handlers, and because `IRREVERSIBLE_TOOLS` is DERIVED from
+    `TOOL_CAPABILITIES`, none of them could reach the deny-list at all —
+    `cloud_backup`'s vault-snapshot upload executed unconfirmed. Directive 5 calls
+    this a test that pins a bug, and the repair is to delete the pin, not the fix.
+
+    What survives is the law itself, and it is now DERIVED rather than asserted:
+    the gap must be exactly `INTERNAL_ONLY_TOOLS` — the routed names that are
+    explicitly not tools. `none` is that name today, so the asymmetry the
+    neighbouring guards lean on is intact (it is non-empty, and
+    `tests/test_evolution_task.py:264` and `tests/test_p3d_seams.py:693` both
+    require a non-empty gap and still pass). The four-name literal is gone
+    because a fifth uncatalogued tool must now fail
+    `tests/test_tool_catalog_completeness.py` rather than be absorbed here.
+    """
+    from src.skills.capabilities import INTERNAL_ONLY_TOOLS, TOOL_CAPABILITIES
 
     assert set(TOOL_CAPABILITIES) <= set(_VALID_TOOLS)
-    assert set(_VALID_TOOLS) - set(TOOL_CAPABILITIES) == {
-        "analytics",
-        "cloud_backup",
-        "none",
-        "quota_safety",
-    }
+    assert set(_VALID_TOOLS) - set(TOOL_CAPABILITIES) == set(INTERNAL_ONLY_TOOLS)
+    assert INTERNAL_ONLY_TOOLS, (
+        "the gap must stay non-empty — it is what proves a guard reading only "
+        "TOOL_CAPABILITIES would let a routed name through"
+    )
 
 
 # --------------------------------------------------------------------------------------

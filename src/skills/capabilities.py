@@ -7,6 +7,15 @@ clarification gate), backend needs (honest offline lines when unmet), and
 chaining affinities (which tools combine into multi-step plans).
 
 Zero src imports — `src/cognition.py` merges these markers into its scoring.
+
+COMPLETENESS IS LOAD-BEARING, NOT COSMETIC. `IRREVERSIBLE_TOOLS` is DERIVED from
+`TOOL_CAPABILITIES` below, so a routed tool with no record here cannot enter the
+deny-list AT ALL — not "is absent from it" but "is structurally incapable of being
+in it". Every confirmation gate downstream reads that set, so an uncatalogued
+executable tool performs its external effect unconfirmed. `INTERNAL_ONLY_TOOLS`
+carries the routed names that are deliberately NOT tools, so the invariant "every
+routed name is catalogued or explicitly internal-only" can be asserted rather than
+assumed. Guard: `tests/test_tool_catalog_completeness.py`.
 """
 
 from __future__ import annotations
@@ -345,7 +354,84 @@ _CAPABILITIES: Final[dict[str, dict]] = {
         "needs": "bridge",
         "chains_with": ("screenshot", "telemetry", "openclaw_desktop"),
     },
+    # -- Phase 0 (2026-10-01): the four routed-but-uncatalogued names ----------
+    #
+    # These four sat in `_VALID_TOOLS` with no capability record, which meant
+    # more than "not listed in the deny-list": `IRREVERSIBLE_TOOLS` is DERIVED
+    # from this dict, so an uncatalogued name is STRUCTURALLY INCAPABLE of being
+    # in it. Three of the four had live `_do_<name>` handlers.
+    #
+    # REVERSIBILITY DECISIONS, each with the evidence it rests on.
+    #
+    #   cloud_backup — IRREVERSIBLE (owner decision). `_do_cloud_backup`
+    #     (src/tools.py) -> `GoogleCloudClient.cloud_backup`
+    #     (src/google_cloud_client.py) -> an `objects.insert` upload to
+    #     `b/state-backups/o` on Cloud Storage. That is an external state change
+    #     Sara cannot undo: nothing in the tree deletes the object, and an
+    #     uploaded Fernet-sealed vault snapshot cannot be recalled once the
+    #     bucket has it. Honest degradation exists (an unconfigured session
+    #     returns False), but degradation is not reversal.
+    #
+    #   analytics — REVERSIBLE (a read). `_do_analytics` ->
+    #     `GoogleCloudClient.analytics` -> `sqlite_life_analytics` over LOCAL
+    #     SQLite. No write, no network, no external effect. Honest limit: that
+    #     function does not exist yet, so the tool currently degrades to `None`
+    #     instead of reporting rows — a read that cannot yet answer is still a
+    #     read.
+    #
+    #   quota_safety — REVERSIBLE (a read). `_do_quota_safety` ->
+    #     `GoogleCloudClient.quota_report` -> `QuotaGuard.allow` ->
+    #     `free_tier_usage_percent`, a Service Usage API READ. The breaker only
+    #     decides whether to proceed; it mutates nothing the owner can observe.
+    #
+    #   none — NOT a tool. See `INTERNAL_ONLY_TOOLS` below: it is the
+    #     dispatcher's rewrite target for "no tool selected" and for an unknown
+    #     router verdict (`src/dispatcher.py:763-765`), and has no handler.
+    #
+    # DIRECTIVE 4, UNREACHABILITY STATED HERE AT THE CALL SITE. None of these
+    # three is in `cognition._TOOL_GOALS`, so `deduce` — which iterates
+    # `tool_goals()`, not this dict — never scores them, and the markers below
+    # have no effect on deduction today. They are read by `markers_for`, which
+    # `src/cognition.py:393` unions into `_goal_markers` for any tool that IS
+    # selectable. Putting these names into `_TOOL_GOALS` is a ROUTING behaviour
+    # change and is deliberately NOT done in this phase (catalog + docs only).
+    # The missing producer for their markers reaching deduction is a
+    # `_TOOL_GOALS` entry; that work is not authorised yet.
+    "analytics": {
+        "goals": "معرفة تحليلات استخدام جهازك من أرقام حقيقية",
+        "markers": ("تحليل استخدام", "تحليل الاستخدام", "استخدام جهازي", "احصائيات"),
+        "reversible": True,  # local SQLite read; degrades honestly until the query exists
+        "needs": "local",  # the data plane is the local SQLite log, never the network
+        "chains_with": ("app_sessions", "telemetry"),
+    },
+    "cloud_backup": {
+        "goals": "حفظ نسخة احتياطية مشفّرة من الخزينة على خدمة سحابية خارجية",
+        "markers": ("نسخة احتياطية", "بالسحابة", "باك اب"),
+        "reversible": False,  # OWNER DECISION: an upload cannot be un-done by Sara
+        "needs": "google",  # the Cloud Storage session; the vault is always present
+        "chains_with": (),
+    },
+    "quota_safety": {
+        "goals": "معرفة نسبة استهلاك حصة غوغل المجانية والبقاء ضمن $0.00",
+        "markers": ("حصة غوغل", "الكوتا", "كوتا", "فحص استهلاك", "استهلاك الخدمات"),
+        "reversible": True,  # Service Usage API read; the breaker mutates nothing
+        "needs": "google",
+        "chains_with": ("brief",),
+    },
 }
+
+#: Routed names that are NOT tools and must therefore never carry a capability
+#: record. `none` is the dispatcher's rewrite target — a router verdict naming a
+#: tool `valid_tools()` rejects becomes `none`, and it is also the spelling for
+#: "no tool selected". It has no `_do_<name>` handler.
+#:
+#: It is named HERE, machine-visible, rather than given a capability record,
+#: because a record would assert a handler that does not exist and would drag a
+#: narration guide and an audit-matrix prompt into existence for a non-tool.
+#: This set is what closes the completeness invariant in
+#: `tests/test_tool_catalog_completeness.py`: every name in `valid_tools()` is
+#: either a `TOOL_CAPABILITIES` key or listed here.
+INTERNAL_ONLY_TOOLS: Final[frozenset[str]] = frozenset({"none"})
 
 TOOL_CAPABILITIES: Final[dict[str, dict]] = dict(_CAPABILITIES)
 
