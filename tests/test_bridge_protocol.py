@@ -61,7 +61,11 @@ async def test_auth_success_flow_and_lan_only_surface(tmp_path: Path):
     spawn_spy = _SpawnSpy()
     executor._spawn = spawn_spy  # OS process edge stays a spy; the TUNNEL is the real boundary
     daemon = BridgeDaemon(
-        f"ws://127.0.0.1:{port}", TOKEN, executor, heartbeat_interval_s=0.05, backoff_cap_s=0.1
+        f"ws://127.0.0.1:{port}/bridge",
+        TOKEN,
+        executor,
+        heartbeat_interval_s=0.05,
+        backoff_cap_s=0.1,
     )
     stop = asyncio.Event()
     runner = asyncio.create_task(daemon.run(stop))
@@ -107,7 +111,9 @@ async def test_wrong_token_closed_4401(tmp_path: Path):
     """AC10 companion — wrong token is closed 4401, WARNING names peer IP not token."""
     server = BridgeServer(TOKEN, silence_timeout_s=45.0)
     port = await server.start(host="127.0.0.1", port=0)
-    rejected = await websockets.asyncio.client.connect(f"ws://127.0.0.1:{port}", max_size=None)
+    rejected = await websockets.asyncio.client.connect(
+        f"ws://127.0.0.1:{port}/bridge", max_size=None
+    )
     await rejected.send(json.dumps({"v": 1, "token": "wrong-token", "hostname": "x"}))
     closed_code = None
     try:
@@ -152,7 +158,7 @@ async def test_auth_attempts_rate_limited():
         import websockets.exceptions
 
         for i in range(6):
-            async with websockets.connect(f"ws://127.0.0.1:{port}") as ws:
+            async with websockets.connect(f"ws://127.0.0.1:{port}/bridge") as ws:
                 hello = Hello(token=f"wrong-{i}", hostname="attacker", version="1")
                 await ws.send(encode(hello))
                 try:

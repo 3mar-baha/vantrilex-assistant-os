@@ -4,6 +4,7 @@ shared token and a live_state provider are wired (Bearer-gated, 401 otherwise)."
 
 from __future__ import annotations
 
+import hmac
 import json
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -23,7 +24,14 @@ class _Handler(BaseHTTPRequestHandler):
             self.wfile.write(body)
         elif self.path == "/telemetry/live-state" and self.provider is not None:
             auth = self.headers.get("Authorization", "")
-            if self.lan_token is None or auth != f"Bearer {self.lan_token}":
+            # QW-6: constant-time Bearer compare, matching the WSS acceptor's
+            # hmac.compare_digest. The operands are BYTES on purpose: the `str`
+            # overload raises TypeError on non-ASCII, and http.server decodes
+            # headers as iso-8859-1, so any LAN client can put a non-ASCII byte
+            # in Authorization and turn a 401 into a dead request thread.
+            if self.lan_token is None or not hmac.compare_digest(
+                auth.encode("utf-8"), f"Bearer {self.lan_token}".encode()
+            ):
                 body = json.dumps({"error": "unauthorized"}).encode("utf-8")
                 self.send_response(401)
                 self.send_header("WWW-Authenticate", "Bearer")

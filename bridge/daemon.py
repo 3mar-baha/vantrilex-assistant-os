@@ -54,7 +54,7 @@ class BridgeDaemon:
         openclaw: Any = None,
     ):
         self._url = url
-        # S-6 (deferred queue): a PLAIN ws:// dial (not wss://) is a
+        # AUTHZ-plaintext-warn: a PLAIN ws:// dial (not wss://) is a
         # deployment smell on the public internet — one loud warning at
         # startup so the owner sees it. (ws://127.0.0.1 local testing stays
         # quiet-safe: the warning is informational, never blocking.)

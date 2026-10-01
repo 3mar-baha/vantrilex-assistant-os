@@ -33,13 +33,15 @@ import socket
 import tokenize
 import urllib.error
 import urllib.request
+from contextlib import suppress
 from pathlib import Path
 
+import pytest
 import websockets.asyncio.client
 from websockets.exceptions import ConnectionClosed, InvalidStatus
 
 from bridge.server import LanServer
-from common.protocol import Hello, encode
+from common.protocol import Hello, encode, new_envelope
 from src import bridge_server as bs
 from src.bridge_server import BridgeServer
 
@@ -50,21 +52,35 @@ TOKEN = "your-f5-bridge-token-0123456789"
 
 
 async def _hello_close_code(url: str, token: str) -> int | None:
-    """Connect, send one Hello, and report the close code the server answers with.
+    """Connect, send one Hello, and report the close code the server answered with.
 
-    Returns None when the connection is still open (the server neither closed nor
+    Returns None when the connection stayed open (the server neither closed nor
     answered), so a caller asserting a specific code cannot pass on a hang.
+
+    A server that refuses BEFORE reading a frame closes first, so the close can
+    surface at either `send` or `recv` — both are the real wire behaviour for the
+    same refusal, and both are reported here rather than one being papered over.
+    The exit is wrapped in `suppress(ConnectionClosed)` for the same reason: the
+    client's own close handshake has nothing left to answer with.
     """
-    async with websockets.asyncio.client.connect(url, max_size=None) as ws:
-        await ws.send(encode(Hello(token=token, hostname="probe")))
+    ws = await websockets.asyncio.client.connect(url, max_size=None)
+
+    def code_of(exc: ConnectionClosed) -> int | None:
+        return exc.rcvd.code if exc.rcvd is not None else None
+
+    try:
         try:
+            await ws.send(encode(Hello(token=token, hostname="probe")))
             raw = await asyncio.wait_for(ws.recv(), timeout=5)
         except ConnectionClosed as exc:
-            return exc.rcvd.code if exc.rcvd is not None else None
+            return code_of(exc)
         try:
             return json.loads(raw).get("code")
         except (ValueError, AttributeError):
             return None
+    finally:
+        with suppress(ConnectionClosed):
+            await ws.close()
 
 
 async def _upgrade_status(url: str) -> int:
@@ -91,7 +107,7 @@ def _raw_get(port: int, request_bytes: bytes) -> str:
 
 def _http_get(url: str) -> tuple[int, bytes]:
     try:
-        with urllib.request.urlopen(url, timeout=5) as resp:  # noqa: ASYNC210 - loopback, bounded
+        with urllib.request.urlopen(url, timeout=5) as resp:
             return resp.status, resp.read()
     except urllib.error.HTTPError as exc:
         return exc.code, exc.read()
@@ -205,7 +221,43 @@ async def test_a_caller_supplied_health_responder_still_answers_before_the_gate(
         await server.close()
 
 
+async def test_a_valid_non_hello_first_frame_is_refused_and_logged():
+    """A well-formed frame that is not a Hello is refused too. A MALFORMED first
+    frame never reaches this arm — `decode_frame` raises ProtocolError first — so
+    without this guard the 4400 refusal path could go unexercised while the suite
+    stayed green."""
+    server = BridgeServer(TOKEN)
+    port = await server.start()
+    try:
+        ws = await websockets.asyncio.client.connect(f"ws://127.0.0.1:{port}/bridge")
+        try:
+            await ws.send(encode(new_envelope(type="heartbeat")))  # valid, but not a Hello
+            with pytest.raises(ConnectionClosed) as caught:
+                await asyncio.wait_for(ws.recv(), timeout=5)
+        finally:
+            with suppress(ConnectionClosed):
+                await ws.close()
+        assert caught.value.rcvd.code == 4400
+        assert any("not Hello" in entry for entry in server.security_log)
+        assert server.online() is False
+    finally:
+        await server.close()
+
+
 # --- BACKOFF ------------------------------------------------------------------
+
+
+def test_the_peer_bucket_key_is_the_host_alone():
+    """The load-bearing detail of the whole backoff. `connection.remote_address`
+    is `(host, port)` with an EPHEMERAL port, so keying on the whole tuple would
+    hand every attempt its own bucket — the burst counter could never reach its
+    threshold and the cooldown would be dead code that still reads as a guard.
+    """
+    assert bs._peer_key(("10.0.0.7", 51234)) == "10.0.0.7"
+    assert bs._peer_key(("10.0.0.7", 99999)) == bs._peer_key(("10.0.0.7", 1))
+    # non-TCP transports report a bare path, and a missing address must not raise
+    assert bs._peer_key("/run/bridge.sock") == "/run/bridge.sock"
+    assert bs._peer_key(None) == "None"
 
 
 async def test_a_burst_of_bad_tokens_locks_the_peer_out():
@@ -215,7 +267,7 @@ async def test_a_burst_of_bad_tokens_locks_the_peer_out():
     try:
         for i in range(3):
             assert await _hello_close_code(f"ws://127.0.0.1:{port}/bridge", f"bad-{i}") == 4401
-        assert await _hello_close_code(f"ws://127.0.0.1:{port}/bridge", f"bad-3") != 4401
+        assert await _hello_close_code(f"ws://127.0.0.1:{port}/bridge", "bad-3") != 4401
         assert server.online() is False
     finally:
         await server.close()
@@ -362,9 +414,12 @@ async def test_the_lan_surface_answers_401_on_a_non_ascii_authorization_header()
         )
         assert " 401 " in raw.splitlines()[0], raw.splitlines()[:1]
         # the surface survived: /health still answers
-        assert " 200 " in _raw_get(
-            port, b"GET /health HTTP/1.1\r\nHost: x\r\nConnection: close\r\n\r\n"
-        ).splitlines()[0]
+        assert (
+            " 200 "
+            in _raw_get(
+                port, b"GET /health HTTP/1.1\r\nHost: x\r\nConnection: close\r\n\r\n"
+            ).splitlines()[0]
+        )
     finally:
         await lan.close()
 

@@ -1547,10 +1547,165 @@ A future routed tool that omits its capability record will fail
 
 ### Not started, by instruction
 
-F-1, F-2, F-3, F-5, F-6, F-8, 33B and Part E remain untouched. No file in
-`src/decision_loop.py`, `src/pc_actions.py`, `src/bot.py`, `src/dispatcher.py`, `src/tools.py`
-or `bridge/` was modified — Phase 0 is catalog + docs, and no edit outside that boundary proved
-necessary.
+*(As of the QW-7 commit above: F-1, F-2, F-3, F-5, F-6, F-8, 33B and Part E were untouched, and
+no file in `src/decision_loop.py`, `src/pc_actions.py`, `src/bot.py`, `src/dispatcher.py`,
+`src/tools.py` or `bridge/` was modified — Phase 0 was catalog + docs. F-5 has since landed and
+does touch `bridge/`; see the section below.)*
+
+## F-5 — the bridge acceptor's two auth gaps + QW-4 + QW-6
+
+Owner-approved P0 phase 1. Two commits: a RED barrier (`tests/test_bridge_auth_hardening.py`
+alone) then the implementation. 18 guards, **14 mutants, 14 RED, 0 survived**, every injection
+confirmed landed before its verdict was read.
+
+#### The path gate — `src/bridge_server.py:152-187`
+
+**Measured before writing anything:** `BridgeServer._handler` never read `request.path`, so
+`ws://host:PORT/`, `/admin` and `/bridge2` all reached a live tunnel. That is the audit's finding
+at `docs/AUDIT_REPORT.md:169`. The gate lives in a `process_request` wrapper that `start()`
+installs, **after** the caller's responder — `src/main.py:25-28`'s `/health` returns a Response
+and never reaches the gate, which is why a shared port keeps its keep-alive. It cannot live in
+the handler: by then the 101 is on the wire and only a close code remains.
+
+**Why 404 and not 403.** A wrong path is not a resource, and a 403 would confirm to a
+port-scanner that something *is* mounted on that port. `bridge/server.py:42` already answers 404
+for an unknown route, so this is the house answer. It is also the only status that can be
+returned at all here — a close code would already be a completed upgrade.
+
+**Owner-approved write-set exception** (recorded per CLAUDE.md §5.1 Directive 7): enforcing one
+path cannot coexist with the ten root-dial sites in `tests/test_coverage_gaps_p66a.py` (7),
+`tests/test_bridge_protocol.py` (3) and `tests/test_desktop_telemetry.py` (1). All eleven were
+retargeted to `/bridge` — **dial URLs only, not one assertion changed**. A permissive default
+would have been a fake guard. Production risk is zero and was verified, not assumed: the daemon
+dials `BRIDGE_SERVER_URL` verbatim (`bridge/__main__.py:64`) and `.env.example:169` ships
+`wss://your-space-host/bridge`. The accepted path is logged at startup *and* on every refusal, so
+a deployment whose URL disagrees fails loudly instead of silently.
+
+**No config surface changed.** `bridge_path` is a constructor argument, not an env var or a
+settings field, and `src/config.py` was not touched. Stated in the code: nothing in `src/` reads
+`BRIDGE_SERVER_URL` — it is a PC-side value this process never receives.
+
+#### The backoff — `src/bridge_server.py:191-247`
+
+Dependency-free, in-memory, bounded. Thresholds, and why they are generous: the regression this
+risks is the **owner's** bridge, not the attacker's rate. The daemon redials with capped
+exponential backoff, and a rotated `BRIDGE_TOKEN` on the PC produces a steady drip of 4401s that
+a tight limit would convert into a self-inflicted outage.
+
+| Threshold | Value | Reasoning |
+|---|---|---|
+| `AUTH_FAIL_LIMIT` | 20 bad tokens | 20 from one host in 5 minutes is a probe, not a flaky dial |
+| `AUTH_FAIL_WINDOW_S` | 300 s | wide enough to span a slow retry loop |
+| `AUTH_LOCKOUT_S` | 900 s | outlives the daemon's own backoff, so a transient fault is not re-attempted into a second lock |
+| window ≤ lockout | invariant | guarantees the owner's slate is already clean the instant a cooldown lifts, instead of re-locking on the next typo |
+
+Two properties the guards pin rather than assert in prose: a cooldown refuses the **correct**
+token too (that is what makes it a cooldown and not a guess-throttle), and a *successful* auth
+clears the peer's record so the owner is never one typo from a fresh lockout.
+
+**Bounded, and the bound is asserted on the accounting.** `_peer_auth` is keyed by an
+attacker-chosen peer, so it is capped at `AUTH_PEER_CAP = 256` with eviction that forgets the
+entry *closest to expiry* — a full dict degrades to dropping stale peers, never new ones, and
+eviction can only ever release a cooldown. The refusal sample is separately capped
+(`AUTH_LOG_CAP = 64`, bad-token entries at 5, the pre-existing cap). Every refusal is written to
+the loguru stream, which is the complete record; the list is the bounded sample. Without that
+split, "log every refusal" would itself have been the leak.
+
+**Directive 4, the measured detail that makes the backoff real.** `connection.remote_address` is a
+`(host, port)` tuple with an **ephemeral** port (measured, websockets 15.0.1). Keying on the whole
+tuple would hand every attempt its own bucket — the counter could never reach its threshold and
+the cooldown would be dead code that still reads as a guard. `_peer_key` keys on the host alone,
+and mutant `i` re-keys on the tuple to prove the guard notices.
+
+#### QW-6 — the LAN token compare — `bridge/server.py:7,27-33`
+
+`auth != f"Bearer {self.lan_token}"` → `hmac.compare_digest`. **Measured trap:** the `str` overload
+of `compare_digest` raises `TypeError` on non-ASCII, and `http.server` decodes headers as
+iso-8859-1, so any LAN client can put a non-ASCII byte in `Authorization` and turn a 401 into a
+dead request thread. The compare is therefore over **bytes**; mutant `c2` applies the `str`
+overload and the 401 guard goes RED.
+
+#### QW-4 — the colliding comment ids
+
+`docs/AUDIT_REPORT.md` owns the numbering: `S-1` executor `open_path`, `S-2` executor
+`confirmation_id`, `S-3` the any-path upgrade, `S-6` the app-indexer whitelist. The comments in
+`src/bridge_server.py:39,89,91` and `bridge/daemon.py:57` reused those tokens for unrelated
+findings, so a grep for a finding landed on the wrong file. They now carry property tags
+(`AUTHZ-const-time`, `AUTHZ-log-bounded`, `AUTHZ-plaintext-warn`, `AUTHZ-peer-backoff`,
+`PATH`); the new docstring cites `docs/AUDIT_REPORT.md:169` by line anchor instead. Verified by
+the work order's own command: `git grep -n "S-2\|S-3" src/bridge_server.py bridge/daemon.py`
+→ zero hits, and zero `S-<digit>` anywhere in either file.
+
+#### Two guards that were NOT red before the fix — stated, not hidden
+
+* `test_the_configured_bridge_path_upgrades_and_authenticates` was green precisely *because* any
+  path upgraded. It is the guard the fix could break; mutants `a`/`a2` prove it is real.
+* `test_the_lan_surface_answers_401_on_a_non_ascii_authorization_header` — `!=` cannot raise, so
+  it is green pre-fix by construction. It guards the hazard the fix **introduces**, and mutant
+  `c2` is what makes it real.
+
+#### Two of my own defects, found by existing guards and fixed in production, not in the tests
+
+`tests/test_coverage_gaps_p66a.py` went red twice and both times **the test was right**:
+
+1. `len(server.security_log) == 5` became 12 — I had appended each bad token twice, once through
+   the legacy cap and once through the new refusal logger. Fixed by giving the logger the call
+   site's own sampling decision (`sample=`/`cap=`) instead of double-appending.
+2. `any("auth rejected" in line ...)` became false — I had renamed the log vocabulary. Reverted to
+   the original entry strings; **no existing assertion was touched anywhere in this item.**
+
+Also found and repaired in my own instrument: the mutation driver used `Path.write_text`, which
+applies Windows newline translation, so its *restore* rewrote `bridge/server.py` whole (a 9-line
+diff reported as 168). The driver now reads and writes **bytes** and detects the file's own line
+ending. It also caught its own stale anchor and refused to report a mutant rather than measuring
+nothing.
+
+#### Measured, re-derived by script
+
+| Measurement | Before (HEAD `aba16e7`) | After |
+|---|---|---|
+| `tests/test_bridge_auth_hardening.py` | absent | **18 guards, all green** |
+| Suite excluding `tests/live_harness` | 2,547 passed / 5 skipped | **2,566 passed / 4 skipped / 1 xfailed / 0 failed** |
+| Collected (same suite) | 2,552 | **2,570** (= +18, the new guards) |
+| `src/bridge_server.py` coverage | 92% | **95%** |
+| TOTAL branch coverage | 91.9% | **91.9%** (gate ≥ 90.0%) |
+| `TOOL_CAPABILITIES` / `IRREVERSIBLE_TOOLS` / routed / unaccounted | 45 / 7 / 46 / 0 | **45 / 7 / 46 / 0** |
+| ruff check / format | clean / clean | **clean / clean** |
+| `security_gate.py` / `docs_guard.py` | OK / 16/16 | **OK / 16/16** |
+
+The pass/skip difference against the work order's stated 2,548/4 baseline is **not** a code
+difference: my own pre-change run measured 2,547/5, and 2,548 + 18 = 2,566 exactly. The one test
+that differed is network-dependent (`tier2_live_probes/test_omniroute.py` free-provider pool, or
+`live_probe/test_bridge_live.py` against an offline core). The 2 `live_harness` failures
+(`test_h04_ttft_monitor`, `test_h06_joda_dialogues`) are the pre-existing free-provider flakes;
+they were not weakened, skipped or re-scoped.
+
+#### Mutation run — 14 mutants, 14 RED
+
+| Mutant | Guard that went RED |
+|---|---|
+| a remove the path gate | `test_upgrade_on_the_root_path_is_refused_with_404` |
+| a2 path gate loosened to a prefix match | `test_upgrade_on_an_arbitrary_path_is_refused_with_404` |
+| b remove the cooldown refusal | `test_the_lockout_refuses_even_the_correct_token` |
+| b2 never record a failure (counter inert) | `test_a_burst_of_bad_tokens_locks_the_peer_out` |
+| c revert the LAN compare to `!=` | `test_the_lan_token_compare_is_constant_time` |
+| c2 LAN compare over `str` (the TypeError trap) | `test_the_lan_surface_answers_401_on_a_non_ascii_authorization_header` |
+| d unbounded peer tracking dict | `test_peer_auth_state_is_bounded_however_many_distinct_peers_appear` |
+| d2 unbounded refusal sample | `test_cooldown_refusals_cannot_grow_the_security_log_without_bound` |
+| e a successful auth does not clear the record | `test_a_successful_auth_clears_the_peer_backoff_record` |
+| f renumber the S-comments back | `test_audit_finding_ids_do_not_collide_with_the_comments_in_the_auth_paths` |
+| g tighten the thresholds into a lockout footgun | `test_shipped_auth_thresholds_are_generous_enough_not_to_lock_out_a_flaky_owner` |
+| h the gate swallows the shared `/health` surface | `test_a_caller_supplied_health_responder_still_answers_before_the_gate` |
+| i key the peer bucket on the whole address tuple | `test_the_peer_bucket_key_is_the_host_alone` |
+| j drop the 4400 non-Hello refusal arm | `test_a_valid_non_hello_first_frame_is_refused_and_logged` |
+
+#### Still open, deliberately not folded in
+
+`docs/AUDIT_REPORT.md:159` (V-9) has a second half — the in-memory `security_log` is still
+**unbounded for the non-bad-token paths** (`/health` responder aborts, session teardown). F-5 caps
+every path it *added*; capping the pre-existing ones is a separate item and would move assertions
+in tests outside this write-set. Also open: the `ws://` plaintext-dial warning on the daemon side
+is informational only, and TLS remains Caddy's job per `docs/09-DECISIONS.md` §7.
 
 - [07 — Implementation Plan](./07-IMPLEMENTATION-PLAN.md)
 - [11 — Testing](./11-TESTING.md)

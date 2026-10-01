@@ -28,7 +28,7 @@ async def test_happy_path_heartbeat_and_result():
     server = BridgeServer("tok", silence_timeout_s=5.0)
     port = await server.start()
     try:
-        async with connect(f"ws://127.0.0.1:{port}") as ws:
+        async with connect(f"ws://127.0.0.1:{port}/bridge") as ws:
             await ws.send(await _hello("tok"))
             raw = await ws.recv()
             assert json.loads(raw)["ok"] is True
@@ -56,7 +56,7 @@ async def test_bad_token_rejected_and_capped():
     try:
         for _ in range(7):
             try:
-                async with connect(f"ws://127.0.0.1:{port}") as ws:
+                async with connect(f"ws://127.0.0.1:{port}/bridge") as ws:
                     await ws.send(await _hello("wrong"))
                     await ws.recv()
             except ConnectionClosed:
@@ -72,7 +72,7 @@ async def test_non_hello_first_frame_rejected():
     server = BridgeServer("tok", silence_timeout_s=5.0)
     port = await server.start()
     try:
-        async with connect(f"ws://127.0.0.1:{port}") as ws:
+        async with connect(f"ws://127.0.0.1:{port}/bridge") as ws:
             await ws.send(b"not-json{{{")
             try:
                 await ws.recv()
@@ -88,11 +88,11 @@ async def test_second_session_rejected_while_first_live():
     server = BridgeServer("tok", silence_timeout_s=5.0)
     port = await server.start()
     try:
-        async with connect(f"ws://127.0.0.1:{port}") as first:
+        async with connect(f"ws://127.0.0.1:{port}/bridge") as first:
             await first.send(await _hello("tok"))
             await first.recv()
             assert server.online()
-            async with connect(f"ws://127.0.0.1:{port}") as second:
+            async with connect(f"ws://127.0.0.1:{port}/bridge") as second:
                 await second.send(await _hello("tok"))
                 raw = await second.recv()
                 assert json.loads(raw)["ok"] is False
@@ -111,7 +111,7 @@ async def test_send_cmd_without_session_and_timeout():
 
     port = await server.start()
     try:
-        async with connect(f"ws://127.0.0.1:{port}") as ws:
+        async with connect(f"ws://127.0.0.1:{port}/bridge") as ws:
             await ws.send(await _hello("tok"))
             await ws.recv()
             try:
@@ -128,7 +128,7 @@ async def test_unknown_result_id_dropped_and_drop_cleans_session():
     server = BridgeServer("tok", silence_timeout_s=0.3)
     port = await server.start()
     try:
-        async with connect(f"ws://127.0.0.1:{port}") as ws:
+        async with connect(f"ws://127.0.0.1:{port}/bridge") as ws:
             await ws.send(await _hello("tok"))
             await ws.recv()
             stray = new_envelope(type="result", cmd="exec.screenshot")

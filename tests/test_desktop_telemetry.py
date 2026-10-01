@@ -150,7 +150,11 @@ async def test_telemetry_via_tunnel_roundtrip(tmp_path):
     port = await server.start(host="127.0.0.1", port=0)
     executor = Executor(_tmp_guard(tmp_path))
     daemon = BridgeDaemon(
-        f"ws://127.0.0.1:{port}", TOKEN, executor, heartbeat_interval_s=0.05, backoff_cap_s=0.1
+        f"ws://127.0.0.1:{port}/bridge",
+        TOKEN,
+        executor,
+        heartbeat_interval_s=0.05,
+        backoff_cap_s=0.1,
     )
     stop = asyncio.Event()
     runner = asyncio.create_task(daemon.run(stop))
