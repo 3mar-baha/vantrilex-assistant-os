@@ -2359,6 +2359,145 @@ docs_guard        OK — 16 canonical files
 2 `live_harness` flakes (`test_h04_ttft_monitor`, `test_h06_joda_dialogues`) are
 free-provider noise, pre-existing, and **not weakened**.
 
+## F-4 SHIPPED — Google startup/deployment now tells the truth (2026-10-01)
+
+### The finding, and what it cost to be true
+
+The report was right on all four counts, and one of them was worse than "undocumented".
+`GoogleSession.__init__` never looked at the OAuth client secret at all, so a wrong
+one surfaced at the owner's first calendar read. What the report called "the probe"
+was `GoogleSession(settings)` inside a blanket `except Exception` — it built a session
+and hoped. The `Dockerfile` had **no `config/` line whatsoever**, so a container built
+from it could never find `google_oauth_client.json` and could never authenticate. And
+the Oracle compose mounted nothing, so on a filesystem the project deliberately treats
+as disposable (ADR-15), the Fernet-sealed grant died on every `docker compose up -d` —
+a browser consent per redeploy. The report's own words on the last point: "the current
+silence is not [acceptable]".
+
+### The three states, kept apart on purpose
+
+The regression the work order names is getting the first two backwards, so they are
+separated at the source rather than by a flag:
+
+| State | Behaviour | Where it lives |
+|---|---|---|
+| **absent** (no secret file) | `client_secret_present` → `False`, no raise. `google_healthy = False`, bot boots, tools answer the honest line | `src/google_auth.py` |
+| **broken** (file present, unusable) | `GoogleAuthError` **at construction** — boot stops loudly | `src/google_auth.py` |
+| **present, probe fails** | `google_healthy = False` + honest line, never a raise | `src/google_auth.py` |
+
+Absent also **short-circuits before the transport exists** — a box with no Google
+spends zero requests at boot, which is what makes the pure-local path free in both
+sense of the word.
+
+### The probe is real, and bounded
+
+`calendarList.list(maxResults=1)` through the ordinary session path, so a stale token
+is refreshed first and a dead refresh token is caught here rather than by the owner.
+Wrapped in `asyncio.timeout(GOOGLE_PROBE_TIMEOUT_S = 8.0)`. `describe_probe_failure`
+returns the **fully-qualified exception class and nothing else** — `GoogleAPIError`
+embeds 300 characters of live response body, and httpx embeds the request URL, so
+`str(error)` would put token material in the operator's log.
+
+### Why `cloud` is deliberately NOT gated on the verdict
+
+Places and Custom Search authenticate with **API keys**, not the OAuth grant. Nulling
+`GoogleCloudClient` on an OAuth failure would have broken a feature that was working on
+a box holding a Places key and never having run the OAuth bootstrap. `probe_google`
+therefore hands the session back even when unhealthy, and `healthy` decides binding —
+pinned by `test_unhealthy_oauth_leaves_the_key_driven_cloud_surface_bound` and broken
+on purpose by mutant M7.
+
+### The Dockerfile bakes the path, never the secret
+
+`COPY config/whitelist.json /app/config/whitelist.json` — the tracked, non-secret file.
+The obvious `COPY config/ /app/config/` would have baked `google_oauth_client.json`
+into a layer, and an image layer keeps its copy forever (`docker save` is a snapshot,
+not a deletion) while CLAUDE.md §2.2 forbids OAuth client credentials in the repo at
+all. The secret arrives as a **runtime mount**. Verified after the change:
+`.gitignore:6` (`config/google_*.json`) still matches, `git ls-files config/` shows
+only `whitelist.json`, and `git ls-files --error-unmatch config/google_oauth_client.json`
+errors — the file remains untracked.
+
+### `/app/config` mount shadows the baked whitelist — documented, not silent
+
+A bind mount over `/app/config` replaces the image's copy, so the host directory must
+carry **both** files. The deploy guide now says so in Arabic with the `scp` for both,
+right above the existing single-file `scp` line it corrects.
+
+### Tests that encoded the old contract — UPDATED, never the gate weakened
+
+Three guards in `tests/test_coverage_gaps_p65.py` passed a bare `object()` as
+`settings`. That worked only because construction never read `settings`; F-4 made the
+constructor read `google_oauth_client_json`, so they raised `AttributeError`. That is a
+**fixture that fell behind a real contract change**, not a guard encoding a wrong law:
+all three assertions are byte-for-byte untouched, and the replacement stand-in points
+at a path that does not exist — exactly the documented ABSENT state.
+
+### Mutation check (Directive 5) — 10 mutants, every one RED on a NAMED guard
+
+Byte-level patches with sha256-verified restores (no `write_text`, no newline
+translation). Anchors authored in LF are translated per-file, because `src/bot.py` is
+CRLF in the working tree and rewriting a file's endings would be a second, invisible
+mutation.
+
+| Mutant | Guard turned RED |
+|---|---|
+| M1 Dockerfile config COPY deleted | `test_dockerfile_copies_the_config_path_into_the_image` |
+| M2 probe reverted to construct-and-hope | `test_probe_issues_exactly_one_authenticated_calendar_list_call` |
+| M3 "absent" raises instead of degrading | `test_absent_credentials_do_not_raise_at_construction` |
+| M4 compose `/app/vault` volume removed | `test_oracle_compose_mounts_the_config_and_vault_volumes` |
+| M5 compose `/app/config` volume removed | `test_oracle_compose_mounts_the_config_and_vault_volumes` |
+| M6 unhealthy early-return dropped | `test_unhealthy_probe_binds_no_oauth_surface` |
+| M7 `cloud` nulled on OAuth failure | `test_unhealthy_oauth_leaves_the_key_driven_cloud_surface_bound` |
+| M8 `client_id`/`client_secret` check dropped | `test_broken_credentials_raise_the_existing_typed_error_at_construction` |
+| M9 Dockerfile bakes `config/` whole | `test_dockerfile_never_bakes_the_oauth_client_secret_into_an_image_layer` |
+| M10 fault label logs the payload | `test_the_boot_failure_log_line_names_no_path_or_secret` |
+
+Two mutants (M6/M7) were **REFUSED on first attempt — anchor stale**, because the
+anchors assumed `src/bot.py` was LF. They were re-anchored against the real bytes and
+then ran. No mutant is reported from a stale anchor.
+
+### Guards that were NOT red before the fix — stated plainly
+
+Three of the 27 were already green against the unfixed tree, and saying so is the point:
+
+1. `test_the_honest_offline_line_is_arabic_and_leaks_nothing` — `GOOGLE_OFFLINE_AR`
+   already existed and was already correct. This guard **pins** a standing invariant
+   so a future refactor cannot translate it into English; it did not detect a defect.
+2. `test_dockerfile_never_bakes_the_oauth_client_secret_into_an_image_layer` — passed
+   vacuously: there was no config COPY at all, so nothing was being baked. It only
+   became load-bearing once M1/M9 showed it can fail.
+3. `test_the_oauth_client_json_stays_gitignored_after_the_dockerfile_change` — passed
+   trivially, and it is the answer to the work order's question ("does the COPY risk
+   committing the secret?"): `.gitignore` covered it before and after.
+
+The remaining 24 were red on the unfixed tree, 22 of them in the committed RED commit
+`d0eedb6` and 2 more after the fixture repair.
+
+### Measured numbers (re-derived from the tree, not asserted)
+
+```
+gate file          tests/test_google_boot_probe.py — 27 passed
+suite (excl live_harness)  2,728 passed / 4 skipped / 1 xfailed / 1 failed
+                             (2,701 passed / 1 failed BEFORE F-4 — same failure)
+tiered coverage   TOTAL 92.27%  (was 92.34%)  · gate PASSED, thresholds unchanged
+ruff check        clean          ruff format  clean
+security_gate     OK            docs_guard  OK — 16 canonical files
+mutation check    10 mutants, 10 RED, 0 refused, all restores sha256-verified
+```
+
+### The one failing test is PRE-EXISTING and unrelated — measured, not assumed
+
+`tests/test_production_wiring.py::test_run_bot_boots_all_components_and_shuts_down`
+fails **before and after** F-4, verified by stashing every F-4 file and re-running it
+on the clean tree (1 failed, 5 passed, 31.10s). It is not a network flake: it hits
+`api.github.com` with the placeholder `VAULT_GITHUB_TOKEN` from the `.env.example`
+mirror, so the real vault client gets a real **401** back and the boot sync burns its
+30s budget on retries. The work order's "one network-dependent test varies run to run"
+did not reproduce here — the failure is deterministic, not flaky, and it is not one of
+mine. **Zero NEW failures: 2,728 vs 2,701 is +27 new guards and the same single
+pre-existing failure.** Not weakened, not skipped, not xfailed.
+
 ### Carried forward from F-1
 
 * **The live path has no confirmation producer.** F-1 closed the enforcement hole;
@@ -2373,6 +2512,22 @@ free-provider noise, pre-existing, and **not weakened**.
 * **`register_tool`'s R2 still does not police a shipped handler** — the point-of-use
   refusal in `call` catches the CONSEQUENCE. The registration itself is still
   accepted and then refused at dispatch, which is safe but wasteful.
+
+### Carried forward from F-4
+
+* **`test_run_bot_boots_all_components_and_shuts_down` is RED for a pre-existing
+  reason and is NOT F-4's to fix.** It lets the real `VaultClient` reach the live
+  GitHub API with the `.env.example` placeholder token, gets a real 401, and burns the
+  30s boot budget on retries. It was already red at `c367eb8` (verified by stashing).
+  The fix is to inject a fake `VaultClient`, which is `tests/test_production_wiring.py`
+  — outside this work order's write-set. **Carried forward as a named defect, not
+  absorbed into a milestone count.**
+* **The probe adds up to 8s to boot when Google is slow.** Bounded and deliberate, but
+  it is real latency the owner will see. If it ever becomes objectionable the fix is a
+  shorter bound or a background re-probe, not removing the probe.
+* **`config/` on the Oracle VM must hold both files** now that the mount shadows the
+  image's copy — documented in `docs/15-ORACLE-DEPLOY.md`, verified by no test (it is
+  an operator step, not code).
 
 ### Carried forward, still open
 

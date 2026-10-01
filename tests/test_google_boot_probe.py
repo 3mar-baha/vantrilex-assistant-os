@@ -36,8 +36,10 @@ from pathlib import Path
 import httpx
 import pytest
 import yaml
+from cryptography.fernet import Fernet
 
 from src.google_auth import (
+    GoogleAPIError,
     GoogleAuthError,
     GoogleSession,
     GoogleTokens,
@@ -92,7 +94,28 @@ def _client_secret(path: Path) -> Path:
     return path
 
 
-def _seeded(settings, tmp_path: Path, *, access: str | None = "tok-abc") -> str:
+def _secret_path(tmp_path: Path) -> str:
+    """The documented secret path inside the fixture box — `config/` and all, so
+    the test exercises the same layout the image and the compose mount use."""
+    return str(tmp_path / "config" / "google_oauth_client.json")
+
+
+def _absent_path(tmp_path: Path) -> str:
+    return str(tmp_path / "nowhere" / "google_oauth_client.json")
+
+
+def _settings(make_settings, tmp_path: Path, *, secret: str | None = None, **extra):
+    """A box with a REAL Fernet key — the `.env.example` mirror value is a
+    placeholder, and seeding the token cache needs a key that actually seals."""
+    return make_settings(
+        VAULT_LOCAL_PATH=str(tmp_path / "vault"),
+        VAULT_ENC_KEY=Fernet.generate_key().decode(),
+        GOOGLE_OAUTH_CLIENT_JSON=secret if secret is not None else _secret_path(tmp_path),
+        **extra,
+    )
+
+
+def _seeded(settings, *, access: str | None = "tok-abc") -> str:
     """A box with BOTH a valid client secret and a cached grant."""
     _client_secret(Path(settings.google_oauth_client_json))
     if access is not None:
@@ -110,10 +133,7 @@ def _seeded(settings, tmp_path: Path, *, access: str | None = "tok-abc") -> str:
 async def test_absent_credentials_do_not_raise_at_construction(make_settings, tmp_path):
     """A box with no OAuth client file is a supported deployment (pure-local).
     `GoogleSession` must construct; nothing about a missing file is an error."""
-    settings = make_settings(
-        VAULT_LOCAL_PATH=str(tmp_path / "vault"),
-        GOOGLE_OAUTH_CLIENT_JSON=str(tmp_path / "nowhere" / "google_oauth_client.json"),
-    )
+    settings = _settings(make_settings, tmp_path, secret=_absent_path(tmp_path))
 
     session = GoogleSession(settings)  # must NOT raise
 
@@ -123,10 +143,7 @@ async def test_absent_credentials_do_not_raise_at_construction(make_settings, tm
 async def test_absent_credentials_report_unhealthy_without_dialing_out(make_settings, tmp_path):
     """Absent is a VERDICT (unhealthy), not a crash — and the probe must not
     spend a request to learn something it already knows."""
-    settings = make_settings(
-        VAULT_LOCAL_PATH=str(tmp_path / "vault"),
-        GOOGLE_OAUTH_CLIENT_JSON=str(tmp_path / "nowhere" / "google_oauth_client.json"),
-    )
+    settings = _settings(make_settings, tmp_path, secret=_absent_path(tmp_path))
     spy = _Spy(_ok)
 
     health = await _probe(settings, transport=spy.transport)
@@ -142,10 +159,7 @@ async def test_absent_credentials_never_reach_a_missing_grant_for_a_token_reques
 ):
     """No credentials AND no cached grant: still zero requests. The probe
     short-circuits before the transport exists."""
-    settings = make_settings(
-        VAULT_LOCAL_PATH=str(tmp_path / "vault"),
-        GOOGLE_OAUTH_CLIENT_JSON=str(tmp_path / "nowhere" / "google_oauth_client.json"),
-    )
+    settings = _settings(make_settings, tmp_path, secret=_absent_path(tmp_path))
     spy = _Spy(_ok)
 
     await _probe(settings, transport=spy.transport)
@@ -223,18 +237,13 @@ async def test_broken_credentials_fail_the_boot_fast(make_settings, tmp_path):
 # --- state 3: the probe really fires an authenticated call --------------------
 
 
-async def test_probe_issues_exactly_one_authenticated_calendar_list_call(
-    make_settings, tmp_path
-):
+async def test_probe_issues_exactly_one_authenticated_calendar_list_call(make_settings, tmp_path):
     """THE anti-no-op guard. The pre-F-4 boot code constructed a session and
     hoped; this pins that a real bearer-authenticated `calendarList.list` with
     maxResults=1 now leaves the box at boot. Reverting the probe to a
     construct-and-hope no-op turns this RED."""
-    settings = make_settings(
-        VAULT_LOCAL_PATH=str(tmp_path / "vault"),
-        GOOGLE_OAUTH_CLIENT_JSON=str(tmp_path / "config" / "google_oauth_client.json"),
-    )
-    _seeded(settings, tmp_path)
+    settings = _settings(make_settings, tmp_path)
+    _seeded(settings)
     spy = _Spy(_ok)
 
     health = await _probe(settings, transport=spy.transport)
@@ -252,28 +261,22 @@ async def test_probe_issues_exactly_one_authenticated_calendar_list_call(
 async def test_probe_failure_marks_unhealthy_without_raising(make_settings, tmp_path):
     """Credentials fine, grant cached, Google unreachable -> unhealthy, no
     exception escapes the boot. The bot must degrade, not die."""
-    settings = make_settings(
-        VAULT_LOCAL_PATH=str(tmp_path / "vault"),
-        GOOGLE_OAUTH_CLIENT_JSON=str(tmp_path / "config" / "google_oauth_client.json"),
-    )
-    _seeded(settings, tmp_path)
+    settings = _settings(make_settings, tmp_path)
+    _seeded(settings)
     spy = _Spy(lambda request: httpx.Response(503, json={"error": "backendError"}))
 
     health = await _probe(settings, transport=spy.transport)
 
     assert health.healthy is False
     assert health.reason
-    assert health.session is None
+    assert health.credentials_present is True
 
 
 async def test_probe_timeout_marks_unhealthy_without_raising(make_settings, tmp_path):
     """A hung network is the common case on a laptop lid-closed; it must cost
     boot a bounded pause, never an exception."""
-    settings = make_settings(
-        VAULT_LOCAL_PATH=str(tmp_path / "vault"),
-        GOOGLE_OAUTH_CLIENT_JSON=str(tmp_path / "config" / "google_oauth_client.json"),
-    )
-    _seeded(settings, tmp_path)
+    settings = _settings(make_settings, tmp_path)
+    _seeded(settings)
 
     def _hang(request: httpx.Request) -> httpx.Response:
         raise httpx.ReadTimeout("simulated stall", request=request)
@@ -281,17 +284,33 @@ async def test_probe_timeout_marks_unhealthy_without_raising(make_settings, tmp_
     health = await _probe(settings, transport=_Spy(_hang).transport, timeout=0.05)
 
     assert health.healthy is False
-    assert health.session is None
+
+
+async def test_an_unhealthy_verdict_still_hands_back_the_session_for_key_driven_calls(
+    make_settings, tmp_path
+):
+    """`probe_google` returns the session even when the grant is dead, on
+    purpose: Places and Custom Search authenticate with API KEYS, so the cloud
+    surface must not be collateral damage of an OAuth failure. What stays
+    unbound is decided by `healthy`, and THAT is what
+    `test_unhealthy_probe_binds_no_oauth_surface` pins."""
+    settings = _settings(make_settings, tmp_path)
+    _seeded(settings)
+
+    health = await _probe(
+        settings,
+        transport=_Spy(lambda request: httpx.Response(503, json={})).transport,
+    )
+
+    assert health.healthy is False
+    assert isinstance(health.session, GoogleSession)
 
 
 async def test_no_cached_grant_is_unhealthy_and_never_dials_out(make_settings, tmp_path):
     """An authenticated call is impossible without a grant, and pretending
     otherwise would spend a request to learn it. Stated as a law so the cheap
     short-circuit is a decision, not an accident."""
-    settings = make_settings(
-        VAULT_LOCAL_PATH=str(tmp_path / "vault"),
-        GOOGLE_OAUTH_CLIENT_JSON=str(tmp_path / "config" / "google_oauth_client.json"),
-    )
+    settings = _settings(make_settings, tmp_path)
     _client_secret(Path(settings.google_oauth_client_json))
     spy = _Spy(_ok)
 
@@ -307,11 +326,8 @@ async def test_no_cached_grant_is_unhealthy_and_never_dials_out(make_settings, t
 async def test_unhealthy_probe_binds_no_oauth_surface(make_settings, tmp_path):
     from src.bot import build_google_stack
 
-    settings = make_settings(
-        VAULT_LOCAL_PATH=str(tmp_path / "vault"),
-        GOOGLE_OAUTH_CLIENT_JSON=str(tmp_path / "config" / "google_oauth_client.json"),
-    )
-    _seeded(settings, tmp_path)
+    settings = _settings(make_settings, tmp_path)
+    _seeded(settings)
     spy = _Spy(lambda request: httpx.Response(503, json={}))
 
     stack = await build_google_stack(settings, transport=spy.transport)
@@ -326,11 +342,8 @@ async def test_healthy_probe_binds_the_oauth_surfaces(make_settings, tmp_path):
     from src.bot import build_google_stack
     from src.google_suite import GoogleSuite
 
-    settings = make_settings(
-        VAULT_LOCAL_PATH=str(tmp_path / "vault"),
-        GOOGLE_OAUTH_CLIENT_JSON=str(tmp_path / "config" / "google_oauth_client.json"),
-    )
-    _seeded(settings, tmp_path)
+    settings = _settings(make_settings, tmp_path)
+    _seeded(settings)
 
     stack = await build_google_stack(settings, transport=_Spy(_ok).transport)
 
@@ -340,21 +353,15 @@ async def test_healthy_probe_binds_the_oauth_surfaces(make_settings, tmp_path):
     assert stack.composer is not None
 
 
-async def test_unhealthy_oauth_leaves_the_key_driven_cloud_surface_bound(
-    make_settings, tmp_path
-):
+async def test_unhealthy_oauth_leaves_the_key_driven_cloud_surface_bound(make_settings, tmp_path):
     """Places/CSE authenticate with API KEYS, not the OAuth grant. Nulling the
     cloud surface on an OAuth failure would break a working feature for a box
     that holds a Places key and has never run the OAuth bootstrap."""
     from src.bot import build_google_stack
     from src.google_cloud_client import GoogleCloudClient
 
-    settings = make_settings(
-        VAULT_LOCAL_PATH=str(tmp_path / "vault"),
-        GOOGLE_OAUTH_CLIENT_JSON=str(tmp_path / "config" / "google_oauth_client.json"),
-        GOOGLE_PLACES_KEY="places-key-fixture",
-    )
-    _seeded(settings, tmp_path)
+    settings = _settings(make_settings, tmp_path, GOOGLE_PLACES_KEY="places-key-fixture")
+    _seeded(settings)
 
     stack = await build_google_stack(
         settings, transport=_Spy(lambda request: httpx.Response(503, json={})).transport
@@ -364,9 +371,7 @@ async def test_unhealthy_oauth_leaves_the_key_driven_cloud_surface_bound(
     assert isinstance(stack.cloud, GoogleCloudClient)
 
 
-async def test_unhealthy_google_answers_the_honest_line_and_never_raises(
-    make_settings, tmp_path
-):
+async def test_unhealthy_google_answers_the_honest_line_and_never_raises(make_settings, tmp_path):
     """The end-to-end law, against the REAL ToolRegistry: with health False the
     calendar tool returns the honest ar-JO offline line. It must not raise, and
     it must not return the generic crash line (`TOOL_FAIL_AR`) either — that is
@@ -375,11 +380,8 @@ async def test_unhealthy_google_answers_the_honest_line_and_never_raises(
     from src.bot import build_google_stack
     from src.tools import GOOGLE_OFFLINE_AR, TOOL_FAIL_AR, ToolRegistry
 
-    settings = make_settings(
-        VAULT_LOCAL_PATH=str(tmp_path / "vault"),
-        GOOGLE_OAUTH_CLIENT_JSON=str(tmp_path / "config" / "google_oauth_client.json"),
-    )
-    _seeded(settings, tmp_path)
+    settings = _settings(make_settings, tmp_path)
+    _seeded(settings)
     spy = _Spy(lambda request: httpx.Response(503, json={}))
 
     stack = await build_google_stack(settings, transport=spy.transport)
@@ -401,10 +403,7 @@ async def test_absent_credentials_boot_the_bot_and_answer_honestly(make_settings
     from src.bot import build_google_stack
     from src.tools import GOOGLE_OFFLINE_AR, ToolRegistry
 
-    settings = make_settings(
-        VAULT_LOCAL_PATH=str(tmp_path / "vault"),
-        GOOGLE_OAUTH_CLIENT_JSON=str(tmp_path / "nowhere" / "google_oauth_client.json"),
-    )
+    settings = _settings(make_settings, tmp_path, secret=_absent_path(tmp_path))
     spy = _Spy(_ok)
 
     stack = await build_google_stack(settings, transport=spy.transport)
@@ -435,9 +434,16 @@ def test_the_boot_failure_log_line_names_no_path_or_secret():
     from src.google_auth import describe_probe_failure
 
     described = describe_probe_failure(httpx.ReadTimeout("token abc123 leaked"))
-    assert "abc123" not in described
+    assert "abc123" not in described, "the response body reached the log line"
     assert "/" not in described and "\\" not in described
     assert described == "httpx.ReadTimeout"
+    # and the module-qualified form for a Google-originated fault, so the boot
+    # log distinguishes an httpx stall from a Google 403 without any payload
+    google_side = describe_probe_failure(
+        GoogleAPIError(403, '{"error":{"message":"token abc123 invalid"}}')
+    )
+    assert google_side == "src.google_auth.GoogleAPIError"
+    assert "abc123" not in google_side and "403" not in google_side
 
 
 # --- deployment truthfulness: the image and the compose -----------------------
@@ -457,7 +463,7 @@ def test_dockerfile_copies_the_config_path_into_the_image():
         if line.strip().upper().startswith("COPY ") and len(line.split()) >= 3
     ]
     assert any(
-        dest.rstrip("/") in ("/app/config", "app/config") for dest in copies
+        dest.rstrip("/") == "/app/config" or dest.startswith("/app/config/") for dest in copies
     ), f"no COPY lands the config path in the image; destinations={copies}"
 
 
@@ -466,10 +472,13 @@ def test_dockerfile_never_bakes_the_oauth_client_secret_into_an_image_layer():
     image layer is the same leak with a longer half-life (`docker save` keeps it
     forever). The tracked, non-secret whitelist is baked; the secret is a
     runtime mount."""
+    instructions = [
+        line for line in _dockerfile_lines() if line.strip() and not line.strip().startswith("#")
+    ]
     offenders = [
         line
-        for line in _dockerfile_lines()
-        if "google_oauth_client" in line or re.search(r"COPY\s+config/?\s", line)
+        for line in instructions
+        if "google_oauth_client" in line or re.search(r"^(COPY|ADD)\s+config/?\s", line)
     ]
     assert offenders == [], f"the OAuth secret would be baked into the image: {offenders}"
 
@@ -478,7 +487,7 @@ def _gitignore_matches(relative: str) -> str | None:
     """Return the .gitignore rule that ignores `relative`, or None."""
     for raw in (REPO_ROOT / ".gitignore").read_text(encoding="utf-8").splitlines():
         rule = raw.strip()
-        if not rule or rule.startswith("#") or rule.startswith("!"):
+        if not rule or rule.startswith(("#", "!")):
             continue
         pattern = rule.rstrip("/")
         if fnmatch.fnmatch(relative, pattern) or Path(relative).match(pattern):
@@ -515,6 +524,15 @@ def test_oracle_compose_mounts_the_config_and_vault_volumes():
     container_paths = [m.split(":")[1] for m in mounts]
     assert "/app/config" in container_paths, f"no /app/config mount: {mounts}"
     assert "/app/vault" in container_paths, f"no /app/vault mount: {mounts}"
+
+
+def test_the_boot_probe_reports_its_own_timeout_bound():
+    """The probe bounds its one network call. A laptop lid-closed must cost boot
+    a pause, never a hang — and the bound is a named constant rather than a
+    magic number someone later raises to 'fix' a slow morning."""
+    from src.google_auth import GOOGLE_PROBE_TIMEOUT_S
+
+    assert GOOGLE_PROBE_TIMEOUT_S == 8.0
 
 
 def test_the_deploy_guide_explains_the_re_auth_cost_of_the_token_cache():

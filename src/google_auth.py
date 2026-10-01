@@ -4,9 +4,26 @@ Desktop loopback OAuth with state verification, refresh-once-on-401 session,
 and the encrypted vault token cache (ADR-15): the token cache lives at
 ``{vault_local_path}/State/google_token.json.enc`` — Fernet-encrypted JSON
 under VAULT_ENC_KEY, never plaintext on disk, never logged.
+
+Boot truthfulness (F-4 / C-6). Two separate facts are now established at
+construction and at boot, and the report called the old code a no-op because it
+established neither:
+
+* **absent** — no client secret on disk. A supported pure-local deployment.
+  Nothing raises; `probe_google` answers `healthy=False` and the Google tools
+  return the honest ar-JO offline line.
+* **broken** — a client secret that exists and cannot be used. `GoogleAuthError`
+  at `GoogleSession` construction, so the fault surfaces at boot rather than at
+  the owner's first calendar read.
+
+The token cache is disposable with the vault root (ADR-15), so a container
+without a `/app/vault` mount silently loses the grant and pays a browser
+consent on every redeploy. `docs/15-ORACLE-DEPLOY.md` mounts it; this module
+only records the path.
 """
 
 import asyncio
+import dataclasses
 import http.server
 import json
 import secrets
@@ -23,6 +40,12 @@ from pydantic import BaseModel
 
 OAUTH_AUTH_URL: Final[str] = "https://accounts.google.com/o/oauth2/v2/auth"
 OAUTH_TOKEN_URL: Final[str] = "https://oauth2.googleapis.com/token"
+
+# F-4 / C-6 boot probe: the cheapest authenticated call that exists. It reads
+# one field off the owner's calendar LIST (never an event, never owner data),
+# and `maxResults=1` keeps the quota cost at the floor.
+GOOGLE_PROBE_URL: Final[str] = "https://www.googleapis.com/calendar/v3/users/me/calendarList"
+GOOGLE_PROBE_TIMEOUT_S: Final[float] = 8.0
 
 # Three scopes (remediation 3.4): Calendar + Tasks + Gmail.modify — the OS
 # reads no Drive/Contacts data anywhere, so those consent screens are noise.
@@ -55,6 +78,54 @@ def token_cache_path(settings) -> Path:
     return Path(settings.vault_local_path) / "State" / "google_token.json.enc"
 
 
+def client_secret_present(settings) -> bool:
+    """Eager boot-time answer to "is the OAuth client secret usable?".
+
+    Two answers, and the caller must keep them apart (F-4 / C-6):
+
+    * **absent** — no file at that path. Returns ``False`` and raises nothing:
+      a box deliberately running without Google is a supported deployment, and
+      crashing it would be the regression this function exists to avoid.
+    * **broken** — a file that exists and cannot be used. Raises
+      ``GoogleAuthError`` NOW. Fail fast at boot beats discovering a wrong
+      secret at the owner's first calendar read, minutes or hours later.
+
+    ``load_client_secret`` already raises the typed error for unparseable JSON
+    and a missing ``installed`` block. ``OSError`` (permissions, a directory in
+    the file's place) is re-raised as the SAME class rather than escaping bare,
+    so no ``except GoogleAuthError`` in this codebase is left dead.
+    """
+    path = Path(settings.google_oauth_client_json)
+    if not path.exists():
+        return False
+    try:
+        load_client_secret(path)
+    except GoogleAuthError:
+        raise
+    except OSError as error:  # unreadable, or a directory where the file belongs
+        raise GoogleAuthError(
+            f"OAuth client secret at {path} is unreadable ({type(error).__name__}) — "
+            "fix the file, or remove it to run without Google"
+        ) from error
+    return True
+
+
+def describe_probe_failure(error: BaseException) -> str:
+    """The probe's log-safe fault label: the fully-qualified exception CLASS.
+
+    ``GoogleAPIError`` embeds up to 300 characters of a live response body and
+    httpx errors embed the request URL, so ``str(error)`` can carry an account
+    id, a query, or token material into the operator's log. The class name is
+    what an operator acts on; the payload is what leaks.
+
+    The module prefix is deliberate: it tells an httpx stall from a Google 403
+    at a glance, which is the distinction that decides whether to retry or to
+    re-consent. `__qualname__` only, never the message, never the arguments.
+    """
+    kind = type(error)
+    return f"{kind.__module__}.{kind.__qualname__}"
+
+
 def load_client_secret(path: str | Path) -> dict:
     """Unwrap the {"installed": ...} desktop-client JSON; missing -> loud abort."""
     try:
@@ -68,6 +139,16 @@ def load_client_secret(path: str | Path) -> dict:
     cfg = raw.get("installed")
     if not cfg:
         raise GoogleAuthError(f"client secret JSON at {path} lacks the 'installed' block")
+    # F-4 / C-6: an "installed" block that parses is not yet a usable credential.
+    # Without this check a JSON missing client_secret sails through construction
+    # and dies as a bare KeyError inside the token exchange — at the owner's
+    # first request, which is the discovery-at-first-request this rejects.
+    missing = [key for key in ("client_id", "client_secret") if not cfg.get(key)]
+    if missing:
+        raise GoogleAuthError(
+            f"client secret JSON at {path} is missing {' and '.join(missing)} — "
+            "re-download the desktop client JSON per RUNBOOK 'Google OAuth bootstrap'"
+        )
     return cfg
 
 
@@ -216,9 +297,18 @@ class GoogleSession:
         transport: httpx.AsyncBaseTransport | None = None,
     ) -> None:
         self._settings = settings
+        # F-4 / C-6: the client secret is judged HERE, not at the first request.
+        # Raises GoogleAuthError when it exists and is unusable; a missing file
+        # is a pure-local deployment and raises nothing.
+        self._credentials_present = client_secret_present(settings)
         self._tokens = tokens or self._load_cached(settings)
         self._http = httpx.AsyncClient(transport=transport)
         self._lock = asyncio.Lock()
+
+    @property
+    def credentials_present(self) -> bool:
+        """False when the OAuth client secret is simply absent (pure-local)."""
+        return self._credentials_present
 
     @staticmethod
     def _load_cached(settings) -> GoogleTokens:
@@ -290,6 +380,70 @@ class GoogleSession:
         self._tokens = fresh
         save_tokens(token_cache_path(self._settings), fresh, enc_key=self._settings.vault_enc_key)
         logger.debug("google bearer refreshed (proactive or post-401)")
+
+
+@dataclasses.dataclass(frozen=True)
+class GoogleBootHealth:
+    """What boot actually established about Google (F-4 / C-6).
+
+    ``healthy`` is the flag the tool surface reads. When it is False the
+    OAuth-backed surfaces (calendar, tasks, gmail) are left UNBOUND so they
+    answer the honest ar-JO offline line instead of raising mid-turn.
+
+    ``session`` is always the constructed session whenever credentials were
+    present, healthy or not: the Places / Custom Search surface authenticates
+    with API KEYS, not this grant, so nulling it on an OAuth failure would
+    break a feature that was working. Binding is the CALLER's decision, and
+    ``healthy`` is what it decides on.
+
+    ``reason`` is operator-readable and non-secret — a fault class or a
+    one-clause explanation, never a path, a response body, or token material.
+    """
+
+    healthy: bool
+    credentials_present: bool
+    reason: str
+    session: GoogleSession | None = None
+
+
+async def probe_google(
+    settings,
+    *,
+    transport: httpx.AsyncBaseTransport | None = None,
+    timeout: float = GOOGLE_PROBE_TIMEOUT_S,
+) -> GoogleBootHealth:
+    """The REAL boot probe — it replaces the construct-and-hope the report
+    called a no-op (F-4 / C-6).
+
+    ``calendarList.list(maxResults=1)`` runs through the ordinary session path,
+    so a stale token is refreshed first and a dead refresh token is discovered
+    here rather than by the owner. The call is bounded by ``timeout``: a closed
+    laptop lid costs boot a pause, never a hang.
+
+    Returns a verdict rather than raising, with exactly one exception — a
+    BROKEN client secret file, which `GoogleSession.__init__` rejects and which
+    must stop a misconfigured deployment instead of leaving it serving an
+    offline bot indefinitely.
+    """
+    session = GoogleSession(settings, transport=transport)  # raises on BROKEN
+    if not session.credentials_present:
+        return GoogleBootHealth(
+            False, False, "OAuth client secret absent — running without Google", session
+        )
+    if not (session.tokens.access_token or session.tokens.refresh_token):
+        # An authenticated call is impossible without a grant. Saying so is
+        # cheaper than spending a request to learn it.
+        return GoogleBootHealth(
+            False, True, "no cached Google grant — run the OAuth bootstrap", session
+        )
+    try:
+        async with asyncio.timeout(timeout):
+            await session.request("GET", GOOGLE_PROBE_URL, params={"maxResults": 1})
+    except (TimeoutError, httpx.HTTPError, GoogleAPIError, GoogleAuthError, ValueError) as error:
+        return GoogleBootHealth(
+            False, True, f"Google probe failed ({describe_probe_failure(error)})", session
+        )
+    return GoogleBootHealth(True, True, "Google probe ok", session)
 
 
 if __name__ == "__main__":

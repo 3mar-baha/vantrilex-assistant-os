@@ -218,6 +218,21 @@ def test_exchange_and_refresh_grants():
     _aio.run(_run())
 
 
+class _NoGoogleSecret:
+    """A settings stand-in for the GoogleSession seams below.
+
+    F-4/C-6 made `GoogleSession.__init__` READ `settings.google_oauth_client_json`
+    (it validates the secret at construction instead of at the first request), so
+    the bare `object()` these three guards used to pass no longer satisfies the
+    constructor. That is a fixture that fell behind a real contract change, not a
+    guard encoding a wrong law: the ASSERTIONS below are untouched, and
+    `google_oauth_client_json` pointing at a path that does not exist is exactly
+    the documented ABSENT state, which must construct cleanly.
+    """
+
+    google_oauth_client_json = "./config/does-not-exist-google_oauth_client.json"
+
+
 def test_session_tokens_property_and_double_401():
     import asyncio as _aio
 
@@ -226,7 +241,7 @@ def test_session_tokens_property_and_double_401():
     from src.google_auth import GoogleAuthError, GoogleSession, GoogleTokens
 
     tokens = GoogleTokens(access_token="a", refresh_token="r", expires_at=9999999999.0, scopes=[])
-    session = GoogleSession(object(), tokens=tokens)
+    session = GoogleSession(_NoGoogleSecret(), tokens=tokens)
     assert session.tokens is tokens
 
     async def _fake_refresh():
@@ -252,7 +267,7 @@ def test_refresh_on_401_replay_when_already_refreshed():
     from src.google_auth import GoogleSession, GoogleTokens
 
     session = GoogleSession(
-        object(),
+        _NoGoogleSecret(),
         tokens=GoogleTokens(
             access_token="new", refresh_token="r", expires_at=9999999999.0, scopes=[]
         ),
@@ -267,7 +282,7 @@ def test_proactive_double_check_skips_second_refresh(monkeypatch):
     from src.google_auth import GoogleSession, GoogleTokens
 
     session = GoogleSession(
-        object(),
+        _NoGoogleSecret(),
         tokens=GoogleTokens(
             access_token="a", refresh_token="r", expires_at=_time.time() - 10, scopes=[]
         ),

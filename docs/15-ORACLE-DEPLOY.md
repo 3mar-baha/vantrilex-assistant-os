@@ -102,6 +102,21 @@ PORT=8080
 > **ميزة الـ VM على HF**: ملف `config/google_oauth_client.json` (عميل OAuth) يُنسخ
 > إلى الخادم — الـ VM دائمة فتشتغل ميزات Google كاملة هنا (كانت مستحيلة داخل
 > حاوية HF لأسباب أمنية). `scp -i <key> config/google_oauth_client.json ubuntu@<IP>:~/sara/config/`
+>
+> **انتبه (C-6)**: الـmount على `/app/config` يغطّي محتويات الصورة، فلازم
+> `~/sara/config/` على المضيف يحتوي **الملفين**: `google_oauth_client.json`
+> و`whitelist.json` — والأخير تظهّر في الصورة لكن，一阵 الـmount يحجبه:
+> ```bash
+> mkdir -p ~/sara/config ~/sara/vault
+> scp -i <key> config/google_oauth_client.json config/whitelist.json ubuntu@<IP>:~/sara/config/
+> ```
+>
+> **ثمن إعادة المصادقة (C-6)**: كاش التوكن يعيش على مسار مؤقت —
+> `{VAULT_LOCAL_PATH}/State/google_token.json.enc` (مشفّر Fernet، ليس نصاً
+> صريحاً أبداً). بلا الـmount على `/app/vault` تفقده الحاوية مع كل
+> `docker compose up -d`، فتدفع **موافقة متصفح جديدة + نسخ الملفات** في كل
+> إعادة نشر. الـmount على `/app/vault` هو ما يجعل النشر متكرراً بلا كلفة
+> مصادقة؛ إن حذفه فالتكلفة ليست «بطيئة» بل **صفر وصول للجيميل والتقويم**.
 
 ## المرحلة 7 — التشغيل + Caddy للـ TLS (docker compose)
 
@@ -117,6 +132,15 @@ services:
     # لا حاجة لنشر المنفذ للعالم — Caddy يتحدث معه داخلياً
     expose:
       - "8080"
+    # C-6 (F-4): نظام الملفات داخل الحاوية مؤقت (ADR-15) — بلا هذين الـmount
+    # يخسر كل `docker compose up -d` ملف عميل OAuth وكاش التوكن المشفّر،
+    # أي أن كل إعادة نشر = موافقة متصفح جديدة من الصفر.
+    # /app/config: يجلب config/ من المضيف (بما فيه google_oauth_client.json
+    #              وwhitelist.json معاً — انظر أدناه).
+    # /app/vault : الخزنة المحلية_state/ includ google_token.json.enc.
+    volumes:
+      - /home/ubuntu/sara/config:/app/config:ro
+      - /home/ubuntu/sara/vault:/app/vault
 
   caddy:
     image: caddy:2-alpine

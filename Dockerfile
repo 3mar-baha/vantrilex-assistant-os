@@ -17,6 +17,13 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY src/ src/
 COPY common/ common/
+# F-4 / C-6: the container must be able to FIND the OAuth client secret, whose
+# documented path is config/google_oauth_client.json (src/config.py) — pre-F-4
+# this image had no config path at all and could never authenticate. Only the
+# tracked, non-secret whitelist is baked in: the OAuth client JSON is a RUNTIME
+# MOUNT (compose), because an image layer keeps a copy forever and CLAUDE.md
+# §2.2 forbids committing OAuth client credentials anywhere at all.
+COPY config/whitelist.json /app/config/whitelist.json
 # RAG mirror source (audit 2026-09-14): VaultIndex reads the vault, so the
 # boot mirror needs the repo's 04_Resources/ inside the image.
 COPY 04_Resources/ 04_Resources/

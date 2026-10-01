@@ -12,13 +12,14 @@ mapped to a Jordanian apology — the owner is never left hanging.
 
 import asyncio
 import base64
+import dataclasses
 import io
 import re
 from collections.abc import AsyncIterator
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Final
+from typing import Any, Final
 from zoneinfo import ZoneInfo
 
 import httpx  # M4: the shared external-APIs client
@@ -1213,6 +1214,94 @@ async def _run_task_sync(engine, *, tick_s: float = 600.0) -> None:
         await asyncio.sleep(tick_s)
 
 
+@dataclasses.dataclass(frozen=True)
+class GoogleStack:
+    """What boot decided about Google (F-4 / C-6).
+
+    `healthy` is the flag the tool surface reads. When it is False the
+    OAuth-backed surfaces (calendar, tasks, gmail, the daily brief) stay None,
+    so `ToolRegistry` answers the honest ar-JO offline line instead of raising
+    a Google error in the middle of the owner's turn.
+
+    `cloud` is deliberately NOT gated on `healthy`: Places and Custom Search
+    authenticate with API KEYS, so nulling them on an OAuth failure would break
+    a feature that was working on a box holding a Places key and never having
+    run the OAuth bootstrap.
+    """
+
+    healthy: bool
+    reason: str
+    session: Any = None
+    suite: Any = None
+    inbox: Any = None
+    cloud: Any = None
+    composer: Any = None
+
+
+async def build_google_stack(
+    settings: Settings,
+    *,
+    bot: Bot | None = None,
+    gateway: Any = None,
+    transport: httpx.AsyncBaseTransport | None = None,
+) -> GoogleStack:
+    """Bind the Google surfaces from ONE probe verdict (F-4 / C-6).
+
+    Replaces the pre-F-4 block that called `GoogleSession(settings)` inside a
+    blanket `except`: it constructed a session, proved nothing about whether
+    Google actually works, and then swallowed every fault it could have named.
+
+    A BROKEN client secret raises `GoogleAuthError` out of here and stops the
+    boot — a misconfigured deployment must fail loudly. An ABSENT one, or a
+    probe that cannot reach Google, returns `healthy=False` and every OAuth
+    tool degrades to the honest offline line while the rest of Sara boots.
+
+    `transport` is the injection seam production never uses: with no transport
+    the probe makes exactly one real authenticated call to Google at boot.
+    """
+    from src.daily_brief import BriefComposer
+    from src.email_triage import TriageClassifier
+    from src.gmail import GmailInbox
+    from src.google_auth import probe_google
+    from src.google_cloud_client import GoogleCloudClient
+    from src.google_suite import GoogleSuite
+
+    health = await probe_google(settings, transport=transport)
+    cloud = GoogleCloudClient(
+        session=health.session,
+        custom_search_key=settings.custom_search_key or "",
+        custom_search_cx=settings.custom_search_cx or "",
+        places_key=settings.google_places_key or "",
+    )
+    if not health.healthy:
+        logger.warning("google boot degraded ({}); google tools answer offline", health.reason)
+        return GoogleStack(
+            healthy=False,
+            reason=health.reason,
+            session=health.session,
+            cloud=cloud,
+        )
+    suite = GoogleSuite(health.session, settings.google_calendar_id)
+    inbox = GmailInbox(health.session, settings)
+    composer = BriefComposer(
+        suite,
+        inbox,
+        TriageClassifier(settings, gateway),
+        bot,
+        settings.authorized_user_id,
+        settings,
+    )
+    return GoogleStack(
+        healthy=True,
+        reason=health.reason,
+        session=health.session,
+        suite=suite,
+        inbox=inbox,
+        cloud=cloud,
+        composer=composer,
+    )
+
+
 async def run_bot(settings: Settings, bridge=None) -> None:
     gateway = OmniRouteClient(
         settings.omniroute_base_url,
@@ -1267,37 +1356,15 @@ async def run_bot(settings: Settings, bridge=None) -> None:
     memory = ConversationMemory()
     writer = VaultMemoryWriter(vault, gateway, tz=ZoneInfo(settings.tz))
     bot = Bot(token=settings.telegram_bot_token)
-    inbox = suite = None
-    try:
-        from src.daily_brief import BriefComposer
-        from src.email_triage import TriageClassifier
-        from src.gmail import GmailInbox
-        from src.google_auth import GoogleSession
-        from src.google_cloud_client import GoogleCloudClient
-        from src.google_suite import GoogleSuite
-
-        session = GoogleSession(settings)
-        suite = GoogleSuite(session, settings.google_calendar_id)
-        cloud = GoogleCloudClient(
-            session=session,
-            custom_search_key=settings.custom_search_key or "",
-            custom_search_cx=settings.custom_search_cx or "",
-            places_key=settings.google_places_key or "",
-        )
-        inbox = GmailInbox(session, settings)
-        composer = BriefComposer(
-            suite,
-            inbox,
-            TriageClassifier(settings, gateway),
-            bot,
-            settings.authorized_user_id,
-            settings,
-        )
-    except Exception as error:  # noqa: BLE001 — missing Google creds degrade to honest offline lines
-        logger.warning("google stack unavailable; google tools degrade: {}", error)
-        suite = None
-        cloud = None
-        composer = None
+    # F-4 / C-6: one probe verdict decides every Google surface. A broken
+    # credential file raises out of here and stops the boot; an absent one, or a
+    # probe that cannot reach Google, leaves the OAuth tools unbound so they
+    # answer the honest ar-JO offline line instead of raising mid-turn.
+    google = await build_google_stack(settings, bot=bot, gateway=gateway)
+    suite = google.suite
+    inbox = google.inbox
+    composer = google.composer
+    cloud = google.cloud
     telemetry = TelemetryClient(bridge, gateway) if bridge is not None else None
     # pass-4 (v2.0 §3-هـ): keyless web intelligence — DDG search + page reads.
     # One shared httpx client, bounded lifetime, injected into WebIntel.
