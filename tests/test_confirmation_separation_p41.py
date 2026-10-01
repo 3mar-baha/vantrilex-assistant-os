@@ -10,6 +10,7 @@ dynamic park warning is single-pass with a static floor.
 
 import re
 
+from bridge.executor import verify_confirmation_id
 from src.decision_loop import PARK_LINE_AR, _park_warning
 from src.pc_actions import LaunchStatus, PCActionCoordinator
 
@@ -81,7 +82,13 @@ async def test_execution_target_comes_from_pending_state():
     assert launched and launched[-1]["name"] == "somelauncher"
     assert launched[-1]["name"] != "الكروم"
     confirmation_id = launched[-1]["confirmation_id"]
-    assert re.fullmatch(r"[0-9a-f]{12}", confirmation_id)  # server-minted
+    # F-2 CORRECTED this assertion. The pre-F-2 body pinned the id's shape as
+    # `uuid4().hex[:12]` — an unsigned string any sender could invent, which is
+    # exactly the forgery F-2 closed. The law this guard states is "the id is
+    # SERVER-MINTED and verifiable", so it now asserts that: the v1 signed-token
+    # grammar, and a MAC that verifies against the shared core<->daemon secret.
+    assert confirmation_id.startswith("cfm1."), confirmation_id
+    assert verify_confirmation_id(confirmation_id).ok, confirmation_id
     assert vault.upserts, "audit note persists BEFORE the command leaves"
 
 

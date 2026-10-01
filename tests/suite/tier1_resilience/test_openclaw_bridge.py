@@ -8,7 +8,7 @@ calls; the unconfigured daemon answers honestly). Follows the existing
 
 import json
 
-from bridge.executor import Executor
+from bridge.executor import Executor, mint_confirmation_id
 from bridge.guard import Guard
 from common.protocol import new_envelope
 
@@ -106,17 +106,40 @@ async def test_act_irreversible_without_id_is_refused(tmp_path):
 
 
 async def test_act_irreversible_with_id_executes(tmp_path):
+    """F-2: the id on this path is a SIGNED token now, so the guard mints a
+    genuine one instead of the bare `"c1"` it used before — that literal
+    asserted the very forgery F-2 closed. The law (a verified confirmation id
+    executes a committing op) is unchanged; what counts as verified is not."""
     backend = _FakeBackend()
     daemon = _daemon(tmp_path, openclaw=_controller(actuator=backend))
     status, _payload = await daemon._execute(
         new_envelope(
             type="cmd",
             cmd="openclaw.act",
-            args={"op": {"op": "hotkey", "value": "Alt+F4"}, "confirmation_id": "c1"},
+            args={
+                "op": {"op": "hotkey", "value": "Alt+F4"},
+                "confirmation_id": mint_confirmation_id(),
+            },
         )
     )
     assert status == "ok"
     assert len(backend.acted) == 1
+
+
+async def test_act_irreversible_with_forged_id_refuses(tmp_path):
+    """The other half of the correction: an unsigned id must not actuate."""
+    backend = _FakeBackend()
+    daemon = _daemon(tmp_path, openclaw=_controller(actuator=backend))
+    status, payload = await daemon._execute(
+        new_envelope(
+            type="cmd",
+            cmd="openclaw.act",
+            args={"op": {"op": "hotkey", "value": "Alt+F4"}, "confirmation_id": "c1"},
+        )
+    )
+    assert status == "error"
+    assert "confirmation" in payload["detail"]
+    assert backend.acted == []
 
 
 async def test_act_forbidden_is_rejected(tmp_path):

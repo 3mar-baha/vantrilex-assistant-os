@@ -7,8 +7,12 @@ is ignored — the verdict is recomputed from (kind, target, value, verify).
 
 import pytest
 
+from bridge.executor import mint_confirmation_id
 from bridge.openclaw.breaker import ActionForbiddenError, SafetyCircuitBreaker
 from bridge.openclaw.protocol import Op, OpKind
+
+# F-2: the shared signing secret this suite verifies confirmation ids against.
+CONFIRM_KEY = "your-breaker-shared-confirmation-key"
 
 
 def _op(kind: OpKind, **kw) -> Op:
@@ -109,7 +113,30 @@ def test_authorize_irreversible_without_id_refuses(cid):
 
 
 def test_authorize_irreversible_with_id_passes():
-    assert SafetyCircuitBreaker.authorize(_op(OpKind.HOTKEY, value="Alt+F4"), "abc123") is True
+    """F-2 CORRECTED this guard. The pre-F-2 body asserted that the bare string
+    `"abc123"` authorized an Alt+F4 — it pinned the forgery as law, and its name
+    ("with_id_passes") disagreed with the contract it was meant to state. A
+    confirmation id is now a signed, expiring, single-use token, so the law is
+    "with a VERIFIED id passes" and the forgery has its own guard below."""
+    token = mint_confirmation_id(secret=CONFIRM_KEY)
+    assert (
+        SafetyCircuitBreaker.authorize(
+            _op(OpKind.HOTKEY, value="Alt+F4"), token, confirm_key=CONFIRM_KEY
+        )
+        is True
+    )
+
+
+@pytest.mark.parametrize("forged", ["abc123", "cid-123", "1234567890ab", "cfm1.1.2.3"])
+def test_authorize_irreversible_with_forged_id_refuses(forged):
+    """The other half of the correction: a non-empty id that nobody signed is
+    refused, exactly like an absent one."""
+    assert (
+        SafetyCircuitBreaker.authorize(
+            _op(OpKind.HOTKEY, value="Alt+F4"), forged, confirm_key=CONFIRM_KEY
+        )
+        is False
+    )
 
 
 def test_authorize_forbidden_raises_even_with_id():

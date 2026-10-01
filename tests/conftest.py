@@ -40,6 +40,16 @@ os.environ.setdefault("SARA_TURN_COUNTER_OFF", "1")  # suite hermeticity: the
 # P2 transport hook never touches real vault State during tests; unit tests
 # opt back into real disk via monkeypatch.delenv.
 
+# F-2: BRIDGE_TOKEN is the shared secret that signs (core) and verifies
+# (daemon) PC confirmation ids on BOTH ends — no new knob, the tunnel already
+# required it. CI runs the suite with no `.env`, so without this the resolver
+# finds nothing, every confirmation-gated site fails closed, and the
+# end-to-end confirmation guards go red on CI while green on a dev box that
+# owns a `.env`. Same pattern and same `your-*` shape as the line above; pinned
+# by tests/test_confirmation_verification_f2.py::test_the_shared_secret_
+# resolves_under_the_suite_environment.
+os.environ.setdefault("BRIDGE_TOKEN", "your-bridge-shared-token")
+
 ENV_EXAMPLE: dict[str, str] = {
     "OMNIROUTE_BASE_URL": "http://localhost:20128/v1",
     "OMNIROUTE_API_KEY": "sk-omniroute-local-key",

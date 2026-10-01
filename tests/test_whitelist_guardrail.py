@@ -17,12 +17,15 @@ import pytest
 from helpers_vault import FakeGitHub
 from loguru import logger
 
-from bridge.executor import Executor
+from bridge.executor import Executor, mint_confirmation_id
 from bridge.guard import Guard
 from src.pc_actions import LaunchStatus, PCActionCoordinator, RefusedOrigin
 from src.vault import AUDIT_DIR, CONFIRMATIONS_DIR, VaultClient, split_frontmatter
 
 TOKEN = "your-github-test-pat-abcdef0123456789"
+# F-2: the shared signing secret this file's executor verifies against. The
+# `your-` shape is the repo's secret-scanner allowlist shape.
+AC5_KEY = "your-ac5-shared-confirmation-key"
 
 WHITELIST = {
     "allowed_apps": [
@@ -163,19 +166,38 @@ async def test_confirmation_roundtrip_persists_and_executes(tmp_path: Path):
 
 
 async def test_restricted_power_always_requires_confirmation(tmp_path: Path):
-    """AC5 — power refused without a confirmation id even if whitelist wrongly allows."""
+    """AC5 — power refused without a VERIFIED confirmation id even if the
+    whitelist wrongly allows it.
+
+    F-2 CORRECTED this test, and the correction is the point: the pre-F-2 body
+    asserted that `"cid-123"` was a "valid ID", so the sacred floor PINNED the
+    forgery (report Part F §42, remediation-1.3 precedent — a test whose name
+    and assertion disagree is the thing that moves, never the fix). The law
+    AC5 actually states is "a live confirmation id proceeds"; after F-2 "live"
+    means signed by the shared core<->daemon secret, unexpired, and unused.
+    """
     wrong = {
         "allowed_apps": [],
         "restricted_actions": [{"action": "sleep", "requires_confirmation": False}],
     }
     spy = SpawnSpy()
-    executor = Executor(Guard(_write_whitelist(tmp_path, wrong)))
+    executor = Executor(Guard(_write_whitelist(tmp_path, wrong)), confirm_key=AC5_KEY)
     executor._spawn = spy
     refused = await executor.power("sleep", confirmation_id="")
     assert refused.status == "error" and spy.calls == []
-    ok = await executor.power("sleep", confirmation_id="cid-123")
-    assert ok.status == "ok" and spy.calls  # valid ID proceeds
-    missing = await executor.power("format", confirmation_id="cid-123")
+    # F-2: a forged id is refused even when it is non-empty, and the refusal is
+    # asserted — not merely "nothing was executed".
+    forged = await executor.power("sleep", confirmation_id="cid-123")
+    assert forged.status == "error", "a forged confirmation id must never execute"
+    assert "does not verify" in forged.detail, forged.detail
+    assert spy.calls == []
+    genuine = mint_confirmation_id(secret=AC5_KEY)
+    ok = await executor.power("sleep", confirmation_id=genuine)
+    assert ok.status == "ok" and spy.calls  # a genuine, signed ID proceeds
+    # ... and it is single-use: the same approval is not a second approval.
+    replayed = await executor.power("shutdown", confirmation_id=genuine)
+    assert replayed.status == "error" and "already used" in replayed.detail
+    missing = await executor.power("format", confirmation_id=mint_confirmation_id(secret=AC5_KEY))
     assert missing.status == "error" and "not in whitelist" in missing.detail
 
 

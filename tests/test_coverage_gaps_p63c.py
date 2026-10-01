@@ -14,10 +14,16 @@ from pathlib import Path
 from bridge.executor import (
     Executor,
     mint_audit_code,
+    mint_confirmation_id,
     resolve_in_roots,
     sanitize_filename,
 )
 from bridge.guard import Guard
+
+# F-2: the gated executor sites below verify the confirmation id against a
+# shared secret, so these coverage pins mint a GENUINE one instead of the
+# `"cid"` literal they used before F-2 (that literal asserted the forgery).
+CONFIRM_KEY = "your-p63c-shared-confirmation-key"
 
 
 def _guard(tmp_path, apps=None, restricted=None):
@@ -146,10 +152,12 @@ def test_close_taskkill_partial_failure_continues(monkeypatch, tmp_path):
         if argv[2] == "CalculatorApp.exe":
             raise OSError("not installed")
 
-    executor = Executor(_guard(tmp_path))
+    executor = Executor(_guard(tmp_path), confirm_key=CONFIRM_KEY)
     executor._spawn = _flaky
     monkeypatch.setattr(executor_mod, "_count_running", lambda image: 0)
-    out = asyncio.run(executor.close("calculator", confirmation_id="cid"))
+    out = asyncio.run(
+        executor.close("calculator", confirmation_id=mint_confirmation_id(secret=CONFIRM_KEY))
+    )
     assert out.status == "ok"
 
 
@@ -172,9 +180,12 @@ def test_power_not_listed_unknown_action_and_spawn_fail(tmp_path):
         _guard(
             tmp_path,
             restricted=[{"action": "hibernate", "requires_confirmation": True}],
-        )
+        ),
+        confirm_key=CONFIRM_KEY,
     )
-    out = asyncio.run(executor2.power("hibernate", confirmation_id="cid"))
+    out = asyncio.run(
+        executor2.power("hibernate", confirmation_id=mint_confirmation_id(secret=CONFIRM_KEY))
+    )
     assert out.status == "error" and "hibernate" in out.detail
 
     async def _denied(argv):
@@ -184,10 +195,13 @@ def test_power_not_listed_unknown_action_and_spawn_fail(tmp_path):
         _guard(
             tmp_path,
             restricted=[{"action": "shutdown", "requires_confirmation": True}],
-        )
+        ),
+        confirm_key=CONFIRM_KEY,
     )
     executor3._spawn = _denied
-    out = asyncio.run(executor3.power("shutdown", confirmation_id="cid"))
+    out = asyncio.run(
+        executor3.power("shutdown", confirmation_id=mint_confirmation_id(secret=CONFIRM_KEY))
+    )
     assert out.status == "error" and "no power" in out.detail
 
 
