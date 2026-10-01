@@ -64,11 +64,16 @@ async def test_no_assoc_block_without_match(tmp_path, fake_bot, make_shell):
         stream_programs=[StreamProgram(deltas=("تمام",))],
         VAULT_LOCAL_PATH=str(vault),
     )
-    from src.persona import SARA_PERSONA_AR
+    # F-6: anchored to the BASE PROMPT, not to the bare identity core. The law
+    # is "the associative block is not injected when nothing matches"; the base
+    # prompt became `build_persona_joda()` when Telegram was unified with
+    # Terminal 1 (owner decision 2026-10-01). The assertion is unchanged in
+    # strength — any extra block still breaks it.
+    from src.persona import build_persona_joda
 
     bot = fake_bot()
     await _run(shell, bot, make_update(1, OWNER_ID, "شو أخبار الطقس اليوم؟"))
-    assert _system_of(shell) == SARA_PERSONA_AR
+    assert _system_of(shell) == build_persona_joda()
 
 
 async def test_posture_focus_block(tmp_path, fake_bot, make_shell):
@@ -92,7 +97,11 @@ async def test_posture_focus_block(tmp_path, fake_bot, make_shell):
 
 async def test_posture_normal_noop(fake_bot, make_shell):
     """Empty ring (no sampler yet): system untouched."""
-    from src.persona import SARA_PERSONA_AR
+    # F-6: same re-anchor as `test_no_assoc_block_without_match` — the law is
+    # "a NORMAL posture appends nothing", and the base prompt is now the
+    # composed `build_persona_joda()`. The `[الوضع الحالي` absence check above
+    # it is untouched and still the primary assertion.
+    from src.persona import build_persona_joda
 
     shell = make_shell(
         router_replies=[_router("direct", "أهلا")],
@@ -101,7 +110,7 @@ async def test_posture_normal_noop(fake_bot, make_shell):
     bot = fake_bot()
     await _run(shell, bot, make_update(1, OWNER_ID, "مرحبا سارة"))
     assert "[الوضع الحالي" not in _system_of(shell)
-    assert _system_of(shell) == SARA_PERSONA_AR
+    assert _system_of(shell) == build_persona_joda()
 
 
 async def test_dp_exposes_situational_state(fake_bot, make_shell):

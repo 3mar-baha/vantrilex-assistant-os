@@ -46,7 +46,7 @@ from src.memory import (
 )
 from src.middleware import OwnerOnlyMiddleware
 from src.pc_actions import PCActionCoordinator
-from src.persona import SARA_PERSONA_AR, build_persona
+from src.persona import SARA_PERSONA_AR, build_persona_joda
 from src.situational import SituationalState
 from src.skills.telegram_chat_streamer import ChatStreamer
 from src.skills.voice_biometric_auth import VoiceBiometrics, owner_voice_gate
@@ -613,7 +613,21 @@ async def _stream_answer(
         task.add_done_callback(_PERSIST_TASKS.discard)
     try:
         await bot.send_chat_action(chat_id, "record_voice" if voice_origin else "typing")
-        system = build_persona([])  # Phase-6: composer route; byte-identical core (lock-tested)
+        # F-6 (owner decision 2026-10-01): Telegram and Terminal 1 run
+        # the SAME builder. They diverged accidentally — this
+        # line said `build_persona([])` (identity core only, no ar-JO
+        # exemplars) while `src/bot_shell.py` said
+        # `build_persona_joda()`. ar-JO IS Sara's voice, so the split
+        # prompt was a split personality: the owner got MSA-with-a-
+        # colloquial-preamble from Telegram and real general Arabic from
+        # the terminal. Unified on the builder, not on a copied literal:
+        # `tests/test_bot_shell_dialect.py` bans the literals in
+        # bot_shell, and a literal copied into bot.py would be a second
+        # source of truth — the exact drift this removes.
+        # The identity core is still byte-identical: `build_persona_joda`
+        # STARTS with it (guarded by test_bot_shell_dialect.py:355), so
+        # every byte-locked persona law is untouched.
+        system = build_persona_joda()
         if vault is not None:
             try:
                 long_term = await load_long_term(

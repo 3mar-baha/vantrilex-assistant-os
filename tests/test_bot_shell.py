@@ -27,6 +27,7 @@ from src.bot import (
     WELCOME_AR,
 )
 from src.gateway import GatewayError
+from src.persona import build_persona_joda
 from src.skills.voice_biometric_auth import GUEST_LOCKDOWN_AR, VoiceBiometrics
 from tests.conftest import (
     OWNER_ID,
@@ -121,8 +122,21 @@ async def test_owner_text_streams_brain_progressively(fake_bot, make_shell):
     # Envelope is "" where the vault has no digest (CI); where the master
     # digest exists it MUST open with the digest header.
     system_content = stream_messages[0]["content"]
-    assert system_content.startswith(SYSTEM_PROMPT_AR)
-    envelope = system_content[len(SYSTEM_PROMPT_AR) :]
+    # F-6: anchored to the BASE PROMPT, not to the bare identity core.
+    # The law is "the living envelope rides AFTER the persona, never
+    # before it, and is either absent or opens with the digest
+    # header" — unchanged. Only the anchor moved: when Telegram
+    # was unified with Terminal 1 (owner decision 2026-10-01) the base
+    # prompt became `build_persona_joda()`, so slicing at
+    # len(SYSTEM_PROMPT_AR) left the JODA block masquerading as
+    # "envelope". MEASURED: with the old anchor this assertion is RED
+    # on any box with no ./vault (every clean runner — the comment
+    # below says the guard is designed for that shape) and GREEN only
+    # where the local vault happens to supply a digest. It was passing
+    # on this box for the wrong reason.
+    base_prompt = build_persona_joda()
+    assert system_content.startswith(base_prompt)
+    envelope = system_content[len(base_prompt) :]
     assert envelope == "" or DIGEST_HEADER_AR in envelope
 
 
