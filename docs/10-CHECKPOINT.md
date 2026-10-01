@@ -2657,7 +2657,181 @@ without it (Gemma `streamed zero deltas in 4s — cascade`). Never weakened.
 * **`src/bot.py` and `src/vault.py` were NOT modified** — neither was needed.
   The confinement list also forbids both; the finding is what made that
   constraint cost-free.
-* **F-6 remains sealed by owner decision.** Not started.
+* ~~**F-6 remains sealed by owner decision.** Not started.~~ **DONE — see the F-6 milestone below. F-6 shipped and P1 is complete.**
+
+## F-6 SHIPPED — the P1 honesty batch is CLOSED, and **P1 is complete** (2026-10-01)
+
+Report Part F §46. Four honesty defects, four fixes, all measured before and
+after. With this work order **P1 closes**: F-1 → F-4 → F-6 is done. Nothing
+in F-6 opened a new P1 item.
+
+### What each item actually was (measured, not as the brief described it)
+
+| # | Item | What the measurement found |
+|---|---|---|
+| 1 | Persona divergence | Real, and a genuine split personality: Telegram ran the bare identity core, the terminal ran the core + ar-JO exemplars. |
+| 2 | Manifest's backup voice engine | Real — but **in `src/memory.py`, not `src/skills/capabilities.py`**. The work order's file pointer was wrong; the file won. |
+| 3 | C-7 alias coverage | Real gap, but **the tree was already correct** — this was a measurement, not a fix. |
+| 4 | C-2 pending expiry | **Worse than unverified: the refusal existed and was silent.** |
+
+### 1 — One assistant, one prompt (owner decision 2026-10-01: UNIFY)
+
+`src/bot.py:616` now calls `build_persona_joda()`, the same builder
+`src/bot_shell.py` uses. Rationale: ar-JO **is** Sara's voice, and the split
+looked accidental. The identity core is untouched — `build_persona_joda()`
+*starts with* it, so every byte-locked persona law still holds, and
+`tests/test_persona_lines.py` stayed GREEN without being edited.
+
+Unified on the **builder**, not on a copied literal: a literal copied into
+`bot.py` would be a second source of truth, which is the exact drift this
+removes.
+
+**Telegram's outputs did change, and here is how we know rather than assume:**
+`tests/test_f6_honesty_batch.py::test_telegram_replies_carry_the_composed_ar_jo_prompt`
+drives the real dispatcher and reads the system message **off the gateway
+double**, asserting the JODA header is present on the wire. An AST guard proves
+which builder is named; the wire guard proves it arrived.
+
+**A latent break was caught that a green run hid.** Three contract tests anchor
+the Telegram system prompt to a base-prompt constant. Two
+(`test_phase6_integration.py`) failed loudly and were re-anchored. The third
+(`test_bot_shell.py`) **passed on this box for the wrong reason**: its own
+comment says it must hold where the vault has no digest, and that is the CI
+shape. With the old anchor it is RED on any box without `./vault` and GREEN
+only where the local vault supplies a digest. Verified by computing both shapes
+directly. All three were re-anchored to `build_persona_joda()` — same law, same
+strength, correct anchor. **No guard was weakened, skipped, xfailed or deleted.**
+
+### 2 — The manifest no longer promises an engine that does not exist
+
+`src/memory.py:53-55` told Sara she has a local backup voice engine.
+`src/voice.py:1-6` says Fish-only, no fallback; `src/voice_policy.py` bans a
+second engine outright. The false claim was the defect — building a fallback is
+a project F-4/F-6 deliberately did not do.
+
+**WRITE-SET EXCEEDANCE, declared.** The work order said to edit
+`src/skills/capabilities.py`. That file was **not touched at all**: it is the
+tool catalogue, its only «احتياطي» is the `cloud_backup` capability (real —
+`src/tools.py:1323`), and `IRREVERSIBLE_TOOLS` is derived from its
+`TOOL_CAPABILITIES`, so a careless edit there would have moved the deny-list.
+The false sentence lives in `src/memory.py`, which is in neither the write-set
+nor the do-not-touch list. Edited under §5.1 Directive 7 and recorded.
+
+`grep -rn "احتياطي" src/` — the manifest sentence is gone; **every remaining hit
+is a true claim** (the cloud-backup capability and one browser line that says
+the browser is *not* a fallback). Nothing true was deleted with it.
+
+### 3 — C-7: coverage is a NUMBER, and the number is pinned
+
+**The real number, on this box (2026-10-01):**
+
+```
+45   alias entries in src/pc_actions._APP_ALIASES
+42   of them Arabic colloquial phrases
+38   of those 42 resolve to a key config/whitelist.json actually knows
+27   executables found on disk by shutil.which, 11 not
+```
+
+The honest statement is **38/42** — not "the alias table covers the whitelist".
+The four that miss are pinned **by name**: الضغط → 7-Zip, التيرمنال and
+تيرمنال → Windows Terminal. Those aliases are *correct*; the owner's whitelist
+simply does not carry those programs. Naming them means the day he installs
+7-Zip the guard says which line to drop instead of the count drifting silently.
+
+The `shutil.which` hit count is **reported, not pinned**. It measures the box
+the suite runs on; pinning it would make the guard lie everywhere else, and a
+guard that lies is worse than no guard. The 11 misses are explained, not
+hidden: user-scoped installs (Spotify, Telegram, Discord) live outside PATH,
+and the WhatsApp entry carries an empty `executable` field.
+
+**This item was GREEN the moment it was written** — the tree it measured was
+already correct, so there was no RED to produce. Said plainly rather than
+dressed up. Its teeth were proven by mutation instead (row 4 below).
+
+### 4 — C-2: an expired confirmation is refused AS EXPIRED, out loud
+
+The refusal already existed and was correct. The **honesty** did not:
+`src/bot.py` gated the coordinator on `pending_active()`, so the instant the
+TTL passed, «نعم» stopped being a confirmation and became an ordinary chat
+message — the brain answered a yes to nothing and the owner was never told his
+request had lapsed.
+
+* `now_fn=` — the repo's clock seam, and **every** time read in the class now
+  goes through it. A half-seam is a second source of truth, and a seam the
+  caller cannot move is exactly why this could not be guarded before: the old
+  `datetime.now(UTC)` read meant no test could cross the TTL without sleeping
+  for it.
+* `pending_open()` — the new routing gate, true for a live prompt **and** an
+  expired-but-unanswered one. `pending_active()` is unchanged in meaning and
+  still clears the aged-out prompt, so `test_pending_expiry_clears_state` stays
+  GREEN untouched.
+* `EXPIRED_CONFIRMATION_AR` — one honest line, said once, carrying no app name,
+  no path and no token (a guard asserts the absence: the pending target is
+  whatever `resolve_app_alias` returned, which with no guard is any string the
+  owner typed).
+
+**The negative control is the load-bearing part:** a confirmation one second
+INSIDE the window still executes. Without it, "refuse everything" would pass
+every other guard here — a coordinator that never confirms is not an honest
+one, it is a broken one.
+
+### Mutation table (Directive 5 — every mutant SEEN red, every restore sha256-verified)
+
+| # | Mutant | Guard that went RED | Restore |
+|---|---|---|---|
+| a | persona builder → `build_persona([])` | `test_both_owner_surfaces_name_the_same_persona_builder` (+ the wire guard) | `924d13f0ce225e66` ✓ |
+| b | manifest's backup-engine sentence restored | `test_the_manifest_promises_no_backup_voice_engine` | `67b61912caef94f6` ✓ |
+| c | expiry silently RE-APPROVES instead of refusing | `test_affirming_after_the_ttl_is_refused_as_expired` (+ the wiring guard) | `823c067fd8bbd419` ✓ |
+| d | three aliases deleted behind the coverage guard | `test_the_alias_map_has_not_silently_shrunk` + `test_arabic_alias_coverage_is_measured_and_pinned` ("35 of 38, pinned at 38") | `823c067fd8bbd419` ✓ |
+
+The first harness had a **restore bug** — it re-read the file instead of
+restoring saved bytes, and asserted a stale sha. It failed loudly and left
+`src/bot.py` mutated until `git checkout` restored it; the harness was rewritten
+to restore from bytes captured up front, and every row above is a
+byte-for-byte verified restore. Line endings were checked per file throughout
+(`src/bot.py`, `src/memory.py`, `tests/test_bot_shell.py` are CRLF;
+`src/pc_actions.py` is LF).
+
+### Measured results
+
+```
+tests/test_f6_honesty_batch.py         14 passed
+tests/test_persona_lines.py              2 passed   (GREEN, never edited)
+full suite (excl live_harness)   2747 passed / 4 skipped / 1 xfailed / 0 failed
+tiered coverage              PASSED — src/pc_actions.py 100.0%, TOTAL 92.3%
+ruff check                        All checks passed
+ruff format --check               319 files already formatted
+security_gate.py                  Security Gate OK (bandit + secret scan)
+docs_guard.py                     Docs Guard OK — 16 canonical files present
+```
+
+Suite counts are derived from the tree, never from memory. **2,747 passed / 0
+failed** against the 2,733 baseline: +14 new guards, and zero new failures. The
+2 `live_harness` flakes (`test_h04_ttft_monitor`, `test_h06_joda_dialogues`) are
+the pre-existing free-provider noise and were **not** weakened.
+
+### Carried forward from F-6
+
+* **`make_bridge_greeter` (`src/bot.py:195`) is a THIRD persona surface and is
+  still core-only.** Measured: it assigns `SARA_PERSONA_AR` directly, so the
+  reconnect greeting runs on the bare identity core while Telegram's chat lane
+  now runs the composed prompt. It was **not** changed: the work order named one
+  line, and altering greeting style is an owner-visible change that was not
+  ordered. It is reported, not silently absorbed.
+* **`src/bot_shell.py:33` cites `src/bot.py:615`** for the system-prompt seam.
+  That reference was already off by one before this work order and is further
+  from the truth now. `src/bot_shell.py` is outside the write-set, so it stands.
+* **Three test files outside the write-set were edited, deliberately and
+  declared:** `tests/suite/tier1_resilience/test_phase6_integration.py` and
+  `tests/test_bot_shell.py` (re-anchors, plus two coordinator doubles gaining
+  `pending_open()` — additive, return values and assertions unchanged).
+  `tests/test_persona_lines.py` was **read and left untouched**.
+* **Alias coverage will drift when the owner installs new apps.** That is the
+  point of naming the uncovered set — the guard will name the change rather
+  than let the number move silently.
+* **`tests/test_coverage_gaps_p62.py::test_pending_expiry_clears_state` is a
+  witness that `pending_active()` did not change meaning.** It stayed GREEN
+  untouched, which is the evidence.
 
 ## Owner decisions — 2026-10-01 (authoritative ledger entries)
 
