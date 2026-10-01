@@ -440,7 +440,14 @@ def build_dispatcher(
         # 2.3 (audit C-2, sacred floor): mirror on_text — a pending PC
         # confirmation answered by VOICE «نعم» is consumed by the coordinator,
         # never streamed to the brain.
-        if coordinator is not None and coordinator.pending_active():
+        # F-6 (audit C-2): `pending_open()`, not `pending_active()`. A
+        # confirmation past its TTL is still a DECISION awaiting an answer;
+        # gating on `pending_active()` made it invisible the instant the TTL
+        # passed, so «نعم» became an ordinary chat message and the owner was
+        # never told the request had lapsed. `pending_open()` is True for a
+        # live prompt AND for an expired-but-unanswered one, so the reply
+        # reaches the coordinator, which refuses it out loud.
+        if coordinator is not None and coordinator.pending_open():
             consumed = await coordinator.handle_owner_reply(text)
             if consumed is not None:
                 return
@@ -456,7 +463,14 @@ def build_dispatcher(
 
     @dp.message(F.text)
     async def on_text(message: Message, bot: Bot) -> None:
-        if coordinator is not None and coordinator.pending_active():
+        # F-6 (audit C-2): `pending_open()`, not `pending_active()`. A
+        # confirmation past its TTL is still a DECISION awaiting an answer;
+        # gating on `pending_active()` made it invisible the instant the TTL
+        # passed, so «نعم» became an ordinary chat message and the owner was
+        # never told the request had lapsed. `pending_open()` is True for a
+        # live prompt AND for an expired-but-unanswered one, so the reply
+        # reaches the coordinator, which refuses it out loud.
+        if coordinator is not None and coordinator.pending_open():
             target = await coordinator.handle_owner_reply(message.text)
             if target is not None:
                 return  # consumed as the launch confirmation/rejection

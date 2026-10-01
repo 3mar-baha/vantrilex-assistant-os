@@ -104,9 +104,8 @@ def _persona_builders(path: Path) -> set[str]:
     names = {"build_persona", "build_persona_joda"}
     called: set[str] = set()
     for node in ast.walk(tree):
-        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
-            if node.func.id in names:
-                called.add(node.func.id)
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id in names:
+            called.add(node.func.id)
     return called
 
 
@@ -157,8 +156,7 @@ async def test_telegram_replies_carry_the_composed_ar_jo_prompt(make_shell, fake
         "few-shots that make Sara sound like Sara are not reaching the wire"
     )
     assert system.startswith(build_persona_joda()), (
-        "Telegram's prompt must be the composed persona, byte-for-byte the "
-        "one the terminal builds"
+        "Telegram's prompt must be the composed persona, byte-for-byte the one the terminal builds"
     )
 
 
@@ -359,15 +357,18 @@ class Notifier:
 
 
 class Bridge:
-    """Answers every unconfirmed command with "not whitelisted", so a pending
-    is minted and nothing ever executes without the coordinator's say-so."""
+    """Mirrors the daemon's gate: no confirmation id -> "not whitelisted", a
+    signed id -> executed. Refusing everything unconditionally would make the
+    negative control pass for the wrong reason."""
 
     def __init__(self) -> None:
         self.commands: list[tuple[str, dict]] = []
 
     async def send_cmd(self, cmd: str, args: dict, *, timeout_s: float = 20.0) -> dict:
         self.commands.append((cmd, dict(args)))
-        return {"status": "error", "detail": "not whitelisted", "audit_code": "PC-F6"}
+        if not args.get("confirmation_id"):
+            return {"status": "error", "detail": "not whitelisted", "audit_code": "PC-F6"}
+        return {"status": "ok", "detail": "executed", "audit_code": "PC-F6"}
 
 
 def _vault_client() -> tuple:
@@ -472,12 +473,19 @@ async def test_the_expiry_line_leaks_no_path_and_no_secret():
         assert TOKEN not in line and "your-" not in line, f"a secret leaked: {line!r}"
 
 
-async def test_inside_the_window_a_confirmation_still_executes():
+async def test_inside_the_window_a_confirmation_still_executes(monkeypatch):
     """The negative control. Without it, "refuse and say nothing" would pass
     every guard above — a coordinator that never confirms anything is not an
-    honest one, it is a broken one."""
+    honest one, it is a broken one.
+
+    `BRIDGE_TOKEN` is set because reaching `_confirm_and_execute` requires the
+    core to be able to SIGN a confirmation id; with no shared secret the
+    coordinator fail-closes for an unrelated reason (F-2) and this control
+    would be measuring the wrong thing.
+    """
     from src.pc_actions import PENDING_TTL
 
+    monkeypatch.setenv("BRIDGE_TOKEN", "your-f6-shared-confirmation-key")
     clock = Clock()
     coordinator, _bridge, _notifier = _coordinator(clock)
     await coordinator.request_power("sleep", origin="owner_chat")

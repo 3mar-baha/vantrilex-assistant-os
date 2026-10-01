@@ -595,6 +595,12 @@ class _CoordinatorDouble:
         self.replies = []
         self.memory = memory  # 2.4: run_bot wires the shell's memory into the coordinator
 
+    # F-6: `src/bot.py` gates on `pending_open()` — a prompt that aged
+    # out still needs to reach the coordinator so the refusal is spoken. The
+    # double keeps `pending_active()` too; only the routing key was renamed.
+    def pending_open(self):
+        return True
+
     def pending_active(self):
         return True
 
@@ -669,6 +675,12 @@ class _RejectionCoordinatorDouble:
 
     def __init__(self) -> None:
         self.replies: list[str] = []
+
+    # F-6: `src/bot.py` gates on `pending_open()` — a prompt that aged
+    # out still needs to reach the coordinator so the refusal is spoken. The
+    # double keeps `pending_active()` too; only the routing key was renamed.
+    def pending_open(self):
+        return True
 
     def pending_active(self) -> bool:
         return True

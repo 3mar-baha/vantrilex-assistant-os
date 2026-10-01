@@ -10,7 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import StrEnum
-from typing import ClassVar
+from typing import ClassVar, Final
 
 from loguru import logger
 
@@ -26,6 +26,21 @@ PENDING_TTL = CONFIRMATION_TTL
 LEDGER_PATH = f"{AUDIT_DIR}/pc-ledger.md"
 
 UNKNOWN_APP_AR = "«{}» مش موجود بالقائمة المعتمدة — اسمه مش مسجّل عندي."
+
+# F-6 (audit C-2): what the owner hears when he affirms a confirmation
+# that already aged out. Measured, not invented: the expiry really does
+# happen (`pending_active`, PENDING_TTL), and before this the refusal was
+# SILENT — the turn fell through to the brain as ordinary chat, so a yes
+# went to a conversation instead of to a decision, and the owner never
+# learned the request had lapsed.
+#
+# Deliberately carries no app name, no vault path and no token: this line
+# goes to Telegram, and the pending `target` is whatever
+# `resolve_app_alias` returned — in legacy mode with no guard, that is any
+# string the owner typed.
+EXPIRED_CONFIRMATION_AR: Final[str] = (
+    "انتهت مهلة التأكيد — ما نفّذت شي. إذا بدك أعمله، اطلبه من جديد."
+)
 
 # 2.4: fallback chat id when the notifier carries none (tests/plain coordinators) —
 # in production the notifier's _chat_id IS the owner's real chat, so confirmation
@@ -130,13 +145,25 @@ class _Pending:
 
 
 class PCActionCoordinator:
-    def __init__(self, bridge, vault: VaultClient, notifier, guard=None, memory=None):
+    def __init__(self, bridge, vault: VaultClient, notifier, guard=None, memory=None, now_fn=None):
         self._bridge = bridge
         self._vault = vault
         self._notifier = notifier
         self._guard = guard  # None = legacy pass-through (guard lives on the daemon)
         self._memory = memory  # 2.4: None = legacy, exchanges never enter memory
+        # F-6: the repo's clock seam (same name and shape as
+        # `bridge.executor.Executor` and `src.tools.ToolRegistry`). EVERY time
+        # read in this class goes through it — half a seam is a second source
+        # of truth, and a seam the caller cannot move is exactly why C-2 was
+        # unverified: `pending_active` read `datetime.now(UTC)` directly, so no
+        # test could cross the 10-minute TTL without sleeping for it.
+        self._now = now_fn or (lambda: datetime.now(UTC))
         self._pending: _Pending | None = None
+        # A prompt that aged out and has not been answered. Kept OUT of
+        # `_pending` on purpose: `pending_active()` clears the expired prompt
+        # (a test pins that), so the fact that it EXPIRED needs its own latch
+        # or the honest line can never be worded.
+        self._lapsed: bool = False
 
     def _remember(self, role: str, content: str) -> None:
         """2.4 (audit C-8): the confirmation conversation enters memory — the
@@ -151,12 +178,31 @@ class PCActionCoordinator:
             logger.warning("coordinator memory write failed (best-effort skip)")
 
     def pending_active(self) -> bool:
+        """True while a confirmation is still INSIDE its window.
+
+        An aged-out prompt is dropped here exactly as before (state is
+        cleared, the caller is told "no"), and the drop additionally
+        latches `_lapsed` so the refusal can still be spoken.
+        """
         if self._pending is None:
             return False
-        if datetime.now(UTC) - self._pending.created_at > PENDING_TTL:
+        if self._now() - self._pending.created_at > PENDING_TTL:
             self._pending = None
+            self._lapsed = True
             return False
         return True
+
+    def pending_open(self) -> bool:
+        """True while a prompt is still AWAITING an answer, expired or not.
+        This is the gate `src/bot.py` routes the owner's reply through.
+
+        It is deliberately not `pending_active()`. F-6 measured that gating
+        on the latter makes a lapsed confirmation invisible: the instant the
+        TTL passes, «نعم» stops being a confirmation and becomes an ordinary
+        chat message — the brain answers a yes to nothing, and the owner is
+        never told it lapsed.
+        """
+        return self.pending_active() or self._lapsed
 
     async def request_close(self, name: str, *, origin: str) -> LaunchStatus:
         """Directive §2 (owner 2026-09-04): real app closing — «سكري X» routes
@@ -202,7 +248,8 @@ class PCActionCoordinator:
                 f"«{resolved}» مش بالقائمة المعتمدة — بتحب أسمح بإغلاقه هالمرة؟ "
                 f"رد بـ«نعم» للتأكيد. رمز التدقيق: {code}"
             )
-            self._pending = _Pending("close", resolved, datetime.now(UTC))
+            self._pending = _Pending("close", resolved, self._now())
+            self._lapsed = False
             await self._ledger(code, "close", "refused", result["detail"])
             await self._notifier.notify(prompt)
             self._remember("assistant", prompt)
@@ -236,7 +283,8 @@ class PCActionCoordinator:
                 f"«{resolved}» مش بالقائمة المعتمدة — بتحب أسمح فيه هالمرة؟ "
                 f"رد بـ«نعم» للتأكيد. رمز التدقيق: {code}"
             )
-            self._pending = _Pending("launch", resolved, datetime.now(UTC))
+            self._pending = _Pending("launch", resolved, self._now())
+            self._lapsed = False
             await self._ledger(code, "launch", "refused", result["detail"])
             await self._notifier.notify(prompt)
             self._remember("assistant", prompt)
@@ -249,13 +297,25 @@ class PCActionCoordinator:
     async def request_power(self, action: str, *, origin: str) -> LaunchStatus:
         self._require_owner_origin(origin)
         prompt = f"أمر {action} على الجهاز بيتطلب تأكيد صريح — رد بـ«نعم» للمتابعة."
-        self._pending = _Pending("power", action, datetime.now(UTC))
+        self._pending = _Pending("power", action, self._now())
+        self._lapsed = False
         await self._notifier.notify(prompt)
         self._remember("assistant", prompt)
         return LaunchStatus.CONFIRMATION_REQUIRED
 
     async def handle_owner_reply(self, text: str) -> str | None:
         if not self.pending_active():
+            if not self._lapsed:
+                return None  # nothing was ever pending: stay silent
+            # F-6 (audit C-2): the prompt existed and it lapsed. Say so ONCE,
+            # remember it (2.4/C-8: the brain must meet every confirmation
+            # turn, including the dead one), and execute nothing. Without
+            # this line the owner's «نعم» was swallowed in silence and the
+            # request simply vanished.
+            self._lapsed = False
+            self._remember("user", text)
+            await self._notifier.notify(EXPIRED_CONFIRMATION_AR)
+            self._remember("assistant", EXPIRED_CONFIRMATION_AR)
             return None
         pending = self._pending
         self._remember("user", text)
@@ -276,7 +336,7 @@ class PCActionCoordinator:
         return action if await self._confirm_and_execute("power", action) else None
 
     async def _confirm_and_execute(self, kind: str, target: str) -> str | None:
-        now = datetime.now(UTC)
+        now = self._now()
         # F-2: the id is a SIGNED, expiring token, not a bare uuid — the daemon
         # verifies it against the shared core<->daemon secret, which is the
         # only place it can be verified (it has no vault client to read this
@@ -340,7 +400,7 @@ class PCActionCoordinator:
         return await self._bridge.send_cmd(cmd, args)
 
     async def _ledger(self, audit_code: str, action: str, outcome: str, reason: str) -> None:
-        ts = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+        ts = self._now().strftime("%Y-%m-%dT%H:%M:%SZ")
         line = f"{ts} | {audit_code} | {action} | {outcome} | {reason.replace('|', '/')}"
         try:
             existing = await self._vault.read(LEDGER_PATH)
