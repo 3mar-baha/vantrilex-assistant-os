@@ -2515,13 +2515,11 @@ pre-existing failure.** Not weakened, not skipped, not xfailed.
 
 ### Carried forward from F-4
 
-* **`test_run_bot_boots_all_components_and_shuts_down` is RED for a pre-existing
-  reason and is NOT F-4's to fix.** It lets the real `VaultClient` reach the live
-  GitHub API with the `.env.example` placeholder token, gets a real 401, and burns the
-  30s boot budget on retries. It was already red at `c367eb8` (verified by stashing).
-  The fix is to inject a fake `VaultClient`, which is `tests/test_production_wiring.py`
-  — outside this work order's write-set. **Carried forward as a named defect, not
-  absorbed into a milestone count.**
+* ~~**`test_run_bot_boots_all_components_and_shuts_down` is RED for a pre-existing
+  reason and is NOT F-4's to fix.**~~ **RESOLVED by F-5 (2026-10-01) — and this
+  note's diagnosis was WRONG in its mechanism.** It was never a retry problem: the
+  real status is 401, which never enters the 429/403 retry branch. Full measurement
+  and fix in the F-5 milestone below.
 * **The probe adds up to 8s to boot when Google is slow.** Bounded and deliberate, but
   it is real latency the owner will see. If it ever becomes objectionable the fix is a
   shorter bound or a background re-probe, not removing the probe.
@@ -2542,6 +2540,114 @@ pre-existing failure.** Not weakened, not skipped, not xfailed.
   `deduce` must carry this caveat.
 * **Two live-harness flakes** (`test_h04_ttft_monitor`, `test_h06_joda_dialogues`) —
   free-provider pool variance, never weakened.
+
+## F-5 SHIPPED — the boot-path guard boots offline, and hermeticity is now enforced (2026-10-01)
+
+Two commits: `ccd0ed7` (the fix), `e6098eb` (the guard). HEAD `e6098eb`.
+
+### The finding (measured first, as the brief required)
+
+The work order asked for a FINDING before a fix, and proposed two candidate
+causes. **Measurement refutes the prod-fault hypothesis, including its stated
+mechanism.**
+
+* **The real HTTP status is `401`, not 429/403.** GitHub answers the
+  `.env.example` placeholder PAT with `401 Unauthorized` on every call. Because
+  401 is not in `(429, 403)`, `src/vault.py:413` returns the response untouched
+  and `raise_for_status()` at `:370` raises immediately. **The retry branch is
+  never entered.** There was no retry loop burning the budget to shorten.
+* **The 30s was 31 sequential round trips, not retry latency.** Boot issues one
+  dialect-notes read + one capabilities-manifest upsert + one upsert per per-tool
+  skill guide (29). `sync_skill_guides` awaits them one at a time
+  (`src/skills/sara_tool_skills.py:1038`), and each failed upsert still pays a
+  full `_lookup_sha` GET before its PUT. At the observed ~0.3–1.4 s per call
+  that is the whole budget.
+* **Prod behaviour was correct throughout.** `src/vault.py` does what its
+  docstring says — auth errors propagate loudly, no retry. **This is a
+  TEST-HARNESS defect:** the test stubbed `Bot` and `start_polling` but left the
+  vault's HTTP edge live. An incomplete stub, not a prod fault.
+
+Established inside a single controlled `pytest` run of the failing test (never
+by a standalone script hitting GitHub), with real loguru output captured.
+
+### The fix
+
+Test-side only. **No production file is touched.** The vault's HTTP edge is
+swapped for the existing `helpers_vault.FakeGitHub` double — the same
+system-boundary pattern this repo already uses for OmniRoute, GoogleSession and
+the vault Git-Data flow.
+
+The trade-off the brief asked to be stated honestly: replacing `VaultClient`
+with a fake vault class would have stopped proving the vault is **constructible
+from settings**, which is part of "assembles EVERYTHING". So the fake wraps the
+REAL constructor instead, and the test now asserts it received the real
+repo/token/branch. Boot: **30.19s → 1.16s.**
+
+Two assertions the old version could not make, now that boot is offline:
+* the capabilities manifest + all 29 per-tool guides actually **landed**;
+* exactly one `VaultClient` was built, with the settings' own values.
+
+The old test passed `started.is_set()` on a boot where every vault write had
+401'd and silently vanished — it proved assembly of a wiring whose vault was
+empty.
+
+### Hermeticity is now a guard, not a promise
+
+F-5 made ONE test hermetic; nothing stopped the next one from reaching the
+internet, which is how this defect existed at all. `tests/conftest.py` gains an
+autouse fixture refusing every non-loopback `socket.connect`/`getaddrinfo` with
+`SuiteNetworkBlocked`. Loopback stays open (bridge binds `127.0.0.1`; a blanket
+ban broke 4 tests, measured), and the `live_probe` / `live_harness` markers
+exempt their own lane.
+
+No shared-fixture semantics changed: `_hermetic_network` is new and additive;
+`make_settings` and `_clear_gateway_registries` are untouched.
+
+### Mutation table (Directive 5 — every mutant SEEN red, every restore sha256-verified)
+
+| # | Mutant | Result |
+|---|---|---|
+| 1 | Vault fake → live `VaultClient` constructor | **RED** — `assert built == []` (empty vs one entry) |
+| 2 | Guard body → bare `yield` | **RED** — 2 failed: "DID NOT RAISE", plus a real WinError 10060 timeout |
+| 3 | Marker exemption removed | **RED** — 1 failed: "live lane was network-blocked; the marker exemption is broken" |
+
+### Measured results
+
+```
+tests/test_production_wiring.py          6 passed (was 1 failed / 5 passed, 31.10s)
+full suite (excl live_harness)   2733 passed / 4 skipped / 1 xfailed / 0 failed
+tiered coverage                   92.3% TOTAL, every core module >= 98.0%
+ruff check                        All checks passed
+ruff format --check               434 files already formatted
+security_gate.py                  Security Gate OK (bandit + secret scan)
+docs_guard.py                     Docs Guard OK — 16 canonical files present
+```
+
+Suite counts are derived from the tree, never from memory. The 2
+`live_harness` free-provider flakes were re-confirmed **pre-existing** by
+stashing this work's `conftest.py` change and re-running: they fail identically
+without it (Gemma `streamed zero deltas in 4s — cascade`). Never weakened.
+
+### Carried forward from F-5
+
+* **The 429/403 retry conflation is a REAL but SEPARATE latent defect** and
+  deserves its own work order. `_get_with_rate_limit` retries any 403 carrying
+  `Retry-After` — but GitHub uses 403 for BOTH rate limiting AND
+  insufficient-scope/under-scoped PATs. Retrying a 403-for-bad-scope is wrong
+  regardless of this test. **Not fixed here, deliberately:** it is not what made
+  the test red, it changes prod retry semantics, and Directive 3 says re-scope
+  rather than bundle. The correct discriminator is the `X-RateLimit-Remaining:
+  0` header plus the `x-ratelimit-reset`/`Retry-After` pair, not the status code
+  alone.
+* **Boot is still 31 sequential GitHub round trips in production.** F-5 removed
+  the network from the TEST, not the boot path. With a real token those calls
+  succeed but still cost boot latency, and one transient 5xx aborts the guide
+  sync. Batching or backgrounding `sync_skill_guides` is a real improvement that
+  this work order did not measure and did not attempt.
+* **`src/bot.py` and `src/vault.py` were NOT modified** — neither was needed.
+  The confinement list also forbids both; the finding is what made that
+  constraint cost-free.
+* **F-6 remains sealed by owner decision.** Not started.
 
 - [07 — Implementation Plan](./07-IMPLEMENTATION-PLAN.md)
 - [11 — Testing](./11-TESTING.md)
