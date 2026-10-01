@@ -27,6 +27,8 @@ import json
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
+from bridge.executor import mint_confirmation_id
+
 AMMAN = ZoneInfo("Asia/Amman")
 
 LINE_30S = "شغلي تذكير بعد 30 ثانية اشرب ماء"
@@ -114,13 +116,17 @@ async def test_cancel_reminder_tool_accepts_time():
     orch._jobs["job-1"] = _Job("job-1", now.replace(hour=7, minute=10), "⏰ تذكير: اشرب ماء")
 
     registry = ToolRegistry(orchestrator=orch)
-    out = await registry.call("cancel_reminder", "7:10")
+    # F-1: cancelling a reminder cannot be undone, so this drove a real
+    # cancellation with NO confirmation and expected it. Updated, not weakened:
+    # the time-matching path is asserted end to end, now behind a genuine
+    # approval, which is the only way to reach the handler at all.
+    out = await registry.call("cancel_reminder", "7:10", confirmation_id=mint_confirmation_id())
     assert "✅" in out and "job-1" in out
     assert orch.pending == []  # actually cancelled
 
     # a time with no match answers honestly
     orch._jobs["job-2"] = _Job("job-2", now.replace(hour=12, minute=0), "x")
-    out = await registry.call("cancel_reminder", "3:47")
+    out = await registry.call("cancel_reminder", "3:47", confirmation_id=mint_confirmation_id())
     assert "ما لقيت" in out
 
 

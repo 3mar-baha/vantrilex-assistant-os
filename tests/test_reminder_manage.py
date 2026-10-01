@@ -17,6 +17,8 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
+from bridge.executor import mint_confirmation_id
+
 AMMAN = ZoneInfo("Asia/Amman")
 
 
@@ -149,13 +151,20 @@ async def test_cancel_reminder_tool_routes_arg(tmp_path):
     orch = _Orch()
     registry = ToolRegistry(orchestrator=orch)
 
-    ok = await registry.call("cancel_reminder", "job-1")
+    # F-1: all three drove REAL cancellations with no confirmation and expected
+    # them — they pinned the bug. Updated, not weakened: each argument form is
+    # still asserted end to end, now behind a genuine owner approval.
+    ok = await registry.call("cancel_reminder", "job-1", confirmation_id=mint_confirmation_id())
     assert "job-1" in ok and "✅" in ok
 
-    unknown = await registry.call("cancel_reminder", "job-9")
+    unknown = await registry.call(
+        "cancel_reminder", "job-9", confirmation_id=mint_confirmation_id()
+    )
     assert "ما لقيت" in unknown or "ما في" in unknown
 
-    everything = await registry.call("cancel_reminder", "الكل")
+    everything = await registry.call(
+        "cancel_reminder", "الكل", confirmation_id=mint_confirmation_id()
+    )
     assert orch.all_called is True
     assert "3" in everything
 

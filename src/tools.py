@@ -8,7 +8,7 @@ lines; backend failures degrade loudly to a plain apology line.
 
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
-from typing import Any
+from typing import Any, Final
 from zoneinfo import ZoneInfo
 
 from loguru import logger
@@ -55,6 +55,115 @@ OPENCLAW_OFFLINE_AR = "الجسر مو متصل هسا — أدوات التحك
 OPENCLAW_BROWSE_STAGED_AR = (
     "التشغيل التفاعلي للمتصفح بيجهز بالمرحلة 3 — هسا بقدر أجلب نص صفحة برابط مباشر فقط"
 )
+
+# ── F-1 (owner 2026-10-01): the irreversible gate at the ONE choke point ─────────────
+#
+# THE DEFECT THIS REPLACES. `IRREVERSIBLE_TOOLS` names seven tools whose handlers
+# change external state. The only confirmation gate read that set at
+# `src/decision_loop.py:428` — the ReAct branch, which `react_loop_enabled()`
+# keeps OFF unless `SARA_REACT_LOOP` is set, and which `src/bot.py` bypasses for
+# every other turn. `ToolRegistry.call` was four lines of dispatch with no
+# deny-list, so `create_event`, `create_task` and `cancel_reminder` performed
+# Google and local writes on a router verdict alone. A mitigation that exists
+# only in disabled code is not a mitigation. `call` is the single choke point
+# BOTH paths share, so the gate lives HERE.
+#
+# THE VERIFICATION, and what it costs. F-2's `verify_confirmation_id`
+# (`bridge/executor.py:105`) is the sound check: it re-computes an HMAC over the
+# shared `BRIDGE_TOKEN` and compares it in constant time. MEASURED cost — no
+# network call, no vault read, no request: a few microseconds of pure CPU, and
+# the token is burned on use, which is the single-use law F-2 already enforced at
+# the daemon edge. The shared secret resolves in-process exactly as F-2 measured
+# it — process env first, then `get_settings()` (`src/config.py:212` is
+# `lru_cache`d, so the `.env` file is read at most once per process), and
+# unreachable means `""`, which refuses EVERY id. No vault/secret read per call.
+#
+# LATENCY. Only the irreversible branch pays anything. The `IRREVERSIBLE_TOOLS`
+# import and the `bridge.executor` import are both DEFERRED inside the gate — a
+# module-top `src.skills` import is an import cycle (`src.skills.capabilities`
+# reaches `src.cognition`, which imports the dispatcher that imports this module),
+# the same class of problem F-2 hit with `BRIDGE_TOKEN`. An ordinary tool call
+# touches neither.
+#
+# WHY THE ARABIC IS A NEW CONSTANT AND NOT `TOOL_FAIL_AR`. `TOOL_FAIL_AR` is
+# what a CRASH returns, and a refusal that is indistinguishable from a crash
+# tells the owner nothing and is a UX dead end: they cannot tell "it broke" from
+# "you have not agreed to this yet". This line NAMES the action, says plainly
+# that it does not come back, and hands the decision back to the owner.
+CONFIRM_REQUIRED_AR: Final[str] = (
+    "«{action}» — هاي خطوة ما بترجع، فما بقدر أنفّذها إلا بتأكيد صريح منك. "
+    "الطلب واقف هسّ بانتظار قرارك."
+)
+
+#: What each irreversible tool IS, in the owner's own words. The refusal names the
+#: action because «this needs confirmation» gives the owner nothing to decide on.
+#: Keyed by tool name; a name missing here still gets refused (see
+#: `_confirmation_refusal`), it simply has no phrase to offer yet.
+IRREVERSIBLE_ACTION_AR: Final[dict[str, str]] = {
+    "create_event": "تسجيل موعد بالتقويم",
+    "create_task": "إضافة مهمة جديدة لمهامك",
+    "cancel_reminder": "إلغاء تذكير مسجّل",
+    "cloud_backup": "رفع نسخة احتياطية من الخزينة للسحابة",
+    "openclaw_browse": "تشغيل المتصفح والضغط بصفحة",
+    "openclaw_desktop": "التحكّم بنافذة على سطح المكتب",
+    "close": "إغلاق برنامج على جهازك",
+}
+
+#: The one deny-list member this gate does NOT block, and the MEASURED reason.
+#:
+#: `close` is exempt because `_do_close` is a pure DELEGATION to
+#: `PCActionCoordinator.request_close`, which is ITSELF the confirmation channel:
+#: it demands `origin="owner_chat"`, consults the whitelist, prompts the owner on
+#: Telegram, and mints a SIGNED `cfm1.*` id on the reply — which the daemon then
+#: VERIFIES (`bridge/executor.py:467`). A gate here would sit IN FRONT of that
+#: channel: the owner's «سكّر كروم» would never reach `request_close`, `_pending`
+#: would never be set, `handle_owner_reply` would never fire, and closing an app
+#: would become IMPOSSIBLE. It would also have forced edits to
+#: `tests/test_close_routing.py` and `tests/test_tools_matrix_p65b.py` — the
+#: whitelist-guard floor `CLAUDE.md` §5 declares untouchable. The exemption is
+#: earned by a guard, not by this comment: `tests/test_live_irreversible_gate.py`
+#: drives the real owner round trip and proves `close` cannot terminate a process
+#: without a verified id on the wire.
+#:
+#: This is the SAME reasoning as the dormant ReAct branch, which keeps its own
+#: gate at `src/decision_loop.py:428` rather than gaining a second one here.
+#: A double gate is the same defect one layer up.
+_GATED_BY_THE_COORDINATOR: Final[frozenset[str]] = frozenset({"close"})
+
+
+def _confirmation_refusal(tool: str, arg: str, confirmation_id: str) -> str | None:
+    """The F-1 gate. `None` means "proceed"; a string is the owner's confirmation
+    request and the handler must not run.
+
+    Split out of `call` so the choke point itself stays four lines of dispatch —
+    and so this function can hold the deferred imports the latency budget
+    depends on. `IRREVERSIBLE_TOOLS` is read from `src.skills` DEFERRED: a
+    module-top import is a cycle, because `src.skills.capabilities` is imported
+    by `src.cognition`, which the dispatcher imports, which imports this module.
+    Nothing here runs for a reversible tool, so an ordinary call pays no import,
+    no secret resolution and no HMAC.
+    """
+    from src.skills.capabilities import IRREVERSIBLE_TOOLS
+
+    if tool not in IRREVERSIBLE_TOOLS or tool in _GATED_BY_THE_COORDINATOR:
+        return None
+    raw = (confirmation_id or "").strip()
+    if raw:
+        # F-2's verifier: a local HMAC recompute against the shared
+        # `BRIDGE_TOKEN`. No network, no vault read, constant-time compare,
+        # fail-closed when no secret is reachable, and single-use because it
+        # burns what it verifies. Deferred so only this branch ever imports it.
+        from bridge.executor import verify_confirmation_id
+
+        check = verify_confirmation_id(raw)
+        if check.ok:
+            return None
+        logger.warning("confirmation refused for {!r}: {}", tool, check.reason)
+    action = IRREVERSIBLE_ACTION_AR.get(tool)
+    if action is None:  # fail closed with an honest ask rather than a bare refusal
+        logger.warning("irreversible tool {!r} has no Arabic action phrase yet", tool)
+        action = "هالطلب"
+    return CONFIRM_REQUIRED_AR.format(action=action)
 
 
 def _extract_folder_names(head: str, tail: str) -> list[str]:
@@ -134,11 +243,35 @@ class ToolRegistry:
         # wall-clock reads inside handlers make tests die at midnight rollovers.
         self._now = now_fn or (lambda: datetime.now(UTC))
 
-    async def call(self, tool: str, arg: str = "") -> str | None:
+    async def call(self, tool: str, arg: str = "", *, confirmation_id: str = "") -> str | None:
+        """The ONE dispatch choke point. Both execution paths reach a handler
+        through here — the live `FrontDoorDispatcher.handle` and the dormant
+        ReAct loop — so the irreversible gate is placed here rather than at
+        either caller (F-1, owner 2026-10-01).
+
+        `confirmation_id` is keyword-only: every existing call site keeps
+        compiling unchanged, and no neighbouring positional value can ever be
+        mistaken for an approval. A member of `IRREVERSIBLE_TOOLS` arriving
+        without a VERIFIED id returns the Arabic confirmation request — a
+        REFUSAL, like every other outcome of this method, never an exception, and
+        never `TOOL_FAIL_AR`, which is what a crash returns and which would leave
+        the owner unable to tell a refusal from a fault.
+        """
         handler = getattr(self, f"_do_{tool}", None)
         if handler is None:
             logger.warning("tool registry got unknown tool {!r}", tool)
             return TOOL_FAIL_AR
+        if _hijacked_shipped_handler(tool):
+            # F-1 hole 2: a SHIPPED lane whose class-level handler has been
+            # replaced is not dispatched. `register_tool` can reach this state
+            # because its R2 collision check reads the catalog, which does not
+            # list every shipped handler (`file_save` is the measured example).
+            logger.warning("refused hijacked shipped handler {!r}", tool)
+            return TOOL_FAIL_AR
+        refusal = _confirmation_refusal(tool, arg, confirmation_id)
+        if refusal is not None:
+            logger.warning("refused irreversible tool {!r}: no verified confirmation", tool)
+            return refusal
         try:
             return await handler(arg)
         except Exception as error:  # noqa: BLE001 — honest failure, never a hang
@@ -1287,3 +1420,39 @@ class ToolRegistry:
             sender = item.from_name or item.from_email
             lines.append(f"• مهم: {item.subject} من {sender}")
         return "\n".join(lines)
+
+
+#: F-1 hole 2 (owner 2026-10-01): every `_do_*` this class ships with, captured at
+#: import, plus the check that reads it.
+#:
+#: `register_tool` writes `setattr(ToolRegistry, "_do_<name>", ...)` and its R2
+#: collision check reads the CATALOG (`TOOL_CAPABILITIES` union `valid_tools()`)
+#: -- which does not list every shipped handler. MEASURED: `file_save` is a
+#: shipped `_do_file_save` that appears in neither, so registering a tool under
+#: that name sails past R2, R3 and R4 and silently REPLACES a shipped lane.
+#: Nothing calls `register_tool` today, so this is latent rather than exploited,
+#: and `src/evolution.py`'s `AMBIENT_AUTHORITY_NAMES` cannot help: it bans
+#: `setattr` inside a synthesized PROPOSAL, not a registration that landed.
+#:
+#: The refusal belongs at the point of USE -- the choke point in `call` -- because
+#: `src/tool_overlay.py` is outside this work order's write-set. A shipped handler
+#: whose class attribute is no longer the one this module defined is not
+#: dispatched; it answers `TOOL_FAIL_AR`, the honest line for a lane that cannot
+#: be trusted, and the warning names the tool.
+#:
+#: Read on the CLASS, never the instance: a registration writes a class attribute,
+#: while a per-instance override -- how every test here injects a fake -- leaves
+#: the class attribute intact and is therefore not a hijack.
+_SHIPPED_HANDLERS: Final[dict[str, Any]] = {
+    name.removeprefix("_do_"): getattr(ToolRegistry, name)
+    for name in dir(ToolRegistry)
+    if name.startswith("_do_")
+}
+
+
+def _hijacked_shipped_handler(tool: str) -> bool:
+    """True when `tool` ships a handler and the class attribute is no longer it."""
+    shipped = _SHIPPED_HANDLERS.get(tool)
+    if shipped is None:  # a runtime-registered tool: no shipped lane to hijack
+        return False
+    return getattr(ToolRegistry, f"_do_{tool}", None) is not shipped

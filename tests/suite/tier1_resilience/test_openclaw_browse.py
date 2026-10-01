@@ -148,6 +148,17 @@ class _FakeBridge:
         return self.payload
 
 
+def _approved():
+    # F-1: openclaw_browse / openclaw_desktop are IRREVERSIBLE, so the core
+    # handler is unreachable without a verified owner approval. These guards drove
+    # it with none and expected execution -- they pinned the bug. Updated, not
+    # weakened: one id per call, because verify_confirmation_id burns whatever it
+    # verifies, so a shared id would be refused as a replay.
+    from bridge.executor import mint_confirmation_id
+
+    return mint_confirmation_id()
+
+
 def _registry(bridge):
     from src.tools import ToolRegistry
 
@@ -158,7 +169,9 @@ async def test_core_browse_url_navigates_via_verb():
     bridge = _FakeBridge(
         {"status": "ok", "detail": json.dumps({"ok": True, "url": "https://example.com"})}
     )
-    out = await _registry(bridge).call("openclaw_browse", "https://example.com/x")
+    out = await _registry(bridge).call(
+        "openclaw_browse", "https://example.com/x", confirmation_id=_approved()
+    )
     assert bridge.sent and bridge.sent[0][0] == "openclaw.browse"
     assert bridge.sent[0][1]["action"] == "navigate"
     assert "example.com" in out
@@ -185,7 +198,9 @@ async def test_core_browse_falls_back_to_fetch_when_browser_down():
         {"status": "error", "detail": "openclaw browser not configured"},
         {"status": "ok", "detail": "page text via fetch"},
     )
-    out = await _registry(bridge).call("openclaw_browse", "https://example.com/x")
+    out = await _registry(bridge).call(
+        "openclaw_browse", "https://example.com/x", confirmation_id=_approved()
+    )
     assert [cmd for cmd, _args in bridge.sent] == ["openclaw.browse", "openclaw.fetch"]
     assert "page text via fetch" in out
 
@@ -195,17 +210,23 @@ async def test_core_browse_honest_when_both_lanes_fail():
         {"status": "error", "detail": "browser exploded"},
         {"status": "error", "detail": "fetch exploded"},
     )
-    out = await _registry(bridge).call("openclaw_browse", "https://example.com/x")
+    out = await _registry(bridge).call(
+        "openclaw_browse", "https://example.com/x", confirmation_id=_approved()
+    )
     assert out and "exploded" in out
 
 
 async def test_core_browse_offline_without_bridge():
-    out = await _registry(None).call("openclaw_browse", "https://example.com/x")
+    out = await _registry(None).call(
+        "openclaw_browse", "https://example.com/x", confirmation_id=_approved()
+    )
     assert "الجسر" in out
 
 
 async def test_core_browse_non_url_stays_staged_no_tunnel():
     bridge = _ScriptedBridge()
-    out = await _registry(bridge).call("openclaw_browse", "دوري على أسعار الذهب")
+    out = await _registry(bridge).call(
+        "openclaw_browse", "دوري على أسعار الذهب", confirmation_id=_approved()
+    )
     assert bridge.sent == []
     assert "المرحلة" in out or "Phase 3" in out

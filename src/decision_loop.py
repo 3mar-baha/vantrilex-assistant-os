@@ -26,9 +26,9 @@ from loguru import logger
 
 from src.cognitive_dag import EphemeralTodo, TodoItem, classify_weight
 from src.dispatcher import (
-    _ROUTER_PROMPT_AR,
     DEFAULT_ACK_AR,
     _parse_router,
+    router_prompt,
 )
 from src.gateway import GatewayError, Tier
 from src.openclaw import plans as openclaw_plans
@@ -315,11 +315,20 @@ async def run_decision_loop(
     pivoted = False
 
     # Stage 0 — router verdict (same prompt/parser as handle()).
+    #
+    # F-1 hole 1 (owner 2026-10-01): the prompt is COMPOSED LIVE through
+    # `router_prompt()`, exactly as `handle()` does. This branch used to send the
+    # static `_ROUTER_PROMPT_AR` literal, so a tool registered through
+    # `register_tool` was accepted by `_parse_router` (its allow-list reads
+    # `valid_tools()`) and still unemittable — the original silent loss of
+    # seam 1, one layer over. Composed, never spliced: with an empty overlay the
+    # return is the literal byte for byte, so the base catalog never changes for
+    # a turn that registered nothing.
     await pulse()
     try:
         reply = await gateway.chat(
             [
-                {"role": "system", "content": _ROUTER_PROMPT_AR},
+                {"role": "system", "content": router_prompt()},
                 {"role": "user", "content": user_text},
             ],
             tier=Tier.FAST,
@@ -425,6 +434,21 @@ async def run_decision_loop(
         if pad.repeats_of(tool, arg) >= budget.max_same_tool_repeats:
             logger.warning("decision loop thrash-halt on {!r}", tool)
             break
+        # F-1 (owner 2026-10-01): this is the ORIGINAL gate, kept, and it is
+        # deliberately NOT duplicated here — do not "fix" it twice. What changed
+        # is WHERE enforcement lives: `ToolRegistry.call` now refuses every
+        # `IRREVERSIBLE_TOOLS` member that arrives without a verified
+        # `confirmation_id`, and this call passes no id, so the choke point
+        # backs this check up structurally. The two layers differ BEHAVIOURALLY,
+        # which is why deleting either one is not a no-op:
+        #   * this gate reads the COORDINATOR (a recorded owner approval for THIS
+        #     tool and arg) and PARKS with an LLM-written honest ask;
+        #   * the registry gate reads a SIGNED, unexpired, single-use id and
+        #     returns a fixed Arabic confirmation request.
+        # Delete this check and an approved step is refused by the registry —
+        # still safe, but the owner loses the ask. Delete the registry's and this
+        # dormant branch is the only thing standing between the deny-list and
+        # execution, which is the defect F-1 was filed for.
         if tool in IRREVERSIBLE_TOOLS and (
             coordinator is None or not coordinator.has_confirmation(tool, arg)
         ):
@@ -434,6 +458,17 @@ async def run_decision_loop(
             return
         await pulse()
         try:
+            # No `confirmation_id` keyword, and that omission is a REAL
+            # consequence, stated here rather than implied: the approval this
+            # loop honoured lives in the coordinator's pending record, not in a
+            # signed token, so there is no id to thread and the registry refuses
+            # an approved irreversible step on this branch. The branch is DORMANT
+            # (`SARA_REACT_LOOP` off) and `close` is exempt at the choke point,
+            # so today the only irreversible tools this loop can route —
+            # create_event, create_task, cancel_reminder, cloud_backup,
+            # openclaw_browse, openclaw_desktop — all refuse. Carrying a token
+            # here needs a producer on this path, which does not exist; that is
+            # the work §33B.5's plan-level confirmation channel owes.
             result = await tools.call(tool, arg)
         except Exception as error:  # noqa: BLE001 — registry already converts; belt first
             logger.exception("decision loop tool {!r} raised: {}", tool, error)

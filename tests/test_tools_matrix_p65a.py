@@ -9,6 +9,7 @@ from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 from zoneinfo import ZoneInfo
 
+from bridge.executor import mint_confirmation_id
 from src.bridge_server import BridgeOffline
 from src.daily_brief import BriefData
 from src.gmail import EmailMessage
@@ -372,10 +373,19 @@ def test_drive_contacts_create_variants():
     assert "ما لقيت" in _aio.run(
         ToolRegistry(suite=_Suite(contacts=[]), tz=TZ).call("contacts", "زيد")
     )
-    assert "سجّلت الموعد" in _aio.run(reg.call("create_event", "اجتماع التخطيط"))
-    assert "تفاصيل الموعد" in _aio.run(reg.call("create_event", "   "))
-    assert "ضفت المهمة" in _aio.run(reg.call("create_task", "مراجعة العرض"))
-    assert "المهمة" in _aio.run(reg.call("create_task", "   "))
+    # F-1: these four drove real Google writes with NO confirmation and expected
+    # them — they pinned the bug. Updated, not weakened: each branch of the
+    # handler (echo, empty-arg prompt, success) is still asserted end to end,
+    # now behind a genuine owner approval, which is the only way to reach them.
+    _approved = mint_confirmation_id
+    assert "سجّلت الموعد" in _aio.run(
+        reg.call("create_event", "اجتماع التخطيط", confirmation_id=_approved())
+    )
+    assert "تفاصيل الموعد" in _aio.run(reg.call("create_event", "   ", confirmation_id=_approved()))
+    assert "ضفت المهمة" in _aio.run(
+        reg.call("create_task", "مراجعة العرض", confirmation_id=_approved())
+    )
+    assert "المهمة" in _aio.run(reg.call("create_task", "   ", confirmation_id=_approved()))
     err = _Suite()
     err.error = RuntimeError("down")
     reg_err = ToolRegistry(suite=err, tz=TZ)

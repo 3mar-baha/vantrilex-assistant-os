@@ -23,6 +23,7 @@ from __future__ import annotations
 
 from datetime import UTC
 
+from bridge.executor import mint_confirmation_id
 from src.dispatcher import _VALID_TOOLS, _keyword_net
 
 
@@ -224,10 +225,16 @@ async def test_contacts_without_suite_is_offline():
 
 
 async def test_create_event_parses_and_echoes():
+    # F-1: this test drove `create_event` to a real suite write with NO
+    # confirmation and expected success — it pinned the bug. Updated, not
+    # weakened: the handler's own parsing is still asserted end to end, now
+    # behind a genuine owner approval, which is the only way to reach it.
     from src.tools import ToolRegistry
 
     suite = _Suite()
-    out = await ToolRegistry(suite=suite, tz=UTC).call("create_event", "اجتماع التخطيط")
+    out = await ToolRegistry(suite=suite, tz=UTC).call(
+        "create_event", "اجتماع التخطيط", confirmation_id=mint_confirmation_id()
+    )
     assert suite.created_events, "the suite must have been called"
     assert "اجتماع التخطيط" in out
 
@@ -235,21 +242,28 @@ async def test_create_event_parses_and_echoes():
 async def test_create_event_without_suite_is_offline():
     from src.tools import ToolRegistry
 
-    assert "مو متصل" in await ToolRegistry().call("create_event", "اجتماع")
+    out = await ToolRegistry().call(
+        "create_event", "اجتماع", confirmation_id=mint_confirmation_id()
+    )
+    assert "مو متصل" in out
 
 
 async def test_create_task_parses_and_echoes():
+    # F-1: as above — drove a Google Tasks write unconfirmed and expected it.
     from src.tools import ToolRegistry
 
     suite = _Suite()
-    out = await ToolRegistry(suite=suite).call("create_task", "مراجعة العرض")
+    out = await ToolRegistry(suite=suite).call(
+        "create_task", "مراجعة العرض", confirmation_id=mint_confirmation_id()
+    )
     assert suite.created_tasks and "مراجعة العرض" in out
 
 
 async def test_create_task_without_suite_is_offline():
     from src.tools import ToolRegistry
 
-    assert "مو متصل" in await ToolRegistry().call("create_task", "مهمة")
+    out = await ToolRegistry().call("create_task", "مهمة", confirmation_id=mint_confirmation_id())
+    assert "مو متصل" in out
 
 
 # --------------------------------------------------------------------------- B4 places
@@ -329,14 +343,20 @@ async def test_cloud_backup_uses_vault_and_confirms():
             return "بيانات"
 
     cloud = _Cloud()
-    out = await ToolRegistry(vault=_Vault(), cloud=cloud).call("cloud_backup", "")
+    # F-1: an upload cannot be un-done, so this drove a real Cloud Storage write
+    # unconfirmed and expected it. Updated, not weakened: behind a genuine
+    # approval the upload path is asserted end to end exactly as before.
+    out = await ToolRegistry(vault=_Vault(), cloud=cloud).call(
+        "cloud_backup", "", confirmation_id=mint_confirmation_id()
+    )
     assert cloud.backed_up == 1 and "نسخة" in out
 
 
 async def test_cloud_backup_without_vault_is_honest():
     from src.tools import ToolRegistry
 
-    assert "ما قدرت" in await ToolRegistry().call("cloud_backup", "")
+    out = await ToolRegistry().call("cloud_backup", "", confirmation_id=mint_confirmation_id())
+    assert "ما قدرت" in out
 
 
 async def test_analytics_returns_rows():

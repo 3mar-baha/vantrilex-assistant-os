@@ -8,6 +8,7 @@ target user-visible Arabic outcomes.
 from datetime import UTC, datetime
 from zoneinfo import ZoneInfo
 
+from bridge.executor import mint_confirmation_id
 from src.tools import TOOL_FAIL_AR, ToolRegistry
 
 TZ = ZoneInfo("Asia/Amman")
@@ -325,16 +326,30 @@ def test_schedule_lanes():
 def test_reminders_list_and_cancel():
     reg = ToolRegistry(orchestrator=FakeOrchestrator())
     assert "job-1" in _run(reg.call("list_reminders", ""))
-    assert "ألغيت" in _run(reg.call("cancel_reminder", "الكل"))
-    assert "ألغيت" in _run(reg.call("cancel_reminder", "job-1"))
-    assert "ما لقيت" in _run(reg.call("cancel_reminder", "job-9"))
-    assert "رقمه" in _run(reg.call("cancel_reminder", "   "))
-    assert "job-1" in _run(reg.call("cancel_reminder", "7:10"))
+    # F-1: every cancel_reminder line below drove a REAL cancellation with no
+    # confirmation and expected it — they pinned the bug. Updated, not weakened:
+    # all five argument forms plus the failure path are still asserted end to
+    # end, now behind a genuine owner approval, one id each (verify burns them).
+    assert "ألغيت" in _run(
+        reg.call("cancel_reminder", "الكل", confirmation_id=mint_confirmation_id())
+    )
+    assert "ألغيت" in _run(
+        reg.call("cancel_reminder", "job-1", confirmation_id=mint_confirmation_id())
+    )
+    assert "ما لقيت" in _run(
+        reg.call("cancel_reminder", "job-9", confirmation_id=mint_confirmation_id())
+    )
+    assert "رقمه" in _run(
+        reg.call("cancel_reminder", "   ", confirmation_id=mint_confirmation_id())
+    )
+    assert "job-1" in _run(
+        reg.call("cancel_reminder", "7:10", confirmation_id=mint_confirmation_id())
+    )
     assert "ما في" in _run(ToolRegistry().call("list_reminders", ""))
     assert (
         _run(
             ToolRegistry(orchestrator=FakeOrchestrator(error=RuntimeError("x"))).call(
-                "cancel_reminder", "job-1"
+                "cancel_reminder", "job-1", confirmation_id=mint_confirmation_id()
             )
         )
         == TOOL_FAIL_AR

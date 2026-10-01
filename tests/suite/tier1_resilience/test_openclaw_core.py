@@ -205,6 +205,17 @@ def test_dependency_isolation_wall():
     assert "requirements-bridge" not in docker
 
 
+def _approved():
+    # F-1: openclaw_browse / openclaw_desktop are IRREVERSIBLE, so the core
+    # handler is unreachable without a verified owner approval. These guards drove
+    # it with none and expected execution -- they pinned the bug. Updated, not
+    # weakened: one id per call, because verify_confirmation_id burns whatever it
+    # verifies, so a shared id would be refused as a replay.
+    from bridge.executor import mint_confirmation_id
+
+    return mint_confirmation_id()
+
+
 async def test_fetch_handler_returns_transcript_text():
     reg = _registry(_FakeBridge({"status": "ok", "detail": "# title\n\nbody text"}))
     out = await reg.call("openclaw_fetch", "https://example.com/x")
@@ -222,11 +233,11 @@ async def test_handlers_degrade_honestly_offline():
     }
     reg = _registry(None)
     for tool in intents.VALID_OPENCLAW_TOOLS:
-        out = await reg.call(tool, offline_args[tool])
+        out = await reg.call(tool, offline_args[tool], confirmation_id=_approved())
         assert "الجسر" in out, tool
     reg = _registry(_FakeBridge(BridgeOffline("down")))
     for tool in intents.VALID_OPENCLAW_TOOLS:
-        out = await reg.call(tool, offline_args[tool])
+        out = await reg.call(tool, offline_args[tool], confirmation_id=_approved())
         assert "الجسر" in out, tool
 
 
@@ -242,7 +253,7 @@ async def test_act_handler_sends_typed_envelope():
     real DAGs arrive in Phase 3 via plans.build_dag)."""
     reg = _registry(_FakeBridge({"status": "ok", "detail": json.dumps({"ok": True})}))
     bridge = reg._bridge
-    await reg.call("openclaw_desktop", "whatever")
+    await reg.call("openclaw_desktop", "whatever", confirmation_id=_approved())
     assert bridge.sent and bridge.sent[0][0] == "openclaw.act"
     probe = bridge.sent[0][1]["op"]
     assert Op.model_validate(probe).op == OpKind.SCREENSHOT
@@ -251,7 +262,7 @@ async def test_act_handler_sends_typed_envelope():
 async def test_browse_url_navigates_via_browse_verb():
     reg = _registry(_FakeBridge({"status": "ok", "detail": json.dumps({"ok": True})}))
     bridge = reg._bridge
-    out = await reg.call("openclaw_browse", "https://example.com/x")
+    out = await reg.call("openclaw_browse", "https://example.com/x", confirmation_id=_approved())
     assert bridge.sent[0][0] == "openclaw.browse"
     assert bridge.sent[0][1]["action"] == "navigate"
     assert out
@@ -260,7 +271,7 @@ async def test_browse_url_navigates_via_browse_verb():
 async def test_browse_without_url_is_honest_no_tunnel_call():
     reg = _registry(_FakeBridge({"status": "ok", "detail": "unreached"}))
     bridge = reg._bridge
-    out = await reg.call("openclaw_browse", "دوري على أسعار الذهب")
+    out = await reg.call("openclaw_browse", "دوري على أسعار الذهب", confirmation_id=_approved())
     assert bridge.sent == []  # interactive browsing is Phase 3 — no fake execution
     assert "المرحلة" in out or "Phase 3" in out
 

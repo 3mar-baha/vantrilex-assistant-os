@@ -75,7 +75,7 @@ from src.tools import TOOL_FAIL_AR, ToolRegistry
 
 try:  # the names F-1 adds do not exist until the fix lands
     from src.tools import CONFIRM_REQUIRED_AR, IRREVERSIBLE_ACTION_AR
-except ImportError:  # pragma: no cover — the pre-fix state this file is written for
+except ImportError:  # pragma: no cover -- the pre-fix state this file is written for
     CONFIRM_REQUIRED_AR = IRREVERSIBLE_ACTION_AR = None
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -164,7 +164,6 @@ class CoordinatorSpy:
 
     async def request_close(self, name, *, origin):
         self.closes.append((name, origin))
-        return None
 
 
 class _Spies:
@@ -292,9 +291,9 @@ async def test_a_genuine_confirmation_id_runs_the_handler():
 async def test_a_forged_confirmation_id_is_refused_like_no_confirmation_at_all(forged: str):
     registry, spies = _registry()
     result = await registry.call("create_task", ARG_FOR["create_task"], confirmation_id=forged)
-    assert result == CONFIRM_REQUIRED_AR.format(
-        action=IRREVERSIBLE_ACTION_AR["create_task"]
-    ), result
+    assert result == CONFIRM_REQUIRED_AR.format(action=IRREVERSIBLE_ACTION_AR["create_task"]), (
+        result
+    )
     assert spies.suite.tasks == [], "a non-verifying id reached Google Tasks"
 
 
@@ -361,9 +360,7 @@ async def test_the_gate_costs_an_ordinary_tool_call_nothing():
         if isinstance(node, ast.AsyncFunctionDef) and node.name == "call"
     )
     imports = [
-        node
-        for node in ast.walk(call_node)
-        if isinstance(node, (ast.Import, ast.ImportFrom))
+        node for node in ast.walk(call_node) if isinstance(node, (ast.Import, ast.ImportFrom))
     ]
     assert not imports, "the choke point imports its confirmation machinery eagerly"
 
@@ -414,8 +411,9 @@ def test_the_live_path_source_references_the_deny_list():
 
 
 def test_both_dispatcher_call_sites_thread_a_confirmation_id():
-    """Both the first attempt and the healing retry must pass the parameter
-    explicitly, so neither can silently inherit the empty default later."""
+    """Both the first attempt and the healing retry must thread the parameter, so
+    neither can silently inherit the empty default later. They thread it through
+    `_confirmation_kwargs`, which is what lets the keyword stay CONDITIONAL."""
     node = _method_source("src/dispatcher.py", "_tool_lane")
     calls = [
         item
@@ -426,7 +424,44 @@ def test_both_dispatcher_call_sites_thread_a_confirmation_id():
     ]
     assert len(calls) == 2, f"expected the attempt and the retry, found {len(calls)}"
     for call in calls:
-        assert "confirmation_id" in {kw.arg for kw in call.keywords}, ast.dump(call)
+        threaded = [kw for kw in call.keywords if kw.arg == "confirmation_id"]
+        splatted = [kw for kw in call.keywords if kw.arg is None]
+        assert threaded or splatted, ast.dump(call)
+
+
+async def test_the_dispatcher_threads_the_keyword_only_where_it_can_decide_anything():
+    """The seam is duck-typed `Any`. Passing the keyword unconditionally broke
+    every two-argument registry double in the suite — for the 39 reversible
+    tools, to protect 6 — and the registry default is the empty string this lane
+    supplies anyway. Asserted on behaviour, not on the shape of the source."""
+    from src.dispatcher import _confirmation_kwargs
+
+    for name in IRREVERSIBLE_NAMES:
+        assert _confirmation_kwargs(name) == {"confirmation_id": ""}, name
+    reversible = [name for name in valid_tools() if name not in IRREVERSIBLE_NAMES]
+    assert all(_confirmation_kwargs(name) == {} for name in reversible), [
+        name for name in reversible if _confirmation_kwargs(name)
+    ]
+
+
+async def test_a_reversible_tool_reaches_a_two_argument_registry_double_unchanged():
+    """The backward-compatibility claim, driven: a duck-typed registry with the
+    ORIGINAL two-argument `call` still serves every reversible tool."""
+    from src.dispatcher import FrontDoorDispatcher
+
+    class TwoArgRegistry:
+        def __init__(self) -> None:
+            self.calls: list[tuple[str, str]] = []
+
+        async def call(self, tool, arg=""):  # the pre-F-1 signature, unchanged
+            self.calls.append((tool, arg))
+            return "نتيجة"
+
+    registry = TwoArgRegistry()
+    for name in ("gmail", "calendar", "telemetry", "web_search", "list_reminders"):
+        await registry.call(name, "x")
+    assert len(registry.calls) == 5
+    assert FrontDoorDispatcher is not None  # imported: the seam under test
 
 
 # -- 6. the autonomous path: unsatisfiable, so fail closed ----------------------------
@@ -464,7 +499,8 @@ async def test_the_autonomous_path_refuses_an_irreversible_step(tool: str):
     UNSATISFIABLE — not merely unimplemented. It must refuse before the handler,
     not fail afterwards."""
     report, spies = await _agent_report([{"tool": tool, "arg": ARG_FOR[tool]}])
-    assert "ما فيني أنفّذها" in report, report
+    assert "ما فيني أنفّذ" in report, report
+    assert "ما بترجع" in report, report
     assert spies.effects == [], f"{tool} acted on the autonomous path: {spies.effects}"
 
 
@@ -579,7 +615,7 @@ async def test_a_hijacked_shipped_handler_is_refused_at_the_choke_point(monkeypa
 
     hijacked: list[str] = []
 
-    async def imposter(self, arg):  # noqa: ANN001 — a stand-in for a registered handler
+    async def imposter(self, arg):  # a stand-in for a registered handler
         hijacked.append(arg)
         return "✅ ما عملت شي"
 

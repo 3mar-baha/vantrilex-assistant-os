@@ -133,6 +133,34 @@ def router_prompt() -> str:
     return f"{_ROUTER_PROMPT_AR}\n" + "".join(extra)
 
 
+def _confirmation_kwargs(tool: str) -> dict[str, str]:
+    """F-1 (owner 2026-10-01): the `confirmation_id` keyword for `ToolRegistry.call`
+    — present ONLY for a member of `IRREVERSIBLE_TOOLS`, and always empty.
+
+    Conditional on purpose, and the reason is the seam's own contract rather than
+    taste: `tools` here is duck-typed `Any`, so an unconditional keyword breaks
+    every two-argument registry double for the 39 reversible tools in order to
+    protect 6, and buys nothing — the registry's default is the empty string this
+    lane supplies anyway. The keyword is still passed explicitly for the tools it
+    can decide, so the next agent meets the question at the call site instead of
+    inheriting a silent default.
+
+    DIRECTIVE 4, UNREACHABILITY STATED AT THE CALL SITE: this dispatcher has NO
+    producer for a confirmation id. There is no coordinator, no pending state and
+    nothing on the wire for a routed irreversible tool, so the value below cannot
+    be anything but "". The MISSING PRODUCER is an owner-facing confirmation round
+    trip for this lane — §33B.5's plan-level channel. Until it exists, the gate at
+    `ToolRegistry.call` refuses and the owner reads the Arabic request rather than
+    a silent Google write. Read live from `src.skills` (deferred: this module is
+    imported by it) so a change to the deny-list cannot leave a stale copy here.
+    """
+    from src.skills.capabilities import IRREVERSIBLE_TOOLS
+
+    if tool in IRREVERSIBLE_TOOLS:
+        return {"confirmation_id": ""}
+    return {}
+
+
 _ROUTES: Final[dict[str, Tier]] = {
     "direct": Tier.FAST,
     "tier2": Tier.MEDIUM,
@@ -1053,13 +1081,38 @@ class FrontDoorDispatcher:
             # the tool; the marker rides the arg to the handler.
             if tool == "screenshot" and _NO_SEND_PHOTO_RE.search(user_text or ""):
                 arg = (arg + " no-send").strip()
-            result = await tools.call(tool, arg)
+            # F-1 (owner 2026-10-01): the confirmation id is threaded here on
+            # exactly the calls where it can decide anything. DIRECTIVE 4,
+            # UNREACHABILITY STATED AT THE CALL SITE: this dispatcher holds NO
+            # confirmation channel — there is no coordinator, no pending state and
+            # no id on the wire for a routed irreversible tool, so there is no id
+            # it could pass. The MISSING PRODUCER is an owner-facing confirmation
+            # round trip for this lane (§33B.5's plan-level channel); until that
+            # exists the gate refuses at `ToolRegistry.call` and the owner reads
+            # the Arabic request instead of a silent Google write.
+            #
+            # WHY THE KEYWORD IS CONDITIONAL and not unconditional. `tools` is
+            # duck-typed `Any` at this seam, and a reversible tool's dispatch is
+            # unchanged: no keyword, so every existing two-argument `call(tool,
+            # arg)` registry double keeps working exactly as before. Passing the
+            # keyword unconditionally bought nothing (the registry default is the
+            # empty string this lane supplies anyway) and would have broken the
+            # seam's contract for 39 tools to protect 6.
+            result = await tools.call(tool, arg, **_confirmation_kwargs(tool))
         except Exception as error:  # noqa: BLE001 — a dead tool never hangs the chat
             if is_transient_tool_error(error) and self._heal_budget.may_retry(tool):
                 self._heal_budget.note_failure(tool)
                 logger.warning("dispatcher tool {!r} transient failure -> one healed retry", tool)
                 try:
-                    result = await tools.call(tool, arg)
+                    # The SAME id, deliberately: the retry is the
+                    # same owner request, so it must be able to reach the same
+                    # verdict. It is empty for the same reason as the first
+                    # attempt (see the DIRECTIVE 4 note above), and
+                    # `verify_confirmation_id` burns an id on use — a retry that
+                    # legitimately re-presents a verified id is refused as a
+                    # replay, which is the intended single-use law and not a
+                    # retry defect.
+                    result = await tools.call(tool, arg, **_confirmation_kwargs(tool))
                 except Exception as retry_error:  # noqa: BLE001 — retry spent
                     error = retry_error
                     result = None

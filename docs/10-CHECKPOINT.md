@@ -2195,6 +2195,185 @@ silently widening a confirmation path during a safety commit is the worse risk.
   persistence landed → security review. Naming it here records that it was
   considered and *withheld*, so no later agent mistakes it for an approved plan.
 
+## F-1 SHIPPED — the irreversible gate now guards the path that actually runs (2026-10-01)
+
+### The finding, and the closing statement
+
+The owner's finding was verbatim: *"a mitigation that exists only in disabled
+code, with zero enforcement on the path that actually runs."*
+
+**That sentence is no longer true.** Measured, from the tree, and asserted by
+`tests/test_live_irreversible_gate.py`:
+
+> **No irreversible tool executes on the live path
+> (`FrontDoorDispatcher.handle` → `ToolRegistry.call`) without a verified
+> confirmation.** Every member of `IRREVERSIBLE_TOOLS` that arrives without an id
+> F-2's `verify_confirmation_id` accepts is refused at the choke point, before
+> its handler runs, and the handler's external edge is never touched.
+
+`IRREVERSIBLE_TOOLS` · 7 · gated at the choke point · 6 · exempt 1 (`close`, with a
+proof, below) · reversible tools still unblocked · 39 · external effects performed
+by a refusal · **0**
+
+### What shipped, per site
+
+| Site | Obligation | Shipped |
+|---|---|---|
+| `src/tools.py:246` `ToolRegistry.call` | the gate | keyword-only `confirmation_id: str = ""`; refuses 6 names with `CONFIRM_REQUIRED_AR`, an honest ar-JO request naming the action. `IRREVERSIBLE_TOOLS` imported DEFERRED (a module-top `src.skills` import is a cycle — the same class F-2 hit with `BRIDGE_TOKEN`) |
+| `src/dispatcher.py:1101` | live path | `**_confirmation_kwargs(tool)` — empty id, **DIRECTIVE 4 unreachability stated at the call site**: this dispatcher has no coordinator, no pending state and no id on the wire for a routed irreversible tool. The MISSING PRODUCER is §33B.5's plan-level confirmation channel |
+| `src/dispatcher.py:1115` | healing retry | the same helper. `verify_confirmation_id` burns an id on use, so a retry re-presenting a verified id is refused as a replay — the intended single-use law, recorded rather than worked around |
+| `src/decision_loop.py:472` | dormant ReAct | **not double-gated, deliberately.** The original `:428` coordinator gate stays; the choke point backs it up. Its real consequence is now stated in the code: an approved irreversible step on that branch IS refused by the registry, because the approval lives in a pending record and not in a token |
+| `src/agent_manager.py:272` | autonomous | refuses fail-closed BEFORE the handler, phrased **«لحد ما تتوفّر قناة تأكيد لهاد المسار»** — pending a channel, never a ban, so §33B.5 is not painted into a corner |
+
+### The verification, and what it costs on the live path
+
+F-2's `verify_confirmation_id` (`bridge/executor.py:105`), and the honest answer to
+"can the core afford a secret read per irreversible call": **it does not do one.**
+It re-computes an HMAC-SHA256 MAC over the shared `BRIDGE_TOKEN` and compares it in
+constant time. Measured cost: a few microseconds of pure CPU — **no network call,
+no vault read, no request**. The secret resolves in-process exactly as F-2 measured
+it: process env first, then `get_settings()`, which `src/config.py:212` `lru_cache`s,
+so the `.env` file is read at most once per process. Unreachable means `""`, which
+refuses EVERY id. No new env var, no new config knob.
+
+**Latency: zero for ordinary tools.** The `IRREVERSIBLE_TOOLS` import and the
+`bridge.executor` import are both deferred inside the gate, so a reversible tool
+call touches no confirmation machinery at all. Asserted, not claimed:
+`test_the_gate_costs_an_ordinary_tool_call_nothing` reads the AST of `call` and
+finds no import statements in it.
+
+### `close` — the one exemption, and why it is a proof rather than a comment
+
+`_do_close` is a pure delegation to `PCActionCoordinator.request_close`, which is
+**itself** the confirmation channel: it demands `origin="owner_chat"`, consults the
+whitelist, prompts the owner on Telegram, and mints a SIGNED `cfm1.*` id on the
+reply, which the daemon then verifies.
+
+A gate here would have sat **in front of** that channel. «سكّر كروم» would never
+reach `request_close`, `_pending` would never be set, `handle_owner_reply` would
+never fire, and **closing an app would have become impossible**. It would also have
+forced edits to `tests/test_close_routing.py` and `tests/test_tools_matrix_p65b.py`
+— the whitelist-guard floor `CLAUDE.md` §5 declares untouchable. The first
+implementation passed `confirmation_id=""` unconditionally at both dispatcher
+sites and broke 40 tests for exactly that reason; 20 of them were that same
+over-block. This is the measured re-scope Directive 3 asks for.
+
+The exemption is EARNED, not asserted: `tests/test_live_irreversible_gate.py` drives
+the real owner round trip — unconfirmed close → daemon refusal → prompt → «نعم» →
+a signed id on the wire that `verify_confirmation_id` accepts. It cannot terminate a
+process unconfirmed. This is the same reasoning as the dormant ReAct branch keeping
+its own gate: a double gate is the same defect one layer up.
+
+### OpenClaw lane — decision **(B)**, owner-accepted
+
+`openclaw_browse` and `openclaw_desktop` are refused fail-closed at the choke point,
+and nothing was widened. **Reasoning:** `src/pc_actions.py:284` remains the only
+`mint_confirmation_id` caller and still mints for `launch` / `close` / `power`
+only, so covering this lane means teaching a NEW producer to mint for
+`openclaw.act` — a wire-shape and breaker change on F-2/F-5 territory, which is
+outside this work order's confinement (`bridge/**` is forbidden to edit). Silently
+widening a confirmation path during a safety commit is the worse risk; refusing is
+honest and is recorded here so the next agent reads a decision rather than
+rediscovering a bug. **If the owner wants the lane covered, that is a small
+follow-up work order, and it belongs BEFORE F-4.**
+
+### The three P3-D holes
+
+| Hole | Status | How |
+|---|---|---|
+| **1** — `decision_loop` sent the static `_ROUTER_PROMPT_AR`, so a `register_tool` name was unemittable from that branch | **CLOSED** | the prompt is composed live via `router_prompt()`, one line. Guarded both ways: a registered name appears, AND an empty overlay is still the base literal byte for byte |
+| **2** — `register_tool` could `setattr` a SHIPPED `_do_*` | **CLOSED at the point of USE** | `_SHIPPED_HANDLERS` snapshots all 46 shipped handlers at import; a class attribute that no longer matches is not dispatched. MEASURED hole: `file_save` is a shipped `_do_file_save` in neither `TOOL_CAPABILITIES` nor `valid_tools()`, so it sailed past R2/R3/R4. `src/evolution.py`'s `AMBIENT_AUTHORITY_NAMES` cannot help — it bans `setattr` in a synthesized PROPOSAL, not a landed registration. The refusal sits in `call` because `src/tool_overlay.py` is outside this write-set |
+| **3** — R3 unobservable by construction | **NOT CHANGED, and that is the answer** | R3 was NOT weakened. Its docstring already names the enforced law correctly, and the structural enforcement is R4 plus the registry-wide post-condition at `src/tool_overlay.py:378`. **A doc fix is needed in `src/tool_overlay.py`, which this work order forbids** — the R3 bullet reads as an active law when it is a stated one. Reported, not edited |
+
+### Tests that encoded the bug — UPDATED, never the gate weakened
+
+Every one of these drove a real external write with NO confirmation and expected
+success. Each was moved behind a genuine `mint_confirmation_id()` — the handler's
+own behaviour is still asserted end to end, and the gate was not touched:
+
+| File | Tests |
+|---|---|
+| `tests/test_tools_expansion.py` | `test_create_event_parses_and_echoes`, `test_create_event_without_suite_is_offline`, `test_create_task_parses_and_echoes`, `test_create_task_without_suite_is_offline`, `test_cloud_backup_uses_vault_and_confirms`, `test_cloud_backup_without_vault_is_honest` |
+| `tests/test_tools_matrix_p65a.py` | `test_drive_contacts_create_variants` (its four create_event / create_task assertions) |
+| `tests/test_tools_matrix_p65b.py` | `test_reminders_list_and_cancel` (its six cancel_reminder assertions) |
+| `tests/test_reminder_live.py` | `test_cancel_reminder_tool_accepts_time` |
+| `tests/test_reminder_manage.py` | `test_cancel_reminder_tool_routes_arg` (its three assertions) |
+| `tests/suite/tier1_resilience/test_openclaw_browse.py` | `test_core_browse_url_navigates_via_verb`, `test_core_browse_falls_back_to_fetch_when_browser_down`, `test_core_browse_honest_when_both_lanes_fail`, `test_core_browse_offline_without_bridge`, `test_core_browse_non_url_stays_staged_no_tunnel` |
+| `tests/suite/tier1_resilience/test_openclaw_core.py` | `test_handlers_degrade_honestly_offline`, `test_act_handler_sends_typed_envelope`, `test_browse_url_navigates_via_browse_verb`, `test_browse_without_url_is_honest_no_tunnel_call` |
+
+One id is minted per call, because `verify_confirmation_id` burns whatever it
+verifies — a shared id would be refused as a replay and the test would fail for the
+wrong reason.
+
+### Mutation check (Directive 5) — every mutant RED, each on a NAMED guard
+
+| Mutant | Named guard(s) that went RED |
+|---|---|
+| **(a)** the gate removed entirely | `test_an_irreversible_tool_without_a_confirmation_asks_instead_of_acting[all 6]`, `test_a_forged_confirmation_id_is_refused_like_no_confirmation_at_all[5 shapes]`, `test_an_expired_confirmation_id_is_refused`, `test_a_confirmation_id_is_single_use_on_the_live_path_too` |
+| **(b)** the refusal degrades to `TOOL_FAIL_AR` | the six `…asks_instead_of_acting`, plus `test_the_refusal_is_not_the_generic_failure_line[all 6]` — the guard written for exactly this |
+| **(c)** the gate blocks ALL tools | `test_every_non_irreversible_routed_tool_still_executes_without_a_confirmation` + `test_close_reaches_its_own_confirmation_channel_rather_than_a_registry_pre_emption` |
+| **(d)** `decision_loop` sends the static literal again | `test_the_decision_loop_router_prompt_names_a_registered_tool`, `test_the_decision_loop_prompt_is_the_static_base_with_an_empty_overlay` |
+| **(e)** the `agent_manager` refusal removed | `test_the_autonomous_path_refuses_an_irreversible_step[all 6]` |
+| **(f)** the hijacked-shipped-handler refusal removed | `test_a_hijacked_shipped_handler_is_refused_at_the_choke_point` |
+| **(g)** the `close` exemption widened to `create_task` | `test_an_irreversible_tool_without_a_confirmation_asks_instead_of_acting[create_task]` + the forged/expired/single-use set |
+
+**Two driver bugs were found and are recorded, because both produced a verdict
+that looked like a pass:**
+
+1. The first driver ran `python.exe pytest` instead of `python.exe -m pytest`, so
+   the repository root was never on `sys.path`. All seven mutants scored "RED" —
+   every one of them a `ModuleNotFoundError: No module named 'src'` at collection
+   time. **Zero tests had run.** The driver now refuses any non-zero exit with no
+   pass count parsed, so a collection error can never be scored as a RED.
+2. The first mutant (c) used `if tool != '__never_matches__': return None`, and
+   `return None` means PROCEED — so it WEAKENED the gate instead of widening it.
+   Corrected to an inverted condition, and the driver now ASSERTS that an
+   over-blocking mutant is caught by the no-over-blocking guard specifically. A gate
+   that over-blocks with no guard naming it is the same defect as no gate.
+
+**Any guard that was NOT red before the fix, stated plainly:** the two `close`
+guards (`test_close_reaches_its_own_confirmation_channel_rather_than_a_registry_pre_emption`
+and `test_close_still_cannot_terminate_a_process_without_a_verified_confirmation`),
+`test_every_non_irreversible_routed_tool_still_executes_without_a_confirmation`, and
+`test_the_decision_loop_prompt_is_the_static_base_with_an_empty_overlay`. They were
+green at `67f8f90` because they pin behaviour the fix had to PRESERVE — `close`
+already had a live confirmation channel, and seam 1's byte-for-byte guarantee
+already held. They are load-bearing as regression guards, not as RED-first proof.
+
+### Measured numbers (re-derived from the tree, not asserted)
+
+```
+gate file          tests/test_live_irreversible_gate.py — 43 passed
+suite (excl live_harness)  2,702 passed / 4 skipped / 1 xfailed / 0 failed
+baseline before F-1          2,658 passed / 5 skipped / 1 xfailed / 0 failed
+tiered coverage   TOTAL 92.3%  (was 92.0%)  · gate PASSED, threshold >=90.0% unchanged
+ruff check        clean
+ruff format       clean
+security_gate     OK
+docs_guard        OK — 16 canonical files
+```
+
+2,702 vs the 2,659 baseline in the work order: +43 new guards, and the earlier
+5-skip/4-skip difference is the one network-dependent test that varies run to run
+(reported separately, never counted as a pass). Skips: 4. Zero NEW failures. The
+2 `live_harness` flakes (`test_h04_ttft_monitor`, `test_h06_joda_dialogues`) are
+free-provider noise, pre-existing, and **not weakened**.
+
+### Carried forward from F-1
+
+* **The live path has no confirmation producer.** F-1 closed the enforcement hole;
+  it did not build the channel. `create_event`, `create_task`, `cancel_reminder`,
+  `cloud_backup`, `openclaw_browse` and `openclaw_desktop` are now SAFE and
+  UNREACHABLE from chat — the owner reads a confirmation request and no Google write
+  happens. Making them work again needs §33B.5's plan-level confirmation, which is
+  the next design item, not a patch.
+* **OpenClaw coverage** is (B), refused, pending an owner decision.
+* **`src/tool_overlay.py`'s R3 docstring** wants a wording fix; the file is outside
+  this work order's write-set.
+* **`register_tool`'s R2 still does not police a shipped handler** — the point-of-use
+  refusal in `call` catches the CONSEQUENCE. The registration itself is still
+  accepted and then refused at dispatch, which is safe but wasteful.
+
 ### Carried forward, still open
 
 * **V-9** — `security_log` unbounded on the pre-existing non-bad-token paths.
