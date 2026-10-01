@@ -192,18 +192,31 @@ def test_power_not_listed_unknown_action_and_spawn_fail(tmp_path):
 
 
 def test_open_path_walls_and_open(tmp_path):
+    """F-3 REPAIR (directive §5) — this test asserted the hole, not the wall.
+
+    The pre-F-3 body built the Executor with NO roots at all and then required
+    `C:\\Users\\note.txt` to open: "walls and open" with an absolute path
+    outside every root. F-3 closes that hole, so the assertion was wrong and
+    the TEST is what moves — the fix is not reverted to keep it green."""
     opened = []
 
     async def _spy(path):
         opened.append(path)
 
-    executor = Executor(_guard(tmp_path))
+    root = tmp_path / "open_root"
+    root.mkdir()
+    executor = Executor(_guard(tmp_path), open_roots=(root,))
     executor._open = _spy
     assert "UNC" in asyncio.run(executor.open_path("\\\\srv\\share\\f.txt")).detail
     assert "traversal" in asyncio.run(executor.open_path("..\\secret.txt")).detail
     assert "whitelist" in asyncio.run(executor.open_path("evil.exe")).detail
     out = asyncio.run(executor.open_path("C:\\Users\\note.txt"))
-    assert out.status == "ok" and opened == ["C:\\Users\\note.txt"]
+    assert out.status == "error" and "outside_allowed_roots" in out.detail
+    assert opened == []
+    inside = root / "note.txt"
+    inside.write_text("x", encoding="utf-8")
+    ok = asyncio.run(executor.open_path(str(inside)))
+    assert ok.status == "ok" and opened == [str(inside.resolve())]
 
 
 def test_file_roots_missing_wall(tmp_path):

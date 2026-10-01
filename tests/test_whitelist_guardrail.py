@@ -180,9 +180,13 @@ async def test_restricted_power_always_requires_confirmation(tmp_path: Path):
 
 
 async def test_open_path_confined_and_guarded(tmp_path: Path):
-    """AC6 — safe doc opens; exe outside whitelist pends; traversal/UNC refused."""
+    """AC6 — safe doc inside a root opens; exe/double-click equivalents and
+    traversal/UNC/absolute-outside-roots are refused. F-3 EXTENDED this test
+    (it never weakened an assertion): the pre-F-3 version built the Executor
+    with NO roots and called a tmp_path document "inside C:/", which is not a
+    confinement — the root is now explicit and every refusal is asserted."""
     spy, open_spy = SpawnSpy(), OpenSpy()
-    executor = Executor(Guard(_write_whitelist(tmp_path, WHITELIST)))
+    executor = Executor(Guard(_write_whitelist(tmp_path, WHITELIST)), open_roots=(tmp_path,))
     executor._spawn = spy
     executor._open = open_spy
     doc = tmp_path / "report.txt"
@@ -195,6 +199,18 @@ async def test_open_path_confined_and_guarded(tmp_path: Path):
     assert traversal.status == "error" and "outside_allowed_roots" in traversal.detail
     unc = await executor.open_path(r"\\server\share\file.txt")
     assert unc.status == "error" and "outside_allowed_roots" in unc.detail
+    # F-3: an absolute path on another drive reaches nothing without a root
+    outside = await executor.open_path("C:/Windows/System32/drivers/etc/hosts")
+    assert outside.status == "error" and "outside_allowed_roots" in outside.detail
+    # F-3: the double-click equivalents the pre-F-3 set let through
+    for suffix in (".lnk", ".url", ".jar", ".hta", ".html"):
+        double = tmp_path / f"payload{suffix}"
+        double.write_text("x", encoding="utf-8")
+        refused = await executor.open_path(str(double))
+        assert refused.status == "error", suffix
+        assert "whitelist" in refused.detail, (suffix, refused.detail)
+    assert open_spy.calls == [str(doc.resolve())]  # nothing above ever opened
+    assert spy.calls == []
 
 
 async def test_non_owner_origin_intent_refused(tmp_path: Path):
