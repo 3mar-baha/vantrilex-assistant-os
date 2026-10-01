@@ -67,3 +67,20 @@ litellm_config.yaml
 
 # Obsidian local UI state (pane layout, open files — machine-specific)
 .obsidian/workspace.json
+
+# The Sara Agent full analysis report, vendored locally as a READING COPY.
+# Authoritative home: https://drive.google.com/drive/folders/1_iQ-w8ekzDW3xsIfnZ1VS83SMqocMtpd
+# (REPORT.md assembly, part-a..part-h sections, INDEX.md map).
+#
+# NOT committed on purpose, and the reason is not size. The report is PINNED to
+# a817efa. Committing it into the governed tree would freeze a dead snapshot that
+# future agents will read as current documentation -- the same documentation-drift
+# failure the 2026-10-01 radical-truth pass just cleaned up, re-created as a
+# single 5,201-line file. docs_guard.py does not police it, so nothing would catch
+# the drift.
+#
+# What IS tracked, and is the versioned home for the decisions: this ledger plus
+# docs/architecture/CROSS_FRAMEWORK_ANALYSIS_AND_SELF_EVOLUTION.md. The tree
+# records WHAT was decided; the Drive folder holds the analysis behind it.
+# Nothing is deleted -- the directory stays on disk, git simply stops seeing it.
+Sara Agent - Full Analysis Report/

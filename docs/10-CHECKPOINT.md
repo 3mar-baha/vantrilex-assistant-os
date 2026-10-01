@@ -14,6 +14,33 @@ Upstream toolkit inventory: `worldflowai/everything-claude-code` · `mattpocock/
 `dietrichgebert/ponytail` · `amElnagdy/guard-skills` · `3mar-baha/universal-agentic-os` ·
 `msitarzewski/agency-agents`.
 
+## Where the analysis lives, and where the decisions live (2026-10-01)
+
+A full analysis report of this codebase drives the current programme. It has two
+homes, and conflating them is the mistake:
+
+| Artifact | Location | Content |
+|---|---|---|
+| **The analysis** | [Drive folder](https://drive.google.com/drive/folders/1_iQ-w8ekzDW3xsIfnZ1VS83SMqocMtpd) — `INDEX.md` map, `part-a`…`part-h` sections, `REPORT.md` assembly | the reasoning, `file:line` evidence, patch drafts |
+| **The decisions** | this ledger + `docs/architecture/CROSS_FRAMEWORK_ANALYSIS_AND_SELF_EVOLUTION.md` | what was decided, what shipped, what is still RED |
+
+**The report is PINNED to `a817efa`; the tree has moved past it.** Treat every
+`file:line` in it as a claim to re-verify before building on it, not a location
+to trust. P3-D already landed under that rule, and it contradicted the report's
+own patch draft: §41's F-1 draft assumed `ToolRegistry.call` takes a `context`
+dict, and it does not — the signature is `call(self, tool: str, arg: str = "")`.
+The report invited that check explicitly ("adapt to reality"); the reality
+differed, and the owner approved a different signature.
+
+A local copy is vendored at `Sara Agent - Full Analysis Report/` as a **reading
+copy only**. It is deliberately **gitignored** and deliberately **not** committed:
+it is pinned to a commit this repository has since left, so tracking it would
+freeze a dead snapshot that a future agent reads as current documentation.
+`docs_guard.py` does not police it, so nothing would catch that drift. It also
+duplicates nothing — every conclusion that matters is recorded in the tracked
+artifacts above, re-derived from the tree at each milestone. Nothing is deleted;
+the directory stays on disk as the reading copy.
+
 ---
 
 ## Sprint 1 — Foundation (gateway + voice + dialect + dispatcher) — COMPLETE (2026-08-29)
