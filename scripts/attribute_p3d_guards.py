@@ -92,8 +92,14 @@ BARRIER = ("tests/test_p3d_seams.py", "tests/test_p3d_registration.py")
 ORDER: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("S1-router-prompt", ("router_prompt", "ROUTER_PROMPT", "router_calls")),
     ("S-irreversible-gate", ("IRREVERSIBLE_TOOLS", "reversible", "IRREVERSIBLE")),
-    ("P6-collision-live", ("is_valid_task_name", "_COLLIDING_TOOL_NAMES", "collision", "EvolutionTask")),
-    ("P1-handler", ("_do_", "HANDLER_PREFIX", "ToolRegistry", "handler", "TOOL_FAIL_AR", "getattr")),
+    (
+        "P6-collision-live",
+        ("is_valid_task_name", "_COLLIDING_TOOL_NAMES", "collision", "EvolutionTask"),
+    ),
+    (
+        "P1-handler",
+        ("_do_", "HANDLER_PREFIX", "ToolRegistry", "handler", "TOOL_FAIL_AR", "getattr"),
+    ),
     ("P5-guide", ("_SKILLS", "narration", "shipped", "guide")),
     ("P2-capability", ("TOOL_CAPABILITIES", "markers_for", "capability_ids", "record")),
     ("P3-route", ("valid_tools",)),
@@ -117,7 +123,9 @@ def function_surfaces() -> dict[str, str]:
     for name in BARRIER:
         tree = ast.parse(pathlib.Path(name).read_text(encoding="utf-8"))
         for node in ast.walk(tree):
-            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name.startswith("test_"):
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name.startswith(
+                "test_"
+            ):
                 # setdefault: a duplicate name across the two files keeps the first.
                 mapping.setdefault(node.name, surface_of(ast.dump(node)))
     return mapping
@@ -126,9 +134,20 @@ def function_surfaces() -> dict[str, str]:
 def collect() -> list[str]:
     """Collected node ids from pytest, so multiplicity is pytest's, not ours."""
     proc = subprocess.run(
-        [sys.executable, "-m", "pytest", *BARRIER, "-q", "-p", "no:cacheprovider",
-         "--no-cov", "--collect-only"],
-        capture_output=True, text=True, check=False,
+        [
+            sys.executable,
+            "-m",
+            "pytest",
+            *BARRIER,
+            "-q",
+            "-p",
+            "no:cacheprovider",
+            "--no-cov",
+            "--collect-only",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
     )
     if proc.returncode != 0:
         sys.stderr.write(proc.stdout + proc.stderr)
@@ -138,7 +157,9 @@ def collect() -> list[str]:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--ids", action="store_true", help="print every node id, not just functions")
+    parser.add_argument(
+        "--ids", action="store_true", help="print every node id, not just functions"
+    )
     args = parser.parse_args()
 
     surfaces = function_surfaces()
@@ -160,7 +181,9 @@ def main() -> int:
     print()
     for surface in sorted(buckets, key=lambda s: (-len(buckets[s]), s)):
         cases = buckets[surface]
-        print(f"--- {surface}: {len(cases)} cases / {len({i.split('::')[-1].split('[')[0] for i in cases})} functions")
+        print(
+            f"--- {surface}: {len(cases)} cases / {len({i.split('::')[-1].split('[')[0] for i in cases})} functions"
+        )
         if args.ids:
             for test_id in sorted(cases):
                 print(f"      {test_id}")
@@ -170,8 +193,11 @@ def main() -> int:
         print()
 
     if residue:
-        print("WARNING: unattributed ids exist -- a reader who disagrees with an "
-              "attribution rule should expect to find it here.", file=sys.stderr)
+        print(
+            "WARNING: unattributed ids exist -- a reader who disagrees with an "
+            "attribution rule should expect to find it here.",
+            file=sys.stderr,
+        )
         return 1
     return 0
 
