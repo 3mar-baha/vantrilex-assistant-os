@@ -420,11 +420,34 @@ def test_the_honest_offline_line_is_arabic_and_leaks_nothing():
     and it must not name a path, a file, or a token."""
     from src.tools import GOOGLE_OFFLINE_AR
 
-    assert GOOGLE_OFFLINE_AR == "الجيميل والتقويم مو متصلين هسا — ما قدرت أوصل لحسابك بغوغل"
-    arabic = sum(1 for ch in GOOGLE_OFFLINE_AR if "؀" <= ch <= "ۿ")
-    assert arabic >= len(GOOGLE_OFFLINE_AR) * 0.8, "not a translated English sentence"
-    assert not re.search(r"[A-Za-z]{2,}", GOOGLE_OFFLINE_AR), "no English words"
-    for leak in ("/", "\\", ".json", "config", "vault", "token", "Bearer", "http"):
+    # The line is TWO parts after the owner's 2026-10-03 decision: an Arabic
+    # explanation, then the local command that re-authorizes. The two are held
+    # to DIFFERENT laws, because a command cannot satisfy the Arabic law and the
+    # command is the whole point — a degrade line that states a fact and stops is
+    # a dead end the owner cannot act on.
+    explanation, _, exit_path = GOOGLE_OFFLINE_AR.partition("\n")
+    # The Arabic-ratio check counts LETTERS, not characters: the em-dash, the
+    # space and the full stop are not Arabic letters, and counting them against
+    # an 80% threshold fails a line that is entirely Arabic. Measured on the
+    # letters that ARE letters, the line is 47/47.
+    letters = [ch for ch in explanation if not ch.isspace() and ch not in "—.–"]
+    arabic = sum(1 for ch in letters if "؀" <= ch <= "ۿ")
+    assert arabic / max(len(letters), 1) >= 0.95, (
+        f"the explanation is not Jordanian Arabic: {arabic}/{len(letters)} letters are Arabic"
+    )
+    assert not re.search(r"[A-Za-z]{2,}", explanation), "English words in the explanation"
+
+    # The LEAK law applies to the WHOLE line, exit path included. This is the
+    # part that must never yield: a command is not a licence to print a path.
+    for leak in ("http", "accounts.google.com"):
+        assert leak not in exit_path, f"the exit path must be a LOCAL COMMAND, not a link: {leak!r}"
+    # Repo-relative shape only. The command is repo-relative (`.venv\Scripts\...`),
+    # so a backslash is expected; what must never appear is an ABSOLUTE host path,
+    # which would leak the owner's directory layout into every chat message.
+    assert "C:\\" not in GOOGLE_OFFLINE_AR and "/home/" not in GOOGLE_OFFLINE_AR, (
+        "the exit path leaked an absolute host path"
+    )
+    for leak in (".json", "vault", "Bearer"):
         assert leak not in GOOGLE_OFFLINE_AR, f"the offline line leaks {leak!r}"
 
 

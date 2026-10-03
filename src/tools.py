@@ -25,9 +25,31 @@ from src.action_log import record as _record_action
 from src.bridge_server import BridgeOffline
 from src.telemetry import OFFLINE_TEXT_AR
 
-GOOGLE_OFFLINE_AR = "الجيميل والتقويم مو متصلين هسا — ما قدرت أوصل لحسابك بغوغل"
+#: Re-auth entry points, as COMMANDS the owner runs on Sara's machine.
+#:
+#: NOT URLs, deliberately. The Google flow binds a LOOPBACK listener
+#: (`src/google_auth.py` -> `authorize_interactive`), prints a consent URL, and
+#: captures the callback, so the authorization request needs a `redirect_uri`
+#: pointing at that running listener plus a fresh CSRF `state`. Both exist only
+#: while the command is running, so there is no permanent link to print — a bare
+#: `accounts.google.com` URL cannot complete the flow and is a dead end with a
+#: hyperlink attached. The same command is what `sara.ps1:218,220` tells the owner.
+GOOGLE_REAUTH_CMD: Final[str] = ".venv\\Scripts\\python.exe -m src.google_auth"
+
+#: The bridge is local, so ITS exit path is starting the daemon — not a command
+#: the owner can run to fix it remotely.
+BRIDGE_RECOVER_CMD: Final[str] = ".venv\\Scripts\\python.exe -m src.main"
+
+#: A degrade line that states a fact and then STOPS is a dead end: the owner reads
+#: it, learns nothing actionable, and the tool is useless to them. Owner decision
+#: 2026-10-03 — every repairable degrade carries its way out. The reason comes
+#: first (so it still reads as an explanation), then the exit path.
+GOOGLE_OFFLINE_AR = (
+    "الجيميل والتقويم مو متصلين هسا — ما قدرت أوصل لحسابك بغوغل.\n"
+    f"لتعيد التوصيل اكتب على جهازك: {GOOGLE_REAUTH_CMD}"
+)
 TOOL_FAIL_AR = "حصل عطل بسيط وما قدرت أكمّل الطلب — جرب مرة ثانية"
-LAUNCH_OFFLINE_AR = "ما بقدر أتحكم بالجهاز هسا — الجسر مو متصل"
+LAUNCH_OFFLINE_AR = f"ما بقدر أتحكم بالجهاز هسا — الجسر مو متصل.\nلتشغّل الجسر: {BRIDGE_RECOVER_CMD}"
 NO_MAIL_AR = "ما في بريد جديد هسا، كل شي مقروء"
 NO_EVENTS_AR = "ما في مواعيد بالـ24 ساعة الجاية"
 NO_TASKS_TODAY_AR = "ما في مهام مستحقة اليوم"
