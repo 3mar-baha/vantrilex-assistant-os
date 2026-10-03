@@ -4327,6 +4327,106 @@ hash-verified before and after. No forbidden file was staged. **Zero new package
 environment variable, no new configuration knob** — the cap and the fallback are named
 module constants, not knobs.
 
+## N6 — Citation guards: a `file:line` claim must point somewhere real
+
+**The gap, measured not assumed.** N2's mutation check injected four false claims into
+docstrings — a wrong `file:line`, a wrong count, «NINE HUNDRED test modules», «all six
+deny-listed names» — and ran the whole gate against the mutant. pytest, `ruff check`,
+`ruff format`, `scripts/docs_guard.py` and `scripts/security_gate.py` all reported GREEN.
+No guard in this repository detects docstring inaccuracy. N6 closes the machine-checkable
+part of that hole and only that part.
+
+**Two guards, one new file** (`tests/test_citation_guards.py`). Guard 1 extracts
+`path.py:NNN` and `NNN-MMM` from **docstrings and comments only**, across `src/` and
+`tests/`, and asserts every cited number lies inside the target's CURRENT length. Guard 2
+discovers the Class-B set rather than assuming it and asserts the named symbol resolves at
+the cited line.
+
+**Coverage measured at this commit** (all figures re-derived by script, never typed):
+
+| Segment | Citations extracted | Guard 1 checks | Skipped as unresolvable |
+|---|---|---|---|
+| `src/` | 28 | 28 | 0 |
+| `tests/` | 96 | 96 | 0 |
+| `docs/` (coverage only) | 441 | **not policed** | 33 would fail if policed |
+
+Class B: **28 pairings discovered — 8 proved, 20 deferred, 0 unaccounted.**
+
+**The boundary, stated in the module docstring.** Class A (a bare `file:line` carries no
+second claim), Class D (counts as prose) and Class E (behavioural prose) are **NOT GUARDED
+BY DESIGN**. Class D in particular is N7's lane: pinning those numbers would guarantee a
+collision with N7 and pull this node into N7's write-set. `docs/` is READ for coverage
+only — nothing in the guard asserts a `docs/` citation is correct, so it can never go red
+because a document is stale.
+
+### Deferred with reason — owner decision 2026-10-03, option (a): RECORDED, NOT FIXED
+
+Every entry below is a discovered Class-B claim whose symbol does **not** resolve at the
+line it names. A guard node that also rewrites prose becomes a maintenance sink, so none
+of this was fixed here.
+
+| Where written | Citation → symbol | Why it cannot be checked |
+|---|---|---|
+| `src/action_log.py:97` | `src/vault.py:353` → `VaultClient` | **STALE** — 353 is a `#:` comment; the class is at 520 |
+| `src/action_log.py:301` | `src/vault.py:353` → `VaultClient.__init__` | **STALE** — same line; the real span is 520-835 |
+| `src/bot_shell.py:4` | `src/dispatcher.py:805` → `handle` | **HALF-RANGE** — 805 is the class line; the same sentence gives `handle` at :885, which is exact |
+| `src/tool_overlay.py:9` | `src/tools.py:287` → `ToolRegistry._do_<name>` | **SYNTHETIC NAME** — the line is right; `<name>` is a runtime template |
+| `tests/test_action_audit_log.py:25` | `src/vault.py:479` → `append_section` | **STALE** — 479 is inside `classify_rate_limit`; the def is at 674 |
+| `tests/test_action_audit_log.py:26`, `:653` | `src/vault.py:432` → `upsert` | **STALE** — 432 is inside `_seconds`; `upsert` is at 627 |
+| `tests/test_bot_shell_repl.py:12` | `src/dispatcher.py:744` → `handle` | **STALE BOTH HALVES** — 744 is in `_keyword_net`; `:824` is a comment in `__init__` |
+| `tests/test_greeter_persona_parity.py:4` | `src/bot.py:195` → `SARA_PERSONA_AR` | **IMPORT** — the name has no `def` in `bot.py`; it comes from `persona.py` |
+| `tests/test_greeter_persona_parity.py:324` | `src/dispatcher.py:1076` → `_plain_messages` | **STALE**, and the citing file says so itself one line above |
+| `tests/test_makefile_gate.py:28` | `tests/test_quality_gate.py:65` → `make` | **FALSE POSITIVE** — `make` is the English word; the line is blank |
+| `tests/test_p3d_seams.py:16` | `src/cognition.py:418` → `deduce` | **STALE PAIRING** — 418 is in `evaluate_candidates`; `deduce` is at 527 |
+| `tests/test_p3d_seams.py:18` | `src/cognition.py:550` → `_goal_markers` | **STALE** — 550 is in `deduce`; the def is at 393 |
+| `tests/test_p3d_seams.py:25` | `src/evolution.py:253` → `_COLLIDING_TOOL_NAMES` | **OFF-BY-ONE-BLOCK** — 253 is the `#:` comment above the 257 assignment |
+| `tests/test_p3d_seams.py:48` | `src/skills/capabilities.py:353` → `IRREVERSIBLE_TOOLS` | **STALE** — 353 is `"reversible": True,`; the name is at 439 |
+| `tests/test_p3d_seams.py:462` | `src/skills/capabilities.py:358` → `markers_for` | **STALE** — 358 is a bare `#`; the def is at 444 |
+| `tests/test_p3d_seams.py:497` | `src/dispatcher.py:740` → `parse_thought` | **CROSS-FILE, AMBIGUOUS** — one line, two citations, one symbol |
+| `tests/test_p3d_seams.py:506` | `src/cognition.py:430` → `deduce` | **STALE PAIRING** — 430 is in `evaluate_candidates` |
+| `tests/test_tool_overlay.py:665` | `src/decision_loop.py:217` → `_VALID_TOOLS` | **CROSS-FILE** — `_VALID_TOOLS` is not in `decision_loop.py` at all |
+| `tests/test_tool_overlay.py:694` | `src/cognition.py:416` → `_TOOL_GOALS` | **STALE** — 416 is `lead = clean[:_LEAD_WINDOW]`; the name is at 32 |
+
+### The RED demonstration, and the one guard that was NOT red before the fix
+
+1. **Live-corpus RED (Guard 2).** The RED commit ships an incomplete `DEFERRED_CLASS_B`,
+   and `test_every_symbol_bearing_citation_still_resolves` fails with **17 offending
+   pairings printed**, one per line, each naming the citing file, the citation and the
+   symbol. The fix commit adds the seventeen entries with their reasons.
+2. **Mutate-and-restore (Guard 1).** `src/tools.py:287` → `src/tools.py:9999` in
+   `src/tool_overlay.py:9`. Observed RED:
+   `src/tool_overlay.py:9  `src/tools.py:9999` -> PAST EOF (target src/tools.py has 1502
+   lines; cited [9999])`. Restored from a byte-exact backup;
+   **sha256 `d201e91292c72183d71818d02dc5d76dbfc58f1400cb027367f0c7edf4e86813` identical
+   before and after**, `git diff --stat` empty, guard GREEN.
+3. **Scratch-fixture RED, held in the file.** Four guards build a wrong citation inside a
+   `tmp_path` tree — never a live citation — and assert red, then green, including the
+   UNRESOLVED and AMBIGUOUS refusals and a parametrized proof over all three citation
+   dialects (repo-root-relative, segment-relative, bare-module).
+
+**Stated plainly: one guard was NOT red before the fix.** The mutate-and-restore was first
+attempted with a shell rewrite that added a byte-order mark. `ast.parse` then refused
+`src/tool_overlay.py`, the extractor returned an empty region list for it, the `src/`
+segment fell from 28 to 21 citations — still above its floor of 20 — and **both guards
+reported GREEN**. That is the exact «skips what it cannot parse» failure this node exists
+to prevent, hiding inside the anti-vacuity guard itself. The fix commit raises
+`UnreadableSource` instead of swallowing it, asserts the refusal in *both* Guard 1 and the
+anti-vacuity guard, and adds `test_guard_one_reports_a_source_file_it_cannot_read`. The
+same BOM injection now turns both red, and the restore is sha256-verified again.
+
+**The ceiling, unchanged and not softened.** This guard proves REFUSALS and RESOLUTIONS. It
+cannot prove a claim is *right* — only that it points somewhere real. A wrong-but-plausible
+citation, and a wrong count, both still pass.
+
+### Write-set
+
+`tests/test_citation_guards.py` (new) and this file. **No `src/` edit, no other doc edit,
+none of N7's 18 files.** `src/persona.py` hash-verified before and after:
+`8b972942e785880a3de66121e7f808666250ed2f`. No forbidden file was staged. Zero new
+packages, no new environment variable, no new configuration knob. `ruff format --check`
+remains red at HEAD on the **inherited** N3 code fence in this file and was not touched —
+verified with `--diff` that N6 adds no new instance.
+
 - [07 — Implementation Plan](./07-IMPLEMENTATION-PLAN.md)
 - [11 — Testing](./11-TESTING.md)
 - [Objectives Ledger](./reports/OBJECTIVES_LEDGER_MET_VS_PENDING.md)

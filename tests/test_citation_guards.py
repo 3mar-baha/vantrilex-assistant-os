@@ -132,19 +132,89 @@ MIN_DOCS_CITATIONS = 50
 #: maintenance sink, and a stale sentence that is loudly listed beats a fresh sentence
 #: nobody reviewed.
 DEFERRED_CLASS_B: dict[tuple[str, str, str], str] = {
+    ("src/action_log.py", "src/vault.py:353", "VaultClient"): (
+        "STALE. Line 353 is a module-level `#:` comment about the rate-limit backoff "
+        "window; `class VaultClient` is at 520. The claim is about where a secret gets "
+        "registered, not about the class's own line, so no AST span carries it."
+    ),
+    ("src/action_log.py", "src/vault.py:353", "VaultClient.__init__"): (
+        "STALE, and the same line as the entry above. The prose names "
+        "`VaultClient.__init__`, whose real span is inside the class at 520-835; 353 is "
+        "not in it."
+    ),
+    ("src/bot_shell.py", "src/dispatcher.py:805", "handle"): (
+        "HALF-RANGE CLAIM, not a stale one. Line 805 is `class FrontDoorDispatcher:` and "
+        "the same parenthetical gives `handle` at :885, which IS exact. One symbol, two "
+        "citations: pairing 805 with `handle` is a reading, not a decidable claim."
+    ),
     ("src/tool_overlay.py", "src/tools.py:287", "ToolRegistry._do_<name>"): (
         "SYNTHETIC NAME. The cited line is in fact the right one - "
         '`handler = getattr(self, f"_do_{tool}", None)` - but `<name>` is a template '
         "segment, and no AST span can carry a name the source composes at runtime."
     ),
+    ("tests/test_action_audit_log.py", "src/vault.py:479", "append_section"): (
+        "STALE. Line 479 is inside `classify_rate_limit` (451-517); `append_section` is at 674-694."
+    ),
+    ("tests/test_action_audit_log.py", "src/vault.py:432", "upsert"): (
+        "STALE. Line 432 is inside `_seconds` (422-436) and `upsert` is at 627-635. The "
+        "citation appears twice in the citing file; one entry covers both."
+    ),
+    ("tests/test_bot_shell_repl.py", "src/dispatcher.py:744", "handle"): (
+        "STALE ON BOTH HALVES. Line 744 is inside `_keyword_net` (672-771), and the same "
+        "parenthetical puts `handle` at :824, which is a comment inside `__init__`; "
+        "`handle` is at 885."
+    ),
+    ("tests/test_greeter_persona_parity.py", "src/bot.py:195", "SARA_PERSONA_AR"): (
+        "IMPORT, NOT A DEFINITION. `SARA_PERSONA_AR` has no `def` in `src/bot.py` - it is "
+        "imported from `src/persona.py` - so the claim is about an imported binding and "
+        "no span in the cited file can host it."
+    ),
+    ("tests/test_greeter_persona_parity.py", "src/dispatcher.py:1076", "_plain_messages"): (
+        "STALE, and the citing file says so itself: the line above records that "
+        "`_plain_messages` is at 1159. Line 1076 is inside `_tool_lane` (1056-1156)."
+    ),
     ("tests/test_makefile_gate.py", "tests/test_quality_gate.py:65", "make"): (
         "DISCOVERY FALSE POSITIVE. `make` is the English word in the prose, not a Python "
-        "symbol: no span, and no token on that line (the line is blank)."
+        "symbol: no span, and no token on that line (the line is blank). Recorded so the "
+        "pairing is visibly rejected rather than quietly unpaired."
+    ),
+    ("tests/test_p3d_seams.py", "src/cognition.py:418", "deduce"): (
+        "STALE PAIRING. Line 418 is inside `evaluate_candidates` (404-495); `deduce` is "
+        "at 527-559. The seam is real, but the named function is not the enclosing one."
+    ),
+    ("tests/test_p3d_seams.py", "src/cognition.py:550", "_goal_markers"): (
+        "STALE. Line 550 is inside `deduce` (527-559); `_goal_markers` is at 393-401."
+    ),
+    ("tests/test_p3d_seams.py", "src/evolution.py:253", "_COLLIDING_TOOL_NAMES"): (
+        "OFF-BY-ONE-BLOCK. Line 253 is the `#:` comment four lines above the `Final` "
+        "assignment at 257-259. Adjacent-but-not-covering is not a proof, and widening the "
+        "rule to «a span starting within N lines» would be exactly the tolerance fudge "
+        "this node declines to buy."
+    ),
+    ("tests/test_p3d_seams.py", "src/skills/capabilities.py:353", "IRREVERSIBLE_TOOLS"): (
+        'STALE. Line 353 is `"reversible": True,` inside the `_CAPABILITIES` literal; '
+        "`IRREVERSIBLE_TOOLS` is at 439-441."
+    ),
+    ("tests/test_p3d_seams.py", "src/skills/capabilities.py:358", "markers_for"): (
+        "STALE. Line 358 is a bare `#` comment; `markers_for` is at 444-445."
     ),
     ("tests/test_p3d_seams.py", "src/dispatcher.py:740", "parse_thought"): (
         "CROSS-FILE ATTRIBUTION, AMBIGUOUS PAIRING. One line carries two citations "
         "(`src/dispatcher.py:740` and `src/decision_loop.py:221`) and one symbol. "
-        "`parse_thought` lives in `src/decision_loop.py`, not in `src/dispatcher.py`."
+        "`parse_thought` lives in `src/decision_loop.py`, not in `src/dispatcher.py`; "
+        "which of the two citations it modifies is a reading, not a decidable fact."
+    ),
+    ("tests/test_p3d_seams.py", "src/cognition.py:430", "deduce"): (
+        "STALE PAIRING. Line 430 is inside `evaluate_candidates`; `deduce` is at 527-559."
+    ),
+    ("tests/test_tool_overlay.py", "src/decision_loop.py:217", "_VALID_TOOLS"): (
+        "CROSS-FILE ATTRIBUTION. `_VALID_TOOLS` is not defined in `src/decision_loop.py` "
+        "- it is read from `src/dispatcher.py` - and line 217 is a comment inside "
+        "`parse_thought`. The symbol the sentence names is not in the file it cites."
+    ),
+    ("tests/test_tool_overlay.py", "src/cognition.py:416", "_TOOL_GOALS"): (
+        "STALE. Line 416 is `lead = clean[:_LEAD_WINDOW]` inside `evaluate_candidates`; "
+        "`_TOOL_GOALS` is assigned at 32-100."
     ),
 }
 
@@ -194,6 +264,18 @@ class Pairing:
 # ── the extractor: docstrings and comments, never code ─────────────────────────────
 
 
+class UnreadableSource(RuntimeError):
+    """A policed ``.py`` file the extractor cannot read.
+
+    It is RAISED rather than swallowed. A file that will not parse contributes ZERO
+    citations, so swallowing the error drops that file out of the corpus and shrinks the
+    number Guard 1 checks — which is precisely the «skip what you cannot parse» failure
+    this node exists to prevent. Found by the RED demonstration: a byte-order mark
+    injected into a live module made the guard go vacuously green while reporting the
+    segment as still covered, because the segment total stayed above its floor.
+    """
+
+
 def _code_prose_regions(path: Path) -> list[tuple[int, str]]:
     """``(lineno, text)`` for every physical line of every docstring, plus every comment.
 
@@ -207,8 +289,8 @@ def _code_prose_regions(path: Path) -> list[tuple[int, str]]:
     regions: list[tuple[int, str]] = []
     try:
         tree = ast.parse(source)
-    except SyntaxError:
-        return regions
+    except SyntaxError as exc:
+        raise UnreadableSource(f"cannot parse ({exc.msg} at line {exc.lineno})") from exc
     for node in ast.walk(tree):
         if not isinstance(node, (ast.Module, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)):
             continue
@@ -221,9 +303,29 @@ def _code_prose_regions(path: Path) -> list[tuple[int, str]]:
         for token in tokenize.generate_tokens(io.StringIO(source).readline):
             if token.type == tokenize.COMMENT:
                 regions.append((token.start[0], token.string))
-    except (tokenize.TokenError, IndentationError, SyntaxError):
-        return regions
+    except (tokenize.TokenError, IndentationError, SyntaxError) as exc:
+        raise UnreadableSource(f"cannot tokenize ({exc})") from exc
     return regions
+
+
+def _unreadable_sources(root: Path, segments: tuple[str, ...]) -> list[str]:
+    """Every policed source file the extractor had to give up on. Never silently empty.
+
+    Found by the RED demonstration rather than by inspection: injecting a byte-order mark
+    into a live module made that module contribute zero citations, the segment total fell
+    from 28 to 21 — still above the floor of 20 — and BOTH guards reported green. A file
+    that cannot be read is therefore a refusal, exactly like an unresolvable path.
+    """
+    unreadable: list[str] = []
+    for segment in segments:
+        if segment == DOCS_SEGMENT:
+            continue
+        for path in _segment_files(root, segment, ".py"):
+            try:
+                _code_prose_regions(path)
+            except UnreadableSource as exc:
+                unreadable.append(f"{path.relative_to(root).as_posix()}: {exc}")
+    return unreadable
 
 
 def _markdown_prose_regions(path: Path) -> list[tuple[int, str]]:
@@ -456,9 +558,11 @@ def test_every_file_line_citation_points_inside_the_file() -> None:
     citation.
     """
     problems = _eof_violations(REPO, CODE_SEGMENTS)
+    problems += _unreadable_sources(REPO, CODE_SEGMENTS)
     assert not problems, _report(
-        f"{len(problems)} citation(s) point nowhere real. Re-point or delete each. This "
-        f"guard does not skip what it cannot resolve.",
+        f"{len(problems)} citation(s) point nowhere real, or a policed file could not be "
+        f"read at all. Re-point or delete each. This guard does not skip what it cannot "
+        f"resolve.",
         problems,
     )
 
@@ -470,7 +574,17 @@ def test_the_citation_walk_finds_citations_in_every_policed_segment() -> None:
     no longer matches the corpus, a renamed tree — every guard above would report green
     while checking nothing at all. The floors sit far below the measured counts so they
     fire on a broken extractor and never on ordinary drift.
+
+    A segment total alone is NOT enough, which the RED demonstration proved: a file that
+    stopped parsing cost seven citations while the total stayed above its floor. So the
+    per-file refusal is asserted here too, not only inside Guard 1.
     """
+    unreadable = _unreadable_sources(REPO, CODE_SEGMENTS)
+    assert not unreadable, _report(
+        "these policed source files could not be read, so their citations were NOT "
+        "checked — a silently dropped file is a smaller corpus reported as a green one",
+        unreadable,
+    )
     counts = _citation_counts(REPO)
     for segment, floor in MIN_CODE_CITATIONS.items():
         found = counts.get(segment, 0)
@@ -649,6 +763,27 @@ def test_guard_two_goes_red_on_a_symbol_bearing_citation_that_points_elsewhere(
     assert verdict(5, "wanted") is True, "line 5 IS `def wanted`"
     assert verdict(6, "wanted") is True, "line 6 is inside `wanted`'s span"
     assert verdict(2, "renamed_away") is False, "a symbol the file no longer has cannot resolve"
+
+
+def test_guard_one_reports_a_source_file_it_cannot_read(tmp_path: Path) -> None:
+    """The refusal the RED demonstration forced into existence.
+
+    A byte-order mark on a module makes ``ast.parse`` refuse it. Before this guard the
+    extractor returned an empty list for that file, the segment total fell by seven
+    citations, and everything stayed green — the file had left the corpus without saying
+    so. It is now reported, which is the same rule as an unresolvable citation applied to
+    the SOURCE rather than to the target.
+    """
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "citer.py").write_text('"""Fine on its own."""\n', encoding="utf-8")
+    (tmp_path / "src" / "broken.py").write_bytes(
+        b'\xef\xbb\xbf"""A byte-order mark makes this unparseable."""\n'
+    )
+    unreadable = _unreadable_sources(tmp_path, ("src",))
+    assert len(unreadable) == 1, f"the unparseable file must be reported, got {unreadable}"
+    assert "src/broken.py" in unreadable[0], unreadable[0]
+    assert "cannot parse" in unreadable[0], unreadable[0]
+    assert _unreadable_sources(_scratch_tree(tmp_path / "clean", 3), ("src",)) == []
 
 
 def test_guard_two_cannot_decide_a_pairing_whose_target_is_not_python(tmp_path: Path) -> None:
