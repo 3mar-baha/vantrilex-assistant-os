@@ -8,11 +8,20 @@ lines; backend failures degrade loudly to a plain apology line.
 
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
+from time import perf_counter
 from typing import Any, Final
 from zoneinfo import ZoneInfo
 
 from loguru import logger
 
+from src.action_log import (
+    STATUS_OK,
+    STATUS_REFUSED_HIJACKED,
+    STATUS_REFUSED_UNCONFIRMED,
+    STATUS_TOOL_FAIL,
+    STATUS_UNKNOWN_TOOL,
+)
+from src.action_log import record as _record_action
 from src.bridge_server import BridgeOffline
 from src.telemetry import OFFLINE_TEXT_AR
 
@@ -247,7 +256,8 @@ class ToolRegistry:
         """The ONE dispatch choke point. Both execution paths reach a handler
         through here — the live `FrontDoorDispatcher.handle` and the dormant
         ReAct loop — so the irreversible gate is placed here rather than at
-        either caller (F-1, owner 2026-10-01).
+        either caller (F-1, owner 2026-10-01), and the durable action log is
+        placed here for the same reason (N1 / D-2, owner 2026-10-03).
 
         `confirmation_id` is keyword-only: every existing call site keeps
         compiling unchanged, and no neighbouring positional value can ever be
@@ -256,27 +266,61 @@ class ToolRegistry:
         REFUSAL, like every other outcome of this method, never an exception, and
         never `TOOL_FAIL_AR`, which is what a crash returns and which would leave
         the owner unable to tell a refusal from a fault.
+
+        THE ACTION LOG (N1 / D-2), and why it is HERE. Every execution appends
+        exactly one durable entry, in a `finally`, so the five outcomes below
+        cannot disagree about whether they were recorded — that is the whole
+        point, and a per-handler hook would be missed by every tool
+        `register_tool` lands after this module was written. The `loguru` lines
+        in this method are KEPT and are a DIFFERENT record: ephemeral
+        diagnostics for a human watching stdout. The action log is the durable
+        one, in the owner's vault, and it does not replace them.
+
+        The log OBSERVES; it NEVER INTERFERES. The `try` around the hook is the
+        load-bearing part: a broken action log must not turn a working tool into
+        a failing one, so a failure here is logged and swallowed, and the return
+        value of every path above is returned untouched.
         """
-        handler = getattr(self, f"_do_{tool}", None)
-        if handler is None:
-            logger.warning("tool registry got unknown tool {!r}", tool)
-            return TOOL_FAIL_AR
-        if _hijacked_shipped_handler(tool):
-            # F-1 hole 2: a SHIPPED lane whose class-level handler has been
-            # replaced is not dispatched. `register_tool` can reach this state
-            # because its R2 collision check reads the catalog, which does not
-            # list every shipped handler (`file_save` is the measured example).
-            logger.warning("refused hijacked shipped handler {!r}", tool)
-            return TOOL_FAIL_AR
-        refusal = _confirmation_refusal(tool, arg, confirmation_id)
-        if refusal is not None:
-            logger.warning("refused irreversible tool {!r}: no verified confirmation", tool)
-            return refusal
+        started = perf_counter()
+        status = STATUS_UNKNOWN_TOOL
         try:
-            return await handler(arg)
-        except Exception as error:  # noqa: BLE001 — honest failure, never a hang
-            logger.exception("tool {!r} failed: {}", tool, error)
-            return TOOL_FAIL_AR
+            handler = getattr(self, f"_do_{tool}", None)
+            if handler is None:
+                logger.warning("tool registry got unknown tool {!r}", tool)
+                return TOOL_FAIL_AR
+            status = STATUS_REFUSED_HIJACKED
+            if _hijacked_shipped_handler(tool):
+                # F-1 hole 2: a SHIPPED lane whose class-level handler has been
+                # replaced is not dispatched. `register_tool` can reach this state
+                # because its R2 collision check reads the catalog, which does not
+                # list every shipped handler (`file_save` is the measured example).
+                logger.warning("refused hijacked shipped handler {!r}", tool)
+                return TOOL_FAIL_AR
+            status = STATUS_REFUSED_UNCONFIRMED
+            refusal = _confirmation_refusal(tool, arg, confirmation_id)
+            if refusal is not None:
+                logger.warning("refused irreversible tool {!r}: no verified confirmation", tool)
+                return refusal
+            status = STATUS_OK
+            try:
+                result = await handler(arg)
+            except Exception as error:  # noqa: BLE001 — honest failure, never a hang
+                logger.exception("tool {!r} failed: {}", tool, error)
+                status = STATUS_TOOL_FAIL
+                return TOOL_FAIL_AR
+            if result == TOOL_FAIL_AR:
+                # A handler may answer the failure line ITSELF (a dead dependency
+                # it degraded over). The owner reads a failure either way, so the
+                # entry says so rather than claiming a success.
+                status = STATUS_TOOL_FAIL
+            return result
+        finally:
+            try:
+                _record_action(
+                    self._vault, tool=tool, arg=arg, status=status, started=started, tz=self._tz
+                )
+            except Exception as error:  # noqa: BLE001 — the log never alters a result
+                logger.warning("action log append failed (tool result unchanged): {}", error)
 
     async def _do_gmail(self, arg: str) -> str:
         if self._inbox is None:

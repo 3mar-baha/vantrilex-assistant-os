@@ -579,7 +579,7 @@ async def test_entries_accumulate_and_an_earlier_entry_is_never_overwritten():
         await _registry(vault).call("gmail", f"رسالة رقم {index}")
     await _drain(vault)
 
-    assert _args_of("".join(_lines(vault))) == [f"رسالة رقم {i}" for i in range(6)], _lines(vault)
+    assert _args_of("\n".join(_lines(vault))) == [f"رسالة رقم {i}" for i in range(6)], _lines(vault)
 
     before = dict(vault.files)
     await _registry(vault).call("calendar", "")

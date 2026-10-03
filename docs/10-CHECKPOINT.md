@@ -3027,6 +3027,254 @@ The last row matters: the Oracle shelving did **not** deprioritise the hermetici
 guard. That guard is about *this* machine's suite reaching the internet, which is a
 local-first concern, not a deployment one.
 
+## N1 / D-2 — the durable action log (2026-10-03)
+
+Owner-released Phase 1 node. **Two commits, no squash**: the RED guards alone
+(`145d26a`), then the fix. The RED commit is the dispatch proof and stays visible.
+
+### The gap, measured
+
+`ToolRegistry.call` — the ONE dispatch choke point both execution paths share —
+recorded **failures only**, and only to loguru: an ephemeral stream that dies with
+the process, keeps nothing across a restart, and is not part of the owner's vault.
+Nothing durable recorded what the body DID, so every safety claim about it
+(«it never acted without confirmation») was asserted in code and unverifiable
+after the fact. The report's own law for this is invariant **I-4**: *every tool
+execution appends exactly one action-log entry*.
+
+### Where the hook hangs, and why it is not per-tool
+
+One call to `src.action_log.record`, inside `ToolRegistry.call`, in a `finally`,
+guarded by a `try` that swallows and logs any failure. The `finally` is what makes
+"exactly one entry" **structural** rather than a promise about five code paths, and
+the choke point is what makes it **complete**: `src/tool_overlay.register_tool`
+writes a `_do_<name>` onto the class after this module was written, and a per-tool
+hook is silently missed by every tool registered that way.
+
+Two guards make that concrete rather than asserted:
+`test_the_hook_is_at_the_choke_point_and_nowhere_else` reads the AST and requires
+**one** hook call in `call` and **zero** in any `_do_*` handler;
+`test_a_tool_registered_later_is_covered_without_touching_the_hook` registers a
+REAL tool and drives an execution through it. A per-tool hook fails both.
+
+The five outcomes each have their own guard and their own status:
+`ok` · `tool_fail` (handler raised, **or** a handler returned `TOOL_FAIL_AR`
+itself) · `unknown_tool` · `refused_hijacked_handler` · `refused_unconfirmed`.
+
+The `loguru` diagnostics are **kept**. They are a different record — ephemeral,
+shaped for a human watching stdout — and the action log does not replace them.
+`test_the_existing_loguru_failure_lines_are_still_there` pins all four.
+
+### The flush point, given `dispatcher.py` is outside the write-set
+
+Turn end is `bot.py:788` (`_persist_exchange`), reached only after the reply stream
+at `bot.py:730 / 856 / 1106` is exhausted — and `src/dispatcher.py` is outside this
+node's write-set, so its `handle` (`src/dispatcher.py:885`) could not host a flush
+even in principle.
+
+The flush point inside this write-set is **the event loop's next yield point after
+the append**. `record` schedules one background `asyncio.Task`; in the live lane
+that task runs while `_tool_lane` is awaiting the narration stream
+(`src/dispatcher.py:1101` returns, then the gateway stream is awaited), i.e.
+**before** the turn ends. A flush strictly earlier than turn end has a strictly
+**smaller** loss window than the flush-at-turn-end it stands in for, so it is
+dominating, not equivalent-and-lucky. It is also the shape `src.memory_ledger
+.schedule_write_back` already uses: a `create_task` the caller deliberately does
+not await. `flush_action_log(vault)` is the deterministic seam if a future
+turn-end wiring wants to force it.
+
+### Durability statement (the required text, in full)
+
+* **Buffered:** every entry, in memory, from the instant `record` is called.
+* **Flushed:** by one background task at the loop's next yield — normally during the
+  same turn, before the reply finishes.
+* **A crash loses the buffered tail** — every entry recorded since the last flush
+  that had not completed when the process died. A hard kill, an OOM or a power cut
+  can lose the last few entries. That is the price of the buffered append the owner
+  chose; the alternative the owner rejected (a synchronous write per execution)
+  would put a vault round trip on the critical path of every tool call.
+* **A crash cannot lose** anything already flushed: a flush is one `append_section`
+  on the real vault, with the durability every other note there has — no more, no
+  less.
+* **At-least-once on failure.** A failed write keeps its entries buffered and
+  counted (`failed`), and the next flush re-attempts them in order. The buffer is
+  bounded by `MAX_PENDING_ENTRIES`; past it the **oldest** are dropped and counted.
+* **No silent nothing.** With no vault, or a vault that has no append surface, the
+  entry is DROPPED and COUNTED (`counters(vault)["dropped"]`), never written
+  somewhere unreadable. The failure mode this node exists to kill is a log that
+  quietly does not log.
+
+### Storage and rotation — why append-only
+
+`upsert` (`src/vault.py:432`) **OVERWRITES** one path: it GETs the sha and PUTs the
+whole body back, so one `upsert` per entry into a fixed filename would keep only
+the **LAST** entry. `append_section` (`src/vault.py:479`) is the append surface the
+vault already offers — read-modify-write under the client-wide write lock, with the
+409 re-merge re-reading the LATEST remote content so a racing writer's section
+survives. One section per flush, one line per entry: **one vault commit per flush**,
+not one per entry.
+
+Rotation, in full:
+
+1. **By day, by path** — `04_Archives/Audit/action-log/YYYY/MM/YYYY-MM-DD.md`.
+   Yesterday's note is closed by construction.
+2. **By segment, past a cap** — at most `MAX_SEGMENT_ENTRIES` (500) entries per
+   note; the next go to `--02.md`, `--03.md`. A batch that would cross the cap
+   rotates whole, so a note never exceeds its cap.
+3. **The cap is counted FROM THE NOTE**, not from process memory — first touch in a
+   process reads and counts what is already there, so a **restart cannot forget** a
+   full segment. Proved by driving a real restart.
+4. **Nothing is deleted, rewritten or compacted by this module.** Retention is the
+   owner's vault policy; a compaction pass that rewrites history would destroy the
+   append-only property that makes this an audit trail. "Rotation" here means the
+   log stops growing one note — not that it discards.
+
+### MEASURED latency (timer, not estimate)
+
+| Measurement | Figure |
+|---|---|
+| `record()` — Arabic arg (redaction + buffer) | **median 0.0104 ms**, p95 0.0247 ms (n=20 000) |
+| `record()` — empty arg | median 0.0055 ms |
+| `record()` — secret-shaped arg | median 0.0122 ms |
+| Hook's share of a call: 46 shipped tools, one pass, hook vs. hook-disabled | 24.34 ms vs 22.69 ms → **1.66 ms / 46 = ~36 µs per call** |
+| Flush, 1 entry — real `VaultClient` over the GitHub double | 2.38 ms (first flush includes the note read) |
+| Flush, 16 entries | 0.90 ms |
+| Flush, 64 entries (one batch, one commit) | 1.01 ms → **~16 µs/entry amortised** |
+
+The 2.4 ms first flush is a local double. Against the real GitHub API a flush is a
+network commit — hundreds of milliseconds — which is exactly why it is a background
+task and not on the tool's stack.
+
+### Redaction — the five classes, one guard each
+
+Named as `REDACTION_CLASSES` in code, and **one guard per class** in
+`tests/test_action_audit_log.py`, each naming the class it proves:
+`api_key` · `token` · `credential` · `session_string` · `vault_personalization`.
+Plus the process's **live** shared secrets via `src.vault.redact_secret`, which
+screens every secret a `VaultClient` registered (`src/vault.py:353`) — no regex can
+match the owner's own token, and a guard that only tests patterns would prove
+nothing about it.
+
+**The tension, and where the line sits.** The `arg` reaching `call` is legitimately
+the **owner's own instruction** («سكّر كروم»), and a log that redacted that would be
+unreadable and therefore useless. So the law is drawn at **CREDENTIAL SHAPE**, not at
+"is this sensitive-looking": ordinary instruction text passes through byte for byte
+(`test_the_owners_own_instruction_survives_verbatim`) and all five classes are
+shapes, not topics.
+
+**The honest limit, stated in the module too.** Personalization is detected
+structurally — the note's own `## معلومة` / `slot:` / `value:` rows
+(`src/memory.py:521`), the greeter's `[صاحبك باختصار …]` envelope (`src/bot.py:208`),
+the outreach loop's `[ملف المالك]` envelope
+(`src/skills/proactive_outreach.py:138`). Free text that is *about* the owner and
+carries none of those markers cannot be told from an instruction, and **no comment
+claims otherwise**. What bounds the residue is `MAX_ARG_CHARS` (200) and the fact
+that no tool's arg is a profile excerpt today.
+
+Two more laws worth naming: F-2's signed `cfm1.` id is **not merely redacted — it
+is never read**, because `record` has no parameter that could carry it
+(`test_the_recorder_cannot_receive_the_confirmation_id`), and an arg carrying a
+newline **cannot forge a second entry**, because every field is collapsed to one
+line before it is rendered and `append_section` writes lines verbatim.
+
+### The load-bearing guard
+
+`test_a_broken_action_log_never_alters_a_single_tool_result`: the same tool-side
+vault, **four** independent breakages — an exploding sink, a raising hook, a raising
+redactor, a sink with no append surface — and identical results across **all 46**
+shipped tools. The explosion is deliberately scoped to the log's own
+`append_section`: a vault whose `read` also fails would change what a tool
+legitimately answers and would prove nothing.
+
+### Gate
+
+```
+tests/test_action_audit_log.py     37 guards, all green
+tests/test_live_irreversible_gate.py  43 passed  (close still delegated, gate intact)
+suite (excl live_harness)          2,792 passed / 4 skipped / 1 xfailed / 0 failed
+                                   (baseline at b6b8e6e: 2,754 / 5 / 1 / 0 — +38 collected)
+tiered coverage                    TOTAL 92.4% (gate >= 90.0%) · every CORE module >= 98% · PASSED
+src/action_log.py                  93% branch on its own file
+ruff check / format                clean / clean (438 files formatted)
+security_gate / docs_guard         OK / 16 canonical files
+src/persona.py                     8b972942e785880a3de66121e7f808666250ed2f (byte-locked, verified)
+mutation check                     6 mutants, 6 RED, 0 survived, every restore sha256-verified
+```
+
+### Mutation run — mutant → guard
+
+| Mutant | Verdict | Named guards that went RED |
+|---|---|---|
+| **a** remove the hook from `call` | RED (17 failed) | the choke-point AST guard + every entry-count and counters guard |
+| **b** drop the redaction | RED (6 failed) | `test_api_keys_are_redacted`, `test_tokens_are_redacted`, `test_credentials_are_redacted`, `test_session_strings_are_redacted`, `test_the_live_shared_secret_is_redacted_even_when_it_matches_no_shape`, `test_vault_personalization_content_is_redacted` |
+| **c** log failures only (`if status != STATUS_OK`) | RED (11 failed) | the whole-set guard, the counters guard, the rotation guards |
+| **d** double-append | RED (11 failed) | `test_every_shipped_tool_appends_exactly_one_entry` (46 ≠ 46 unique) + the per-outcome guards |
+| **e** let a log exception propagate | RED (2 failed) | `test_a_broken_action_log_never_alters_a_single_tool_result`, `test_a_log_failure_never_raises_into_the_tool_call` |
+| **f** drop the one-line collapse | RED (2 failed) | `test_a_newline_in_the_arg_cannot_forge_a_second_entry`, `test_the_arg_is_bounded_so_a_note_cannot_be_flooded_by_one_call` |
+
+The driver **refused to report mutant b on its first attempt** because the anchor
+had gone stale, which is the correct behaviour and the reason the re-run is a real
+measurement: the driver reads and writes **bytes**, sha256-verifies every restore,
+aborts on a non-unique anchor, refuses any result without a pass count, and runs
+`python -m pytest` rather than `python.exe pytest` (which reports every mutant RED
+when nothing ran).
+
+### One guard repaired in the fix commit — stated, not hidden
+
+`test_entries_accumulate_and_an_earlier_entry_is_never_overwritten` passed
+`_args_of("".join(...))` — concatenated with no separator, so the helper saw one line
+and the arg field captured everything. The **test** was wrong, not the
+implementation (Directive 5). Repaired to `"\n".join(...)`. It was RED before the
+fix and is green after, and mutant **d** re-proves its mutation value on the
+repaired form. No assertion was weakened, skipped, xfailed or deleted; no other
+test in the repository was touched.
+
+### Four guards were NOT red before the fix — stated plainly
+
+The universe census, the loguru-diagnostics-kept law, the no-eager-import-in-`call`
+law, and `a-log-failure-never-raises`. All four guard laws **the fix could break**,
+not laws that are missing today — a census is green by construction, and the last
+three are what mutant **e** (and F-1's own import guard) actually kill.
+
+### Measured-uncovered, by line — Directive 6, not claimed as coverage
+
+`src/action_log.py` is at **93%** on its own file. The 7 uncovered defensive
+behaviours, each named with its line so a reader knows it is unverified:
+`326-327` `parse_entry` on a well-shaped line with an unparsable timestamp;
+`378` `append` self-scheduling at `MAX_BATCH` (64 entries in one turn);
+`390-392` `schedule` with no running loop (`unscheduled`); `431-433`
+`_flush_guarded`'s last-resort except; `440-441` the `MAX_PENDING_ENTRIES` overflow
+drop; `530-531` an unhashable / unweak-referenceable sink; `547`
+`flush_action_log` on a non-hosting vault. Each is a described behaviour, not a
+guarantee the code claims to enforce; guards for them are a separate work order.
+
+### One pre-existing flake, named
+
+`tests/live_probe/test_omniroute_live.py::test_live_ttft_first_token` failed once
+mid-session with `src/gateway.py:550 GatewayError` after a groq empty reply and a
+gemma free-pin first-token timeout — the same free-provider noise class as the two
+known `live_harness` flakes. It did not reproduce: two further full runs are
+**2,792 passed / 0 failed**, and the probe passes with the fix in place. **Not
+weakened, not skipped, not xfailed.**
+
+### Write-set
+
+Touched: `src/tools.py` (**`call` and its import block only**), a NEW module
+`src/action_log.py`, the NEW test file `tests/test_action_audit_log.py` (one repair,
+above), and this file. Nothing else. `src/persona.py` hash-verified before and
+after. `src/vault.py` used through the surfaces it already offers; **no method was
+added to it**, and `src/dispatcher.py` was not edited — which is why the flush point
+is the loop's next yield rather than turn end. **No new environment variable and no
+new configuration knob.** Zero new packages.
+
+### Not done, deliberately
+
+* No compaction, no summarisation, no per-tool log configuration — none was asked
+  for and each is its own decision.
+* `flush_action_log` is never called from `bot.py`'s turn-end hook: that file is
+  outside this node's write-set, and the background flush already runs before the
+  turn ends. Wiring it would buy determinism, not correctness.
+* The seven defensive branches above are unguarded, on purpose for this node.
 - [07 — Implementation Plan](./07-IMPLEMENTATION-PLAN.md)
 - [11 — Testing](./11-TESTING.md)
 - [Objectives Ledger](./reports/OBJECTIVES_LEDGER_MET_VS_PENDING.md)
