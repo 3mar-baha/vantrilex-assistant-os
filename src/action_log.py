@@ -170,14 +170,30 @@ _API_KEY_RE: Final[re.Pattern[str]] = re.compile(
 )
 
 #: Pass `token` — the LABEL survives so a reader still sees THAT a secret was
-#: present; the value never does.
+#: present; the value never does — the `Bearer` scheme keyword excepted, which
+#: is not a value at all (see `_LABELLED_RE` below). `REDACTED` is spliced in
+#: as `\3`, so the labelled result reads `<label><separator>«redacted»`.
 _SENSITIVE_KEYS: Final[str] = (
     r"api[_-]?key|apikey|access[_-]?token|refresh[_-]?token|id[_-]?token"
     r"|token|secret|client[_-]?secret|password|passwd|passphrase|pwd"
     r"|auth|authorization|session|session[_-]?id|sess|confirmation[_-]?id|cfm"
 )
+#: `(?!\s*Bearer\b)` — A SCHEME KEYWORD IS NOT A VALUE. The value pattern stops
+#: at whitespace, so for `Authorization: Bearer <secret>` this pass used to read
+#: `Bearer` as the label's value, redact the scheme word, and leave the secret
+#: dangling for `_BEARER_RE`, which had no `Bearer` left to key on: the
+#: credential reached the vault, under a promise this module's own docstring made
+#: and no guard tested. The lookahead makes this pass DECLINE the whole
+#: `Bearer …` region and lets the bearer clause — which runs LATER in
+#: `redact_arg` — take the shape whole, so the log keeps the label AND the word
+#: `Bearer` and loses only the secret.
+#:
+#: The exemption is the STANDALONE keyword and nothing else. `BearerXYZ123…` has
+#: no word boundary after `Bearer` and is still redacted here. Skipping is
+#: LOCAL: a failed match resumes scanning at the next character, so a later
+#: `password: …` in the same arg is still caught.
 _LABELLED_RE: Final[re.Pattern[str]] = re.compile(
-    rf"(?i)\b({_SENSITIVE_KEYS})([\"']?\s*[:=]\s*[\"']?)[^\s\"',;]+"
+    rf"(?i)\b({_SENSITIVE_KEYS})([\"']?\s*[:=]\s*[\"']?)(?!Bearer\b)[^\s\"',;]+"
 )
 _JWT_RE: Final[re.Pattern[str]] = re.compile(
     r"\beyJ[A-Za-z0-9_-]{6,}\.[A-Za-z0-9_-]{6,}\.[A-Za-z0-9_-]{6,}"
@@ -266,6 +282,17 @@ def redact_arg(arg: str) -> str:
     function guarantees is the narrower, testable law — every one of those five
     shapes is gone from the returned string, and the owner's ordinary
     instruction text is not.
+
+    THE ONE PLACE THE ORDER IS LOAD-BEARING, and why it no longer is. Within
+    `token`, `_LABELLED_RE` runs before `_BEARER_RE`, and it used to destroy the
+    shape the bearer clause keys on: its value pattern stops at whitespace, so
+    `Authorization: Bearer <secret>` gave it the word `Bearer` as the value, and
+    the secret then survived a `_BEARER_RE` pass with no `Bearer` left to match.
+    `_LABELLED_RE` now DECLINES a standalone `Bearer` (see its comment), so the
+    bearer clause takes the shape whole and the label AND the scheme both stay
+    readable — `Authorization: Bearer «redacted»`, not `«redacted» «redacted»`.
+    The two passes are disjoint on this shape in either order, so the sequence
+    is no longer what makes the class safe; the lookahead is.
     """
     text = str(arg or "")
     if not text.strip():

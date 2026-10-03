@@ -3275,6 +3275,140 @@ new configuration knob.** Zero new packages.
   outside this node's write-set, and the background flush already runs before the
   turn ends. Wiring it would buy determinism, not correctness.
 * The seven defensive branches above are unguarded, on purpose for this node.
+
+## MICRO FIX — the labelled-`Bearer` leak in `redact_arg` (2026-10-03)
+
+A real secret leak, found by reading the redaction law rather than by a failing
+test, because **no guard covered the shape the module promised**.
+
+`src/action_log.py`'s REDACTION §2 claims class `token` covers «a `Bearer` header
+value». Inside that class the passes ran labelled-then-bearer, and
+`_LABELLED_RE`'s value pattern `[^\s"',;]+` stops at whitespace — so for
+
+    Authorization: Bearer <secret>
+
+it matched `Authorization:` as the label and **`Bearer` as the value**, redacted
+the scheme word, and left the secret dangling. `_BEARER_RE` then found nothing
+to match, because the `Bearer` it keys on had already been consumed. What
+reached the vault note was `Authorization: «redacted» <secret>`.
+
+`Authorization` is one of ~20 members of `_SENSITIVE_KEYS`, so **this was never
+an authorization-header bug**: `auth=Bearer <secret>` leaked identically, as did
+a mixed `token: Bearer <secret>, password: …`.
+
+### The fix, and why not the reorder
+
+One functional line: `_LABELLED_RE` gained a negative lookahead
+`(?!\s*Bearer\b)`, so the labelled pass DECLINES a standalone scheme keyword and
+lets the bearer clause — which already runs later in the same function — take
+the shape whole. Output is now `Authorization: Bearer «redacted»`.
+
+The reorder (`_BEARER_RE` above `_LABELLED_RE`) was implemented and MEASURED
+first. It closes the secret but yields `Authorization: «redacted» «redacted»`:
+the labelled pass still parses a scheme keyword as a value and then masks it,
+so the log no longer shows that a bearer credential was offered at all, and two
+markers stand where one shape was. The lookahead is one edit instead of a
+reorder, keeps the word `Bearer` readable, and makes the two passes disjoint on
+this shape **in either order** — so the sequence is no longer what makes the
+class safe. That is why the fix is the lookahead and not the reorder.
+
+The exemption is the standalone keyword only: `BearerXYZ123…` has no word
+boundary after `Bearer` and is still redacted by the labelled pass. Skipping is
+LOCAL — a failed match resumes scanning at the next character, so a later
+`password: …` in the same arg is still caught (guarded, and measured).
+
+### Second-order effect, measured across 21 shapes
+
+| shape | before | after |
+|---|---|---|
+| `Authorization: Bearer <secret>` | **LEAK** `Authorization: «redacted» <secret>` | `Authorization: Bearer «redacted»` |
+| `authorization: bearer <secret>` | **LEAK** | `authorization: bearer «redacted»` |
+| `"authorization": "Bearer <secret>"` | **LEAK** | `"authorization": "Bearer «redacted»"` |
+| `auth=Bearer <secret>` | **LEAK** | `auth=Bearer «redacted»` |
+| `token: Bearer <secret>, password: …` | **LEAK** | `token: Bearer «redacted», password: «redacted»` |
+| bare `Bearer <secret>`, `bearer <secret>`, embedded | clean | **unchanged** |
+| `token=`, JWT, `ghp_`, `AIza…`, `password:`, `BearerXYZ`, userinfo, `session:`, `cfm1.`, two-labels, Arabic instruction, cap, empty | clean | **unchanged** |
+
+**No shape that was redacted before is now unredacted.** Two shapes changed
+output without changing exposure, and both are stated rather than hidden:
+
+* `token: Bearer abc` — before `token: «redacted» abc`, now `token: Bearer abc`.
+  The value `abc` survived in BOTH (it is under `_BEARER_RE`'s pre-existing
+  8-character floor, which this fix deliberately does not touch); what changed is
+  that the scheme word is no longer masked. Masking a scheme keyword was never a
+  security property.
+* `token: Bearer ab,cd` — same, for a value broken by a character outside the
+  bearer charset.
+
+`REDACTION_CLASSES` is untouched: same five names, same order, nothing renamed
+or restructured to accommodate the fix.
+
+### Comments
+
+No pass was reordered, so no pass-order prose became false. The order claims at
+`REDACTION_CLASSES` and in `redact_arg`'s docstring ("Six passes, in this
+order") still describe the shipped sequence, and are now backed by a docstring
+paragraph stating that the sequence is no longer load-bearing for this class —
+the lookahead is. What was updated, because it is what the code now does: the
+`_LABELLED_RE` comment (the skip rule, why it exists, that it is local), the
+`_SENSITIVE_KEYS` comment (a scheme keyword is not a value — so "the value never
+does" stays true), and `redact_arg`'s docstring.
+
+### Verification
+
+`2,795 passed / 0 failed` excluding `live_harness` — the recorded 2,792 baseline
+plus exactly the three new guards. `tests/test_live_irreversible_gate.py` 43
+passed. Tiered coverage **92.4% total**, every core module ≥98.0% (gate
+PASSED). `ruff check` + `ruff format --check` clean (438 files). `security_gate`
+OK (bandit + secret scan).
+
+Mutation-checked over `tests/test_action_audit_log.py`, bytes-only restores with
+a sha256 verified on every put-back:
+
+| mutant | failed | verdict | killed by |
+|---|---|---|---|
+| M0 shipped (control) | 0 | GREEN | — |
+| M1 drop the lookahead (= the `d0f3267` behaviour) | 1 | **RED** | `test_a_labelled_bearer_header_loses_the_token_and_keeps_the_scheme` |
+| M2 hoist `_BEARER_RE` above `_LABELLED_RE`, keep lookahead | 0 | GREEN | — (by design: the docstring's claim that the ORDER is no longer load-bearing is itself guarded) |
+| M3 drop the `\b` from the lookahead | 1 | **RED** | `test_a_bearer_prefixed_value_is_still_redacted_as_a_labelled_secret` |
+| M4 `(?!)` — the over-broad "skip everything" | 2 | **RED** | `test_tokens_are_redacted` + the prefixed-value guard |
+
+M3 is why the third guard exists. The `_LABELLED_RE` comment claims the
+exemption is the standalone keyword and nothing else, and the first mutant
+sweep **measured that claim unguarded** — dropping the `\b` left the suite
+GREEN while opening a fresh leak (`BearerXYZ…` has no whitespace after `Bearer`,
+so the labelled pass would skip it and the bearer clause would never match).
+The guard was added to close that, and M3 now fails on it.
+
+### Not red before the fix, stated plainly
+
+Two of the three new guards were already GREEN at `d0f3267` and are
+characterisation guards, not RED proofs:
+
+* `test_a_bare_bearer_token_is_still_redacted` — kept deliberately as the
+  regression witness that forbids a blind reorder.
+* `test_a_bearer_prefixed_value_is_still_redacted_as_a_labelled_secret` — the
+  lookahead's edge, added after M3 exposed it as unguarded.
+
+Only `test_a_labelled_bearer_header_loses_the_token_and_keeps_the_scheme` was
+red before the fix, and it failed on the secret surviving.
+
+**Write-set:** `src/action_log.py` (the `_LABELLED_RE` pattern + the redaction
+comments; `redact_arg`'s docstring only), `tests/test_action_audit_log.py`,
+this file. `record()`, the buffer, the flush and `ToolRegistry.call` are
+**byte-identical to `d0f3267`** — `git diff d0f3267 -- src/tools.py bridge/
+scripts/ Dockerfile` is empty, and the four hunks in `action_log.py` all sit in
+the redaction law and the docstring. `src/persona.py` hash-verified before and
+after: `8b972942e785880a3de66121e7f808666250ed2f`. Zero new packages, no new
+environment variable, no new configuration knob.
+
+**Disclosure:** the fix edits one line of the `_LABELLED_RE` pattern, which sits
+~110 lines above `redact_arg` rather than inside it. The brief's region was
+`redact_arg` and its docstring; a strict reading admits only the reorder, and the
+reorder cannot satisfy the readability requirement the same brief states. The
+edit is inside the redaction law the function implements, touches no other
+function, and no forbidden file.
+
 - [07 — Implementation Plan](./07-IMPLEMENTATION-PLAN.md)
 - [11 — Testing](./11-TESTING.md)
 - [Objectives Ledger](./reports/OBJECTIVES_LEDGER_MET_VS_PENDING.md)

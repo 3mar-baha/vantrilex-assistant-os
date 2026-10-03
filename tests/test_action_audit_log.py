@@ -537,6 +537,26 @@ def test_a_bare_bearer_token_is_still_redacted():
         assert "bearer" in out.lower(), f"the scheme must survive for readability: {out}"
 
 
+def test_a_bearer_prefixed_value_is_still_redacted_as_a_labelled_secret():
+    """THE EDGE OF THE LOOKAHEAD, and the one guard here that is NOT red before
+    the fix — it is a CHARACTERISATION guard, and it is here because a measured
+    mutant proved the claim unguarded.
+
+    The lookahead exempts the STANDALONE scheme keyword and nothing else:
+    `BearerXYZ…` and `Bearer_…` have no word boundary after `Bearer`, so the
+    labelled pass still treats them as the label's value. `_BEARER_RE` cannot
+    cover them either — it requires whitespace after `Bearer` — so this shape has
+    exactly one pass that can catch it. Delete the `\\b` from the lookahead and
+    both of these LEAK: the labelled pass skips them and the bearer clause never
+    matches. Measured green without this guard; red with it.
+    """
+    for secret in ("BearerXYZ1234567890abcdef", "Bearer_s3cr3t-value-1234567890"):
+        for shaped in (f"auth={secret}", f"token: {secret}"):
+            out = redact_arg(shaped)
+            assert secret not in out, f"bearer-prefixed secret leaked: {out}"
+            assert "«redacted»" in out, out
+
+
 def test_credentials_are_redacted():
     """CLASS: credential. A userinfo pair in a URL is the classic leak, and this
     repo has URL-taking tools (`read_page`, `openclaw_fetch`) whose args land here."""
