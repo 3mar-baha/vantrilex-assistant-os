@@ -1,10 +1,13 @@
 """P3-C/P3-D registration overlay — the merge layer AND the entry point that writes it.
 
-Registering a tool needs SIX writes across five modules, and every one of them
-fails SILENTLY — a tool that simply does not work:
+Registering a tool needs SIX registration points across five modules, and every
+one of them fails SILENTLY — a tool that simply does not work. Four of the six
+are a WRITE and land in four modules — ``landed`` carries exactly four labels,
+``capability``, ``registry``, ``overlay``, ``guide`` — while points 3 and 4 share
+one dict and point 6 is a union this module FEEDS rather than a line it writes:
 
-    1. ``ToolRegistry._do_<name>``       getattr  src/tools.py:138
-    2. ``TOOL_CAPABILITIES[<name>]``    dict     src/skills/capabilities.py:350
+    1. ``ToolRegistry._do_<name>``       getattr  src/tools.py:287
+    2. ``TOOL_CAPABILITIES[<name>]``    dict     src/skills/capabilities.py:436
     3. ``_VALID_TOOLS``                  overlay  merged by ``valid_tools()``
     4. ``_TOOL_GOALS[<name>]``          overlay  merged by ``tool_goals()``
     5. ``sara_tool_skills._SKILLS``     tuple    the per-tool narration guide
@@ -13,12 +16,13 @@ fails SILENTLY — a tool that simply does not work:
 
 Points 3, 4 and 6 are the trap P3-C built the merge layer for. ``_VALID_TOOLS``
 and ``_TOOL_GOALS`` are ``Final`` literals no runtime path can rewrite, so the
-merge lives here and the base keeps its name, its type and its contents — ten
-test modules import them by name, and ``Final`` is the very property this module
-works AROUND rather than removes. A router verdict naming a name outside (3) was
-rewritten to ``"none"`` with no exception raised, and ``deduce`` iterates (4), so
-a tool registered only in (2) is a tool Sara can never *select*. "The feature just
-doesn't work" is the entire failure signal.
+merge lives here and the base keeps its name, its type and its contents —
+fourteen test modules import ``_VALID_TOOLS`` from ``src.dispatcher`` by name and
+four import ``_TOOL_GOALS`` from ``src.cognition``; ``Final`` is the very
+property this module works AROUND rather than removes. A router verdict naming a
+name outside (3) was rewritten to ``"none"`` with no exception raised, and
+``deduce`` iterates (4), so a tool registered only in (2) is a tool Sara can
+never *select*. "The feature just doesn't work" is the entire failure signal.
 
 Point 5 is not in the four-point table at all and was found by MEASUREMENT: a
 capability record with no guide turns the green guard
@@ -56,6 +60,20 @@ live registry after the capability record is written, rolling the registration
 back if any non-deny-listed key carries the irreversible flag. The first half
 keeps the tier closed for this entry point; the second half is what makes the
 claim structural rather than a promise about one function's argument list.
+
+R3 IS NOT ONE OF THE TWO HALVES, and this paragraph must not read as if it were.
+The ``name in IRREVERSIBLE_TOOLS`` refusal is UNOBSERVABLE at this boundary: the
+deny-list is DERIVED from ``TOOL_CAPABILITIES``, which is one of R2's two halves,
+so R2's union refuses every deny-listed name before R3 can be reached. It is kept
+as a stated law rather than deleted, so a future reordering that weakened R2
+could not silently reopen the tier. The law ACTUALLY ENFORCED is therefore R4
+plus the registry-wide post-condition — the ``unlisted`` sweep in
+``register_tool``'s ``try`` block, placed immediately after the capability write
+and its ``landed.append("capability")`` and BEFORE the handler binding, and
+routed to ``_rollback`` by ``except _IrreversibleTierWouldOpen``. Those two
+locations are named structurally on purpose: a bare line number here would be
+the next stale citation in this file, and this commit exists because there were
+three.
 
 SHIPS EMPTY, still. No tool is registered at import time, and NOTHING in this
 repository calls ``register_tool`` — Sara still does not autonomously synthesize
@@ -133,8 +151,8 @@ def valid_tools() -> tuple[str, ...]:
 
     Returns a ``tuple`` because that is what every importing call site already
     does to ``_VALID_TOOLS`` — ``in``, iteration, ``set()``, ``len()`` and
-    slicing all have to keep working unchanged for the ten test modules that read
-    the base.
+    slicing all have to keep working unchanged for the fourteen test modules that
+    read the base.
     """
     from src.dispatcher import _VALID_TOOLS  # deferred: dispatcher imports this module
 
@@ -226,9 +244,11 @@ def _live_tool_names() -> set[str]:
 
     The union is load-bearing and NOT symmetric: ``TOOL_CAPABILITIES`` is a
     strict subset of the routed set, so a refusal reading only the capabilities
-    half would let every routed-but-uncatalogued name through (``analytics``,
-    ``cloud_backup``, ``none``, ``quota_safety`` as of this writing). Read from
-    the live registries on every call, so a registration made a moment ago is a
+    half would let every routed-but-uncatalogued name through. Phase 0 catalogued
+    the last three (46 routed, 45 catalogued), so exactly ``none`` is left in the
+    gap — and ``none`` is the one that must STAY there, being the dispatcher's
+    no-tool-selected sentinel rather than a name with a handler. Read from the
+    live registries on every call, so a registration made a moment ago is a
     collision for the next one.
     """
     from src.skills.capabilities import TOOL_CAPABILITIES  # deferred: import-leaf
@@ -303,11 +323,12 @@ def register_tool(
     3. R2 — a name colliding with any live tool: the UNION of the capability
        registry and the routed set, not one half.
     4. R3 — a name in ``IRREVERSIBLE_TOOLS`` (Leader decision 6, zero
-       exceptions). UNREACHABLE at this boundary by construction: the deny-list is
-       a subset of both live registries, so R2 refuses all six names first. It is
-       kept as an explicit law so a future reordering that weakened R2 cannot
-       silently reopen the irreversible tier; the enforceable form of the same
-       rule is R4.
+       exceptions). UNREACHABLE at this boundary by construction: the deny-list
+       is DERIVED from ``TOOL_CAPABILITIES``, one of R2's two halves, so R2
+       refuses all seven deny-listed names first. It is kept as an explicit law
+       so a future reordering that weakened R2 cannot silently reopen the
+       irreversible tier; the enforceable form of the same rule is R4 plus the
+       registry-wide post-condition.
     5. R4 — ``reversible=False``.
     """
     from src.evolution import NAME_RE

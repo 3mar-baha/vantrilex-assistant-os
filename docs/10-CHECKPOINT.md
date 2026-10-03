@@ -3409,6 +3409,179 @@ reorder cannot satisfy the readability requirement the same brief states. The
 edit is inside the redaction law the function implements, touches no other
 function, and no forbidden file.
 
+## N2 — R3: the `src/tool_overlay.py` docstring, corrected to the tree (2026-10-03)
+
+**Docs-only. One file, prose only. Zero behaviour change, zero test change.** HEAD at
+start `f03bfef`. The node exists because the module's prose had drifted away from the
+code it documents — the same drift the programme keeps hitting, citations into files
+under active change. Every number below was measured on the live tree, not typed from
+memory.
+
+### The acceptance artefact — every citation and claim corrected, OLD → NEW
+
+| # | OLD | NEW | points into |
+|---|---|---|---|
+| 1 | `src/tools.py:138` | `src/tools.py:287` | `src/tools.py` — now `handler = getattr(self, f"_do_{tool}", None)`. Line 138 was `…its own gate at src/decision_loop.py:428…`, a comment. |
+| 2 | `src/skills/capabilities.py:350` | `src/skills/capabilities.py:436` | `src/skills/capabilities.py` — now `TOOL_CAPABILITIES: Final[dict[str, dict]] = dict(_CAPABILITIES)`. Line 350 was the `"openclaw_inspect"` record. |
+| 3 | `R2 refuses all six names first` | `R2 refuses all seven deny-listed names first` | `src/skills/capabilities.py` — `IRREVERSIBLE_TOOLS` measures **7** (`cancel_reminder`, `close`, `cloud_backup`, `create_event`, `create_task`, `openclaw_browse`, `openclaw_desktop`). |
+| 4 | `R2 refuses all six names` + `the enforceable form of the same rule is R4` | `…seven deny-listed names` + `the enforceable form of the same rule is R4 plus the registry-wide post-condition` | this module — the R3 prose now names both enforced halves, not one. |
+| 5 | `SIX writes across five modules` | `SIX registration points across five modules … Four of the six are a WRITE and land in four modules — landed carries exactly four labels, capability, registry, overlay, guide — while points 3 and 4 share one dict and point 6 is a union this module FEEDS rather than a line it writes` | this module — see the measured counts below. |
+| 6 | `ten test modules import them by name` | `fourteen test modules import _VALID_TOOLS from src.dispatcher by name and four import _TOOL_GOALS from src.cognition` | `src/dispatcher.py` + `src/cognition.py` — counted, not estimated. |
+| 7 | `for the ten test modules that read the base` | `for the fourteen test modules that read the base` | `src/dispatcher.py` — the `_VALID_TOOLS` count, restated in `valid_tools()`' own docstring. |
+| 8 | `let every routed-but-uncatalogued name through (analytics, cloud_backup, none, quota_safety as of this writing)` | `…Phase 0 catalogued the last three (46 routed, 45 catalogued), so exactly none is left in the gap — and none is the one that must STAY there, being the dispatcher's no-tool-selected sentinel rather than a name with a handler` | `src/skills/capabilities.py` — measured `set(valid_tools()) - set(TOOL_CAPABILITIES) == {"none"}`. Three of the four named are now catalogued records. |
+
+### Citations verified ALREADY CORRECT, and deliberately left untouched
+
+Two `file:line` citations in this file were right, and were **not** edited — a drive-by
+edit to a correct citation is still a diff someone has to verify for nothing:
+
+- `tests/suite/tier1_resilience/test_skill_standard.py:50` (module docstring, point 5)
+- `tests/suite/tier1_resilience/test_skill_standard.py:50` (`_narration_guide` docstring)
+
+`:50` is `def test_sara_tool_guides_cover_capabilities():`. `git diff` contains **zero**
+occurrences of `test_skill_standard` — proof neither line was touched.
+
+### Claims verified TRUE and left alone
+
+- `"_VALID_TOOLS and _TOOL_GOALS are Final literals no runtime path can rewrite"` —
+  `src/dispatcher.py:178 _VALID_TOOLS: Final = (` and
+  `src/cognition.py:32 _TOOL_GOALS: Final[dict[str, tuple[str, ...]]] = {`. Every
+  executable reference to either name in `src/` is a read; the P3-D path writes
+  `OVERLAY`, never a base.
+- `"A router verdict naming a name outside (3) was rewritten to "none" with no exception
+  raised"` — already **past tense**, and still true as history. P3-D has since fixed the
+  path (`src/dispatcher.py:786` documents it), which is why it is history. **Not**
+  rewritten into the present tense.
+- `"Point 5 … was found by MEASUREMENT"` — historical, kept.
+- `"…the ~2,380 that were green before P3-D"` — a hedged historical count, consistent
+  with its sibling `tests/test_p3d_registration.py:596` ("the 2379 that were green
+  before P3-D"). Consistent with history; left alone.
+- `"NOTHING in this repository calls register_tool"` — verified: no call site in
+  `src/`, `bridge/` or `scripts/`, only docstring and comment mentions.
+- `"the autouse hygiene fixture of every registration guard calls it"` — verified in
+  `tests/test_p3d_registration.py:188`, `tests/test_p3d_seams.py:240`,
+  `tests/test_p3d_irreversible_backstop.py:118`, `tests/test_tool_overlay.py:92`.
+
+### The measured counts, stated
+
+| Claim | Measured | Verdict |
+|---|---|---|
+| "SIX writes" | **six registration points; four write statements** | FALSE as written |
+| "across five modules" | **five** — `src/tools.py`, `src/skills/capabilities.py`, `src/tool_overlay.py`, `src/skills/sara_tool_skills.py`, `src/evolution.py` | TRUE |
+| "ten test modules" | **14** import `_VALID_TOOLS` from `src.dispatcher`; **4** import `_TOOL_GOALS` from `src/cognition`; **14 distinct** modules import at least one | FALSE |
+
+`landed` carries exactly four labels — `capability`, `registry`, `overlay`, `guide`.
+Points 3 and 4 share the single `OVERLAY` dict, and point 6 is a union
+`evolution.is_valid_task_name` **reads** (`_COLLIDING_TOOL_NAMES` + `valid_tools()` at
+`src/evolution.py:304`), never a line this module writes. So "six surfaces, four
+writes" is the honest shape; the P3-D checkpoint entry already said "six **surfaces**",
+and the docstring is what had drifted from it.
+
+### R3 — the prose now names the law that is actually enforced
+
+R3 is unobservable at this boundary, and the docstring now says so instead of implying
+otherwise. The deny-list is **DERIVED** from `TOOL_CAPABILITIES`
+(`src/skills/capabilities.py:439`), and `TOOL_CAPABILITIES` is one of R2's two union
+halves — so R2 refuses every deny-listed name before R3 can be reached. Measured:
+`IRREVERSIBLE_TOOLS ⊆ TOOL_CAPABILITIES ⊆ valid_tools()`, and
+`IRREVERSIBLE_TOOLS ⊆ _live_tool_names()` is `True`.
+
+**The enforceable law is R4 plus the registry-wide post-condition.** The post-condition's
+location, verified rather than guessed and named **structurally** (its anchors are
+symbols, because a bare line number in this file is the exact defect this commit fixes):
+the `unlisted` sweep inside `register_tool`'s `try` block, placed immediately after the
+capability write and its `landed.append("capability")`, **before** the handler binding,
+and routed to `_rollback` by `except _IrreversibleTierWouldOpen`. Its own guard file is
+`tests/test_p3d_irreversible_backstop.py` (M7 in the P3-D mutation run).
+
+### No executable line changed — two mechanical proofs
+
+1. **AST.** With every docstring stripped and the module re-parsed, `ast.unparse` of
+   `HEAD` and of the working tree are **byte-identical** → `True`.
+2. **Token.** After dropping every `STRING` and `COMMENT` token, the remaining
+   **1431 → 1431** tokens are identical in type and value.
+3. Supporting: `ruff format --check` clean (438 files), and the full suite is unchanged.
+
+`src/persona.py` hash-verified before and after: `8b972942e785880a3de66121e7f808666250ed2f`.
+
+### Mutation check — and the gap, stated plainly
+
+This node's own guard is **the suite staying green**, because a docs-only change that
+altered behaviour would break something. To find out whether that guard actually
+constrains *docstring accuracy*, four false claims were injected —
+`src/tools.py:9999`, `src/skills/capabilities.py:123456`, "NINE HUNDRED test modules",
+and "all six deny-listed names" — and every gate was run against the mutant:
+
+| Gate | Verdict on a demonstrably FALSE citation |
+|---|---|
+| `pytest` (2,795 tests) | **GREEN**, 0 failed |
+| `ruff check` | **GREEN** |
+| `ruff format --check` | **GREEN** |
+| `docs_guard.py` | **GREEN** |
+| `security_gate.py` | **GREEN** |
+
+**No guard detects docstring accuracy.** The mutant survived all five, so the suite
+going green proves this change was behaviour-neutral and **proves nothing about whether
+a citation is true**. That is the known gap N6 exists to close, it is not closed here,
+and no coverage is claimed for it. The file was restored from a byte-copy backup and
+re-verified by SHA-256 (`D201E912…813` before and after restore).
+
+### Verification, re-derived by running the commands
+
+| Measurement | Value |
+|---|---|
+| Full suite, `--ignore=tests/live_harness` | **2,795 passed** / 0 failed / 4 skipped / 1 xfailed — **exactly the recorded baseline** |
+| `check_tiered_coverage.py` | **GATE PASSED**, 92.4% TOTAL; `src/tool_overlay.py` **98.4%**; every core module ≥98.0% — none lowered |
+| `ruff check` | clean |
+| `ruff format --check` | 438 files already formatted |
+| `security_gate.py` | OK (bandit + secret scan) |
+| `docs_guard.py` | OK — 16 canonical files present |
+| `git hash-object src/persona.py` | `8b972942e785880a3de66121e7f808666250ed2f` |
+| `git diff --stat HEAD` | `src/tool_overlay.py` + `docs/10-CHECKPOINT.md` only |
+
+The 2 failures visible in the coverage script's own full-suite run are the pre-existing
+`tests/live_harness` free-provider flakes (`test_h04_ttft_monitor`,
+`test_h06_joda_dialogues`). **Not weakened, not skipped, not touched.** No test reached
+the network beyond them.
+
+### Same drift class, OUTSIDE this node's write-set — reported, not fixed
+
+This node can correct one file; the tree cannot be made consistent by doing so. Every
+item below is a measured falsehood in a file this node is forbidden to touch:
+
+- `src/cognition.py:419` — "`_TOOL_GOALS` stays the static base (ten test modules import
+  it by name)". Measured: **4**. Locked file.
+- `src/evolution.py:251` — "ten test modules read the base". Measured: **14**. Forbidden.
+- `src/skills/capabilities.py:389` and `tests/test_tool_catalog_completeness.py:23` —
+  both cite `src/dispatcher.py:763-765` for the rewrite to `"none"`; that code is now at
+  `src/dispatcher.py:791-793` (763 is `return ("openclaw_fetch", url)`). Forbidden/locked.
+- `src/dispatcher.py:113` cites "SEAM 1 (`src/dispatcher.py:868`)" and `src/dispatcher.py:788`
+  cites "`router_prompt()` (:905)"; `router_prompt()` is defined at `:110` and called at
+  `:919`. Locked.
+- `tests/test_p3d_registration.py:53` — "R2 refuses all six names". Measured: **7**.
+  `tests/**` is out of scope for this node.
+- `tests/test_p3d_seams.py:525` — "Ten test modules import `_VALID_TOOLS`". Measured: **14**.
+- `docs/architecture/CROSS_FRAMEWORK_ANALYSIS_AND_SELF_EVOLUTION.md:346` (42 catalogued,
+  four routed-but-uncatalogued) and `:550` (ten test modules) — outside this node's
+  write-set.
+- Historical entries at `docs/10-CHECKPOINT.md:1316` ("Ten modules") and `:1393` ("all six
+  names") are **left byte-untouched on purpose**: they are a dated P3-D record whose own
+  results table shows the suite at 2,493, so both numbers were correct when written.
+  Rewriting them would be rewriting history to fix a record, not a live claim.
+
+Two claims that looked like drift and are **NOT** defects, checked rather than assumed:
+`tests/test_live_irreversible_gate.py:244` ("six names") is correct — it parametrizes
+`GATED_NAMES = IRREVERSIBLE_NAMES - {"close"}`, which is 7 − 1. And
+`tests/test_tool_catalog_completeness.py:16` ("42 catalogued, four routed-but-uncatalogued")
+is explicitly dated "MEASURED at the commit this guard was written against", which is the
+honest form of the same fact.
+
+### Write-set
+
+`src/tool_overlay.py` (docstrings and comments only), `docs/10-CHECKPOINT.md` (this
+entry). One commit. Zero new packages, no new environment variable, no new configuration
+knob. No executable line of any file touched; no test added, changed or deleted.
+
 - [07 — Implementation Plan](./07-IMPLEMENTATION-PLAN.md)
 - [11 — Testing](./11-TESTING.md)
 - [Objectives Ledger](./reports/OBJECTIVES_LEDGER_MET_VS_PENDING.md)
