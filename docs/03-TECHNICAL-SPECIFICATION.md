@@ -57,7 +57,7 @@ success,observations[],audit_codes[]}`. Verbs: `openclaw.perceive`
 
 FAST TTFT ~0.6–1.2 s (bar 1.2 s; worst transient ~2.2 s absorbed, never a
 stall). RAG recall 13/14 top-1, 14/14 top-3, p95 ~3.1 ms (bar 5 ms).
-Suite 1,457 passed / 0 failed, coverage ≥ 85%. OpenClaw bench 12/12, 0
+Suite 2,903 passed / 0 failed, coverage ≥ 85%. OpenClaw bench 12/12, 0
 unconfirmed executions.
 
 ## See also (graph links)

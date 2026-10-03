@@ -58,7 +58,7 @@ reachable over Telegram in warm, authentic Jordanian Arabic. (Source:
 
 TTFT < 1.2 s · RAG p95 ≤ 5 ms · voice-note first chunk < 600 ms target ·
 0 unconfirmed destructive executions · 0 guest-mode private-tool leaks ·
-1,457/0 suite · $0.00/mo.
+2,903/0 suite · $0.00/mo.
 
 ## 6. Out of scope (see `docs/08-ROADMAP.md`)
 

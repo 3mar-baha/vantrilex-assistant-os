@@ -9,7 +9,7 @@ self, masculine address to Omar, platonic only. Owner: Omar, Amman
 
 ## Vocabulary (terms agents must use exactly)
 OmniRoute (gateway :20128, NOT the brain) · 3-tier brain FAST/MEDIUM/HEAVY ·
-Fast Front-Door Dispatcher (ADR-18) · ToolRegistry (45 handlers) · Tool lane
+Fast Front-Door Dispatcher (ADR-18) · ToolRegistry (46 handlers) · Tool lane
 (real execution BEFORE narration) · Whitelist guardrail + confirmation IDs +
 audit ledger · Guest Mode · PARA+Zettelkasten vault · VaultIndex (lazy,
 top-3) · Tier-1 digest (`Omar_Master_Digest.md`, ≤800 words) · Write-back

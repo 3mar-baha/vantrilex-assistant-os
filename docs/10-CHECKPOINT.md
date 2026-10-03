@@ -3653,9 +3653,17 @@ second**, and it is a named table rather than an accident:
 
 ```python
 HTTP_STATUS_BY_STATE: Final[dict[str, int]] = {
-    STATE_HEALTHY: 200, STATE_MISCONFIGURED: 200, STATE_UNREACHABLE: 200,
+    STATE_HEALTHY: 200,
+    STATE_MISCONFIGURED: 200,
+    STATE_UNREACHABLE: 200,
 }
 ```
+
+The fence is a VERBATIM copy of `src/health.py:157-161`, and it is byte-shaped like it
+because it has to be: a Python fence inside a markdown file is still parsed as Python by
+`ruff format`, so a hand-wrapped line here is a red gate in the repository, not a cosmetic
+choice. N7 realigned this fence to the live source, which is the only edit N7 made inside
+an existing ledger entry.
 
 **The operator consequence, stated plainly.** Every `/health` response is 200,
 whatever the lanes say. A Space (or any hosting platform) reads a non-200 as
@@ -4433,3 +4441,141 @@ verified with `--diff` that N6 adds no new instance.
 - [Master Transformation Plan](./MASTER_SYSTEM_TRANSFORMATION_AND_EXECUTION_PLAN.md)
 - [System & Codebase Encyclopedia](./reports/SARA_EXHAUSTIVE_SYSTEM_AND_CODEBASE_ENCYCLOPEDIA.md)
 - [Map of Testing & Audits](./00-MAP-OF-TESTING-AND-AUDITS.md)
+
+---
+
+## N7 / D-7 — documentation debt triage (2026-10-03) — the LAST node of Phase 1
+
+**Zero behaviour change. No `.py` file touched. No new tests. One commit.**
+
+### The gate that was red, and it was this node's single hard DoD
+
+`ruff format --check` was **RED at `8da8adf`**, inherited from N3 — exactly as N6 recorded
+above at `:4434-4436`, which N7 left untouched because that statement was true at N6's
+commit. The cause generalises: **ruff parses a `python` fence inside markdown as Python**,
+so N3's hand-wrapped dict literal quoted into the §48 narrative at `:3654-3658` was
+holding the repository's own lint gate red. The fence is now byte-identical to
+`src/health.py:157-161`, verified by comparing the two extracts, and the gate is GREEN
+(`442 files already formatted`). That single fence is the only edit N7 made inside an
+existing ledger entry.
+
+### The finding: the grep count was a hypothesis, and it was wrong in an interesting way
+
+The brief's corpus was 16 files / ~34 hits. The measured corpus is **239 quantity claims
+across 18 files**, and the shape is nothing like the count suggested:
+
+| Bucket | Hits | Action |
+|---|---|---|
+| `dated-history` | 213 | left alone |
+| `verified-true` | 9 | left alone — re-derived and found CORRECT |
+| `external` | 9 | left alone |
+| `not-a-claim` | 4 | left alone — extractor matched a badge, not a count |
+| **`live-and-wrong`** | **4** | **CORRECTED** |
+| **total** | **239** | |
+
+**Two buckets were added because the four-bucket taxonomy had no honest home for a current
+claim that is simply true**, and forcing one in lies in one direction or the other. The
+`verified-true` bucket is the load-bearing one: `4,782` looks stale
+(`src/persona.py` is 12,100 bytes) but it is `len(SARA_PERSONA_AR)` in **characters** —
+measured 4,782 today and pinned green by
+`tests/suite/tier1_resilience/test_persona_extract.py:20`. «Correcting» it to 12,100 would
+have introduced a defect. Same for `docs/16-WORKFLOWS.md`'s «10-agent roster» (re-derived:
+10 roster rows) and the tool compendium's «46 tools» (re-derived: 46).
+
+**The brief's four README Oracle sites are not numeric claims at all** — they are
+narrative, which is why a count-based sweep could not see them. They are triaged as
+Inventory B in the appendix.
+
+### Corrections — every one re-derived, `OLD → NEW` in the commit message
+
+* `docs/01-PRODUCT-REQUIREMENTS.md:61`, `docs/03-TECHNICAL-SPECIFICATION.md:60` —
+  `1,457` → `2,903` suite.
+* `docs/04-ARCHITECTURE.md:94`, `docs/ai/PROJECT-CONTEXT.md:12` — `45 handlers` → `46`.
+  `_do_*` methods on `ToolRegistry` = 46. The ledger had already flagged this discrepancy
+  at `:1187-1188`; that entry is **dated** and was left alone.
+* `README.md:2-3, 26, 31, 54, 137` — the Oracle narrative, as **one artefact**. The
+  diagram at `:54` is what a new reader sees first, so it was corrected together with the
+  header; a half-fix above a diagram still saying Oracle would be worse than the original
+  consistent-but-wrong state. Diagram column alignment verified byte-for-byte (52/57/61).
+  The **Arabic tagline at `:26` was corrected too even though the brief named four
+  sites** — it is the one-line summary under the badges and said *in the cloud, 24/7*.
+* `README.md:149` — a **behavioural** claim, and the most dangerous correction here. It
+  named 3 health lanes and the words `ok`/`degraded`. Live: `LANE_NAMES` is **five** lanes
+  (`src/health.py:115`), the vocabulary is `healthy`/`misconfigured`/`unreachable`, and
+  `exit_code_for({'overall': 'ok'})` returns **1**. The old text told an operator that an
+  `ok` report exits 0 — exactly inverted.
+* `docs/00-MAP-OF-ARCHITECTURE.md:40` — the link to `15-ORACLE-DEPLOY.md` was **kept**
+  (the document exists and is correct as a deploy guide) and a status marker added saying
+  SHELVED and why it was not deleted. This closes the deferred row at `:3023`.
+
+### Current-state note — APPENDED, not folded into N5's entry
+
+**A secondary rate-limit 403 now reports `misconfigured`, not `unreachable`.** This is the
+deliberate cost of never retrying a refusal (N5, `:4186-4194`, unedited): nothing in the
+headers separates a secondary limit from an under-scoped PAT, so `classify_rate_limit`
+demotes that shape to `REFUSED`, and `src/health.py:508` then maps any 401/403 to
+`misconfigured`. Measured, replaying `src/health.py:500-512`:
+
+| Response | `kind` | throttled | `/health` vault lane |
+|---|---|---|---|
+| 403 + `Retry-After` only (**secondary limit**) | `REFUSED` | no | **`misconfigured`** |
+| 403 + `Retry-After` + `x-ratelimit-remaining: 0` | `PRIMARY` | yes | `unreachable` |
+| 403, no headers (under-scoped PAT) | `REFUSED` | no | `misconfigured` |
+| 429 | `TOO_MANY` | yes | `unreachable` |
+
+**Operator consequence:** a genuinely throttled-but-fine vault PAT now reads
+`misconfigured`. An operator who trusts that word will rotate a working key. The two
+states stay distinct; what changed is which guess the system refuses to make. N5 documented
+the trade at `:4191-4194`; this row states what an operator will actually see.
+
+### N6's Class-B deferrals — RECORDED, still deferred
+
+**N7 did not fix them.** Owner decision 2026-10-03, option (a) stands. Re-derived at HEAD
+to confirm the queue is real and not a stale allow-list: **28 pairings discovered, 8
+proved, 20 deferred, 0 unaccounted.** The 20 deferred pairings occupy **19** table rows,
+because one key (`tests/test_action_audit_log.py` + `src/vault.py:432` + `upsert`) is
+discovered twice — which N6 already noted in its own reason string.
+
+* Full table: this file, `:4368-4388`.
+* Machine-readable source of truth: `DEFERRED_CLASS_B`, `tests/test_citation_guards.py`.
+* A `docs_guard.py` guard was **not** added, and `scripts/docs_guard.py` was **not**
+  touched — see below.
+
+### N6's 33 unpoliced `docs/` citations — triaged, none corrected
+
+**N6's 33 is TRUE for N6's commit. Measured at HEAD it is 35**, and the delta is fully
+explained: `8da8adf` added 100 lines to this file carrying 43 new `docs/` citations
+(`484 - 43 = 441`, matching N6's recorded 441), of which exactly **2 fail** — the quoted
+RED-demonstration citations at `:4396` and `:4398`. **33 + 2 = 35.**
+
+**Split: 0 corrected, 35 recorded as known** — 26 in
+`docs/architecture/AGENCY_SWARM_WORKFLOW.md` (**external**: they cite `.claude/agents/*.md`,
+and `SEARCH_ROOTS` excludes `.claude/` **by policy**, because a citation into a tree CI does
+not have cannot be verified from the repository), 6 in this ledger (2 dated findings, 2
+citations into the never-staged analysis report which the text itself flags as «a gitignored
+reading copy», 4 quoted RED-proof citations), and 3 in `docs/AUDIT_REPORT.md`
+(**quoted-third-party**: the 2026-09-02 forensic report citing a tree as it stood then).
+Not one is a live-and-wrong claim about today.
+
+### Write-set
+
+`README.md`, `docs/00-MAP-OF-ARCHITECTURE.md`, `docs/01-PRODUCT-REQUIREMENTS.md`,
+`docs/03-TECHNICAL-SPECIFICATION.md`, `docs/04-ARCHITECTURE.md`, `docs/ai/PROJECT-CONTEXT.md`,
+`docs/N7-DOCS-DEBT-TRIAGE.md` (new), and this file. `src/persona.py` hash-verified before
+and after: `8b972942e785880a3de66121e7f808666250ed2f`. **`git diff --stat -- '*.py'`
+returns empty.** `scripts/docs_guard.py` deliberately **not** modified: its canonical set is
+the 16-file suite and this node's appendix is frozen history, which that file's own
+docstring already excludes from canonicity.
+
+### Dated anchors N7 did NOT rewrite, named
+
+`## Anchor — 2026-09-14 · Commit 3fe6703 · Tests 1,457 passed (0 failures)` (`:285`) and the
+whole run of per-entry suite sizes — `1,462` (`:312`), `1,469` (`:465`), `1,474` (`:476`),
+`1,496` (`:485`), and onward through `1,521`, `1,536`, `1,798`, `1,813`, `1,819`, `1,838`,
+`1,855`, `1,864`. Each is a true statement about the commit that recorded it; rewriting one
+to today's 2,903 would assert that a September commit ran 2,903 tests. Also untouched:
+`1,486 skills / 283 agents / 903 MCPs / 13 plugins / 19 hooks` (`:623`, `:628` — the
+owner's other machine at `O:\`), the gateway's `/models` count (`:1115`, `:185` — a
+third-party inventory), and N6's own `:4434-4436` note that the fence was red, which was
+true when written.
+

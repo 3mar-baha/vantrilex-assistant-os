@@ -1,6 +1,8 @@
 ---
-# Space-compatible metadata (kept for host portability; production host = Oracle VM,
-# ADR-15 amended 2026-08-31 — see docs/15-ORACLE-DEPLOY.md)
+# Space-compatible metadata (kept for host portability; the day-to-day host is THIS
+# Windows PC — local-first, owner decision 2026-10-01. Oracle Cloud Always-Free is
+# SHELVED future work, not current scope; the deploy guide is kept intact at
+# docs/15-ORACLE-DEPLOY.md)
 title: Vantrilex Assistant OS — Sara
 emoji: 🌟
 colorFrom: purple
@@ -21,14 +23,14 @@ pinned: false
 [![Cost: $0.00/month](https://img.shields.io/badge/Cost-%240.00%2Fmonth-brightgreen.svg)](docs/09-DECISIONS.md)
 
 > **نظام تشغيل وكلاء ذكي موحد** يجسّد مساعدة تنفيذية ومعلمة موسوعية شاملة (**سارة**) تعمل
-> سحابياً على مدار الساعة (24/7)، وتتحدث باللهجة واللكنة الأردنية الدافئة والعفوية —
-> بتكلفة شهرية صفرية تماماً ($0.00).
+> محلياً على جهاز المالك، وتتحدث باللهجة واللكنة الأردنية الدافئة والعفوية — بتكلفة شهرية
+> صفرية تماماً ($0.00).
 
 Vantrilex Assistant OS is an owner-only personal executive assistant named **Sara (سارة)** —
-Chief of Staff, polymath tutor, tech scout, and PC automation companion — running 24/7 on an
-Oracle Cloud Always-Free VM (ADR-15, amended 2026-08-31), speaking warm Jordanian Arabic over
-Telegram, reasoning through a 3-tier multi-model brain behind a fast front-door dispatcher
-(ADR-16/18), at exactly **$0.00/month**.
+Chief of Staff, polymath tutor, tech scout, and PC automation companion — running
+**locally on the owner's Windows PC** (local-first doctrine, owner decision 2026-10-01),
+speaking warm Jordanian Arabic over Telegram, reasoning through a 3-tier multi-model brain
+behind a fast front-door dispatcher (ADR-16/18), at exactly **$0.00/month**.
 
 ## What Sara does (v1.0)
 
@@ -48,7 +50,7 @@ Telegram, reasoning through a 3-tier multi-model brain behind a fast front-door 
 ## Architecture (one glance)
 
 ```
-Owner ⇄ Telegram ⇄ [Oracle VM 24/7 (ADR-15)]       [Windows PC]
+Owner ⇄ Telegram ⇄ [Local core — this PC]          [Windows PC]
                      ├─ Aiogram 3.x core             └─ Bridge daemon (outbound-only WSS)
                      ├─ Dispatcher → OmniRoute :20128    ├─ Windows-MCP executor
                      │   ├─ Tier1 fast (converse/ack)    ├─ Wake-on-LAN sender
@@ -132,7 +134,11 @@ make run-core                   # start Sara's core
 On the Windows PC (bridge): same repo, fill the `[CORE <-> BRIDGE]` block of `.env`, then
 `make run-bridge`.
 
-### Production (Oracle Cloud Always Free — ADR-15, amended 2026-08-31)
+### Deploying to Oracle Cloud Always Free (SHELVED — ADR-15, amended 2026-08-31)
+
+> **Status: shelved, not current scope.** Owner decision 2026-10-01 — the day-to-day host is
+> the owner's Windows PC (local-first). Everything below is retained as a *working* deploy
+> path for whenever it is picked up; it is not a description of how Sara runs today.
 
 ONE Docker container on an always-free Ampere A1 VM co-locates OmniRoute + the core behind
 the supervised entrypoint (`scripts/supervise.py`); Caddy 2 terminates TLS for a free DuckDNS
@@ -144,7 +150,11 @@ file (`~/sara-secrets/sara.env`) — never the repo. The Arabic hand-held deploy
 Verify a deployment with `python scripts/deploy_smoke.py` (exit 0 = Sara is alive).
 
 Ops health probe (no Telegram traffic): `python -m src.main --health` prints a JSON report
-(`gateway` / `telegram_token` / `ffmpeg` / `overall`) and exits 0 when ok, 1 when degraded.
+with **five** lanes — `gateway` / `telegram_token` / `ffmpeg` / `vault` / `google` — plus an
+`overall` rollup. The whole vocabulary is `healthy` / `misconfigured` / `unreachable`:
+**every state answers HTTP 200** and the body carries the truth. The operator's alarm is the
+exit code — **0 only when `overall` is `healthy`, 1 otherwise** (`ok` and `degraded` are no
+longer words this endpoint emits).
 
 ## Roadmap
 

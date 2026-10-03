@@ -91,7 +91,7 @@ on shutdown): 07:30 brief, 18:00–19:30 check-in, ~45-min proactive outreach
 ## 4. Component registry
 
 Core: `bot.py` (shell/loops), `dispatcher.py` (ADR-18), `gateway.py`
-(OmniRoute client), `tools.py` (45 handlers), `decision_loop.py` (ReAct +
+(OmniRoute client), `tools.py` (46 handlers), `decision_loop.py` (ReAct +
 PARK), `memory.py` + `memory_ledger.py`, `associative.py` (VaultIndex),
 `vault.py` (GitHub client + resolvers), `cognition.py` + `cognitive_dag.py`,
 `skills/*` (guides, triage, journaler, outreach, biometrics), `openclaw/`

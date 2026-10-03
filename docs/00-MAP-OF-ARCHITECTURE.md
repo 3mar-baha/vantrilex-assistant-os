@@ -37,7 +37,7 @@ links back here via its own `See also` block — no orphaned nodes.
 
 - [13 — Deployment](./13-DEPLOYMENT.md)
 - [14 — Runbook](./14-RUNBOOK.md)
-- [15 — Oracle Deploy](./15-ORACLE-DEPLOY.md)
+- [15 — Oracle Deploy](./15-ORACLE-DEPLOY.md) — **SHELVED, kept for the record.** Oracle Cloud Always-Free is not the day-to-day host; local-first is (owner decision 2026-10-01). The document is live and correct *as a deploy guide* — this marker, not a deletion.
 
 ## Companion hub
 
