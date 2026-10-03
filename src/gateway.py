@@ -51,16 +51,90 @@ class PaidModelBlockedError(GatewayError):
     instead of billing the owner's account."""
 
 
+#: Provider prefixes whose keys the owner holds on OmniRoute itself, with no
+#: billing account attached to the gateway. Dispatch through them costs $0 and
+#: CANNOT silently become paid: quota exhaustion returns 429, it never bills.
+#: Owner decision 2026-10-03.
+#:
+#: This is a STATIC allow-list on purpose. A config-driven list would replace
+#: "this provider is free by construction" with "the owner configured it", and
+#: having a key is not the same claim as being free — that weakening is exactly
+#: what the guard exists to prevent.
+FREE_TIER_PREFIXES: Final[tuple[str, ...]] = ("groq/", "gemini/")
+
+
+#: Hard per-provider DAILY call ceiling — the backstop behind `assert_zero_paid_model`.
+#:
+#: The prefix guard proves a model is FREE BY CONSTRUCTION. This proves the
+#: volume stays inside what a free tier will serve, so a runaway loop cannot
+#: turn "free" into a quota wall (and, on any provider where quota maps to a
+#: bill, into a charge). Fail-safe: when the ceiling is reached the call is
+#: REFUSED before the request is built, loudly, and the cascade moves to the
+#: next model in the chain.
+#:
+#: Sourced from the free tiers' published daily allowances, deliberately
+#: conservative so the guard fires BEFORE the provider's own limit rather than
+#: after. Owner decision 2026-10-03.
+FREE_TIER_DAILY_CALL_CEILING: Final[int] = 400
+
+#: Calls claimed per provider per UTC day. Process-local and deliberately so:
+#: a restart must not silently restore a budget that was already spent, and an
+#: in-memory counter cannot be inflated by a second process.
+_DAILY_CALLS: dict[str, int] = {}
+_DAILY_DAY: Final[str] = ""
+
+
+def _claim_daily_budget(model: str) -> None:
+    """Count one call against its provider's daily ceiling, or refuse.
+
+    Raises `PaidModelBlockedError` — the SAME type the free-tier guard raises —
+    so a ceiling refusal is handled by exactly the code path that already
+    handles "this model cannot be used", and the cascade falls through to the
+    next chain entry instead of failing the turn.
+    """
+    global _DAILY_DAY
+    from datetime import UTC, datetime
+
+    provider = model.split("/", 1)[0] if "/" in model else model
+    today = datetime.now(UTC).date().isoformat()
+    if today != _DAILY_DAY:
+        _DAILY_DAY = today
+        _DAILY_CALLS.clear()
+    used = _DAILY_CALLS.get(provider, 0)
+    if used >= FREE_TIER_DAILY_CALL_CEILING:
+        raise PaidModelBlockedError(
+            f"daily free-tier ceiling reached for provider {provider!r} "
+            f"({used}/{FREE_TIER_DAILY_CALL_CEILING} calls today, UTC) — refusing before "
+            "the wire so a runaway loop cannot reach a quota wall"
+        )
+    _DAILY_CALLS[provider] = used + 1
+
+
 def assert_zero_paid_model(model: str) -> None:
-    """Unconditional free-tier proof for one model ID: `:free`-suffixed
-    OpenRouter slugs pass, `groq/`-prefixed IDs pass (free tier by
-    construction); everything else raises PaidModelBlockedError."""
+    """Unconditional free-tier proof for one model ID.
+
+    Passes when the ID is `:free`-suffixed (an OpenRouter free slug), or carries
+    a prefix in `FREE_TIER_PREFIXES` (a gateway-held key on a provider with no
+    billing attached). Everything else raises `PaidModelBlockedError`.
+
+    The guard is deliberately STRUCTURAL and unconditional: it runs before any
+    request is built, so a paid model can never reach the network even once.
+    Adding a prefix is a deliberate act with a stated reason, never a default.
+    """
     candidate = (model or "").strip()
-    if candidate.startswith("groq/") or candidate.endswith(":free"):
+    if candidate.endswith(":free"):
+        return
+    # A prefix only counts when the whole ID sits under it: `gemini/` may not
+    # become a back door for `gemini/<model>:paid`.
+    tail = candidate.split("/", 1)[1] if "/" in candidate else ""
+    if not tail.endswith(":paid") and any(
+        candidate.startswith(prefix) for prefix in FREE_TIER_PREFIXES
+    ):
         return
     raise PaidModelBlockedError(
         f"non-free model blocked before network: {candidate!r} "
-        "(only ':free' slugs or groq/ free-tier IDs may dispatch)"
+        "(only ':free' slugs or gateway-held free-tier prefixes "
+        f"{FREE_TIER_PREFIXES} may dispatch)"
     )
 
 
@@ -551,6 +625,7 @@ class OmniRouteClient:
 
     async def _attempt(self, model: str, payload: dict) -> AsyncIterator[str]:
         assert_zero_paid_model(model)  # $0.00 breaker: before build_request, before wire
+        _claim_daily_budget(model)  # backstop: refuse before the wire, not after billing
         request = self._client.build_request(
             "POST", "/chat/completions", json=dict(payload, model=model)
         )

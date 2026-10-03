@@ -23,17 +23,21 @@ def test_settings_accept_all_env_example_vars(make_settings):
     s = make_settings()
     assert s.omniroute_base_url == "http://localhost:20128/v1"
     assert s.omniroute_api_key == "sk-omniroute-local-key"
-    assert s.fast_model == "groq/openai/gpt-oss-120b"
-    assert s.medium_model == "openrouter/nex-agi/nex-n2.5-mini:free"
-    assert s.heavy_model == "openrouter/nex-agi/nex-n2.5-pro:free"
-    assert s.heavy_escalation_model == "openrouter/nvidia/nemotron-3-ultra-550b-a55b:free"
+    # Re-pinned 2026-10-03 (owner). The previous nex-agi primaries measured DEAD
+    # against the live gateway (`KeyError: 'choices'` — no completions returned).
+    # This guard owns the LAW: a full mirror validates, primaries parse, the
+    # escalation model leads the escalated chain, and the threshold selector
+    # escalates past 3. Whether each slug is LIVE is
+    # `tests/test_env_model_slugs.py`'s job, checked against the catalog.
+    assert s.fast_model == "gemini/gemini-3.8-flash"
+    assert s.medium_model == "gemini/gemini-3.8-flash"
+    assert s.heavy_model == "gemini/gemini-3.8-flash"
+    assert s.heavy_escalation_model == "openrouter/poolside/laguna-s-2.1:free"
     assert s.heavy_concurrency_threshold == 3
-    assert s.heavy_escalated_chain[0] == "openrouter/nvidia/nemotron-3-ultra-550b-a55b:free"
-    assert s.heavy_chain_for(2)[0] == "openrouter/nex-agi/nex-n2.5-pro:free"
-    assert s.heavy_chain_for(4)[0] == "openrouter/nvidia/nemotron-3-ultra-550b-a55b:free"
-    assert s.heavy_chain_for(1, is_dag_swarm=True)[0] == (
-        "openrouter/nvidia/nemotron-3-ultra-550b-a55b:free"
-    )
+    assert s.heavy_escalated_chain[0] == "openrouter/poolside/laguna-s-2.1:free"
+    assert s.heavy_chain_for(2)[0] == "gemini/gemini-3.8-flash"
+    assert s.heavy_chain_for(4)[0] == "openrouter/poolside/laguna-s-2.1:free"
+    assert s.heavy_chain_for(1, is_dag_swarm=True)[0] == ("openrouter/poolside/laguna-s-2.1:free")
     assert s.telegram_bot_token.startswith("1234567890:")
     assert s.authorized_user_id == 123456789
     assert s.voice_name == "ar-EG-SalmaNeural"

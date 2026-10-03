@@ -54,14 +54,19 @@ os.environ.setdefault("BRIDGE_TOKEN", "your-bridge-shared-token")
 ENV_EXAMPLE: dict[str, str] = {
     "OMNIROUTE_BASE_URL": "http://localhost:20128/v1",
     "OMNIROUTE_API_KEY": "sk-omniroute-local-key",
-    "FAST_MODEL": "groq/openai/gpt-oss-120b",
-    "FAST_MODEL_FALLBACKS": "google/gemma-4-31b-it:free",
-    "MEDIUM_MODEL": "openrouter/nex-agi/nex-n2.5-mini:free",
-    "MEDIUM_MODEL_FALLBACKS": "groq/openai/gpt-oss-120b",
-    "HEAVY_MODEL": "openrouter/nex-agi/nex-n2.5-pro:free",
-    "HEAVY_MODEL_FALLBACKS": "groq/openai/gpt-oss-120b",
-    "HEAVY_ESCALATION_MODEL": "openrouter/nvidia/nemotron-3-ultra-550b-a55b:free",
-    "HEAVY_ESCALATION_FALLBACKS": "groq/openai/gpt-oss-120b",
+    # RE-PINNED 2026-10-03 (owner). The previous mirror carried two DEAD nex-agi
+    # primaries (KeyError: 'choices' — no completions) and a DEAD FAST fallback
+    # (`google/gemma-4-31b-it:free`, absent from the catalog — the slug moved under
+    # the `openrouter/` prefix). Measured against the live 1,482-model catalog.
+    # Order is latency-aware per tier role; gemma (42.2 s) is last resort only.
+    "FAST_MODEL": "gemini/gemini-3.8-flash",
+    "FAST_MODEL_FALLBACKS": "groq/openai/gpt-oss-120b,openrouter/poolside/laguna-s-2.1:free,openrouter/google/gemma-4-31b-it:free",
+    "MEDIUM_MODEL": "gemini/gemini-3.8-flash",
+    "MEDIUM_MODEL_FALLBACKS": "groq/openai/gpt-oss-120b,openrouter/poolside/laguna-s-2.1:free,openrouter/nvidia/nemotron-3-ultra-550b-a55b:free",
+    "HEAVY_MODEL": "gemini/gemini-3.8-flash",
+    "HEAVY_MODEL_FALLBACKS": "openrouter/poolside/laguna-s-2.1:free,openrouter/nvidia/nemotron-3-ultra-550b-a55b:free,openrouter/google/gemma-4-31b-it:free",
+    "HEAVY_ESCALATION_MODEL": "openrouter/poolside/laguna-s-2.1:free",
+    "HEAVY_ESCALATION_FALLBACKS": "openrouter/nvidia/nemotron-3-ultra-550b-a55b:free,groq/openai/gpt-oss-120b",
     "HEAVY_CONCURRENCY_THRESHOLD": "3",
     "TELEGRAM_BOT_TOKEN": "1234567890:ABCdefGHIjklMNOpqrsTUVwxyz",
     "AUTHORIZED_USER_ID": "123456789",

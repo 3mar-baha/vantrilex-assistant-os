@@ -20,13 +20,23 @@ from tests.test_omniroute_gateway import _chunk, _collect, _Scripted, _sse
 # nemotron-3-ultra MoE beyond). Gemma stays the FAST fallback behind the 4s
 # guillotine + 15m quarantine. Test-local chains exercise the dispatcher
 # logic; the canonical pins live in .env.example (test below).
-FAST_PIN = "groq/openai/gpt-oss-120b"
-FAST_FB1 = "google/gemma-4-31b-it:free"
-MEDIUM_PIN = "openrouter/nex-agi/nex-n2.5-mini:free"
+# RE-PINNED 2026-10-03 (owner). The previous values were two DEAD nex-agi
+# primaries (`KeyError: 'choices'` — no completions returned) and a DEAD FAST
+# fallback (`google/gemma-4-31b-it:free` is absent from the catalog; the slug
+# moved under the `openrouter/` prefix). Measured against the live 1,482-model
+# catalog; see the Phase-A commit message for every probe.
+#
+# These constants double as the dispatcher's TEST-LOCAL chains, so they must be
+# real, dispatchable, free-tier slugs — a pin that cannot serve traffic is not a
+# useful fixture. `tests/test_env_model_slugs.py` now asserts the canonical
+# template against the LIVE catalog instead of against a snapshot.
+FAST_PIN = "gemini/gemini-3.8-flash"
+FAST_FB1 = "groq/openai/gpt-oss-120b"
+MEDIUM_PIN = "gemini/gemini-3.8-flash"
 MEDIUM_FB1 = "groq/openai/gpt-oss-120b"
-HEAVY_PIN = "openrouter/nex-agi/nex-n2.5-pro:free"
-HEAVY_FB1 = "groq/openai/gpt-oss-120b"
-HEAVY_ESC_PIN = "openrouter/nvidia/nemotron-3-ultra-550b-a55b:free"
+HEAVY_PIN = "gemini/gemini-3.8-flash"
+HEAVY_FB1 = "openrouter/poolside/laguna-s-2.1:free"
+HEAVY_ESC_PIN = "openrouter/poolside/laguna-s-2.1:free"
 
 CHAINS = {
     Tier.FAST: [FAST_PIN, FAST_FB1],
@@ -61,9 +71,15 @@ def test_settings_carries_tier_pins(make_settings):
     """AC1: Settings carries the 3-tier pins, parses fallback lists, fails fast on gaps."""
     s = make_settings()
     assert (s.fast_model, s.medium_model, s.heavy_model) == (FAST_PIN, MEDIUM_PIN, HEAVY_PIN)
-    assert s.fast_chain == [FAST_PIN, FAST_FB1]
-    assert s.medium_chain == [MEDIUM_PIN, MEDIUM_FB1]
-    assert s.heavy_chain == [HEAVY_PIN, HEAVY_FB1]
+    # Chains are now MULTI-entry (owner 2026-10-03): each tier carries its primary
+    # plus a latency-ordered free-tier fallback set. What this guard owns is that
+    # the primary leads and the fallbacks parse — the exact fallback ORDER is the
+    # latency law, owned by `tests/test_env_model_slugs.py`.
+    assert s.fast_chain[0] == FAST_PIN and s.fast_chain[1] == FAST_FB1
+    assert s.medium_chain[0] == MEDIUM_PIN and s.medium_chain[1] == MEDIUM_FB1
+    assert s.heavy_chain[0] == HEAVY_PIN and s.heavy_chain[1] == HEAVY_FB1
+    for chain in (s.fast_chain, s.medium_chain, s.heavy_chain):
+        assert len(chain) >= 2, f"a single-entry chain is a single point of failure: {chain}"
     # blank fallbacks -> pin-only chain
     assert make_settings(FAST_MODEL_FALLBACKS="").fast_chain == [FAST_PIN]
     # missing tier pin -> boot fails fast
@@ -91,7 +107,13 @@ def test_env_pins_match_adr16():
         for line in template.splitlines()
         if line.startswith("HEAVY_MODEL_FALLBACKS=")
     )
-    assert heavy_fb.split(",") == [HEAVY_ESC_PIN, HEAVY_FB1]
+    # 2026-10-03 (owner): HEAVY now carries THREE free-tier fallbacks, ordered by
+    # measured latency — laguna 8.0 s, nemotron 19.7 s, gemma 42.2 s last. The old
+    # two-entry assertion pinned a two-entry chain whose second slot was the
+    # escalation model; the chain is now latency-ordered per tier role, and
+    # `tests/test_env_model_slugs.py` owns the ordering law.
+    assert heavy_fb.split(",")[0] == HEAVY_ESC_PIN
+    assert len(heavy_fb.split(",")) >= 2
     assert "PRIMARY_MODEL" not in template
 
 
