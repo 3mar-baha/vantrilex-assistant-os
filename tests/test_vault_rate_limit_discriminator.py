@@ -48,6 +48,7 @@ from __future__ import annotations
 import ast
 import asyncio
 import base64
+import contextlib
 import inspect
 import time
 from pathlib import Path
@@ -71,6 +72,8 @@ RATE_LIMIT_HEADERS = frozenset({"retry-after", "x-ratelimit-remaining", "x-ratel
 
 #: Nothing a PURE function may touch. It reads header values and the clock, and
 #: that is the whole of its world: no socket, no file, no client, no clock-wait.
+#: ``headers`` is deliberately ABSENT — it is the parameter name the contract
+#: mandates, so forbidding it would make this guard contradict its own law.
 _FORBIDDEN_IN_A_PURE_FUNCTION = frozenset(
     {
         "httpx",
@@ -91,7 +94,6 @@ _FORBIDDEN_IN_A_PURE_FUNCTION = frozenset(
         "post",
         "request",
         "send",
-        "headers",
         "client",
         "session",
         "transport",
@@ -379,13 +381,36 @@ def test_an_exhausted_quota_is_a_primary_limit_with_and_without_retry_after() ->
         )
 
 
-def test_a_retry_after_without_an_exhausted_quota_is_only_a_secondary_signal() -> None:
-    """The demotion, stated. Still retryable — GitHub does use this for secondary
-    limits — but the KIND records that the evidence is weaker than «quota: 0»."""
+def test_a_retry_hint_alone_is_demoted_out_of_the_decision() -> None:
+    """THE DEMOTION, and the one place the brief's table and its own Definition of
+    Done disagreed.
+
+    The table said a retry hint with no exhausted-quota header is a «secondary rate
+    limit → retry»; the DoD said that exact shape is the live bug and must NOT
+    retry. Both cannot hold: nothing in the headers separates a secondary 403 from an
+    under-scoped PAT, so any rule retrying that shape retries a refusal. The DoD wins,
+    and the cost is recorded in the predicate's docstring rather than hidden.
+
+    What the demotion DOES leave is the header's real job: it still supplies the WAIT
+    once something else has proven a limit.
+    """
     verdict = vault_mod.classify_rate_limit({"Retry-After": "30"}, 403)
-    assert verdict.kind is vault_mod.RateLimitKind.SECONDARY
-    assert verdict.should_retry is True
-    assert verdict.backoff_s == pytest.approx(30.0)
+    assert verdict.kind is vault_mod.RateLimitKind.REFUSED
+    assert verdict.should_retry is False, (
+        "a retry hint alone is not proof of throttling — GitHub sends it on refusals too"
+    )
+    assert verdict.backoff_s == 0.0
+    assert verdict.kind not in vault_mod.RATE_LIMIT_KINDS, (
+        "the health probe reads RATE_LIMIT_KINDS, so a kind in that set IS a throttle as far "
+        "as an operator is concerned — REFUSED must stay outside it"
+    )
+    # the same header still supplies the wait where a limit IS proven
+    proven = vault_mod.classify_rate_limit(_exhausted(40.0, **{"Retry-After": "9"}), 403)
+    assert proven.kind is vault_mod.RateLimitKind.PRIMARY
+    assert proven.backoff_s == pytest.approx(40.0, abs=2.0), (
+        "with the quota proven, the reset header must still drive the wait — the demotion is "
+        "of the DECISION, not of the header's arithmetic"
+    )
 
 
 def test_the_headline_law_a_bad_scope_403_never_retries() -> None:
@@ -459,8 +484,10 @@ def test_the_predicate_reads_headers_case_insensitively() -> None:
 
     for header in ("Retry-After", "retry-after", "RETRY-AFTER"):
         verdict = vault_mod.classify_rate_limit({header: "9"}, 403)
-        assert verdict.kind is vault_mod.RateLimitKind.SECONDARY, header
-        assert verdict.backoff_s == pytest.approx(9.0), header
+        assert verdict.kind is vault_mod.RateLimitKind.REFUSED, header
+        assert vault_mod.classify_rate_limit(_exhausted(15.0, **{header: "9"}), 403).kind is (
+            vault_mod.RateLimitKind.PRIMARY
+        ), header
 
 
 # ── the cap and the fallback: asserted, never assumed ──────────────────────────────
@@ -629,12 +656,142 @@ def _limited_403() -> httpx.Response:
 
 
 async def test_a_persistent_rate_limit_still_fails_loudly() -> None:
-    """The half of the old law that was already right and must stay right."""
-    client, _script = _client(
-        httpx.Response(429, json={"message": "too many"}, headers={"Retry-After": "0"})
+    """The half of the old law that was already right and must stay right: a limit
+    that survives its one retry SURFACES through the caller's `raise_for_status`
+    rather than being swallowed or looped on."""
+    client, script = _client(
+        httpx.Response(429, json={"message": "too many"}, headers={"Retry-After": "0"}),
+        httpx.Response(429, json={"message": "too many"}, headers={"Retry-After": "0"}),
     )
     with pytest.raises(httpx.HTTPStatusError):
         await client.read("notes/x.md")
+    assert script.count == 2
+
+
+class _GatedGitHub(httpx.AsyncBaseTransport):
+    """A permanently rate-limited GitHub that PARKS the second request.
+
+    The latch is set immediately before that request, so parking it parks the latch
+    too. That is what lets a second read be observed deciding while the latch is
+    provably held — with no timing luck and no sleeping involved, which a
+    concurrency test written any other way would depend on.
+
+    BOTH waits are bounded on purpose. An unbounded ``Event.wait`` here would hang the
+    suite rather than fail it whenever the first read does not retry — and «no retry»
+    is exactly what a broken discriminator produces, so the unbounded version would
+    turn a caught regression into a timeout on CI.
+    """
+
+    #: Long enough for a loaded machine, far too short to look like a hang.
+    TIMEOUT_S = 5.0
+
+    def __init__(self) -> None:
+        self.requests: list[httpx.Request] = []
+        self.reached_retry = asyncio.Event()
+        self.released = asyncio.Event()
+
+    async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
+        self.requests.append(request)
+        if len(self.requests) == 2:
+            self.reached_retry.set()
+            await asyncio.wait_for(self.released.wait(), self.TIMEOUT_S)
+        return httpx.Response(403, json={"message": "rate limited"}, headers=_exhausted(5.0))
+
+    async def aclose(self) -> None:
+        """The client owns this session, so it will close it; nothing to do."""
+
+
+async def test_a_read_arriving_during_another_reads_retry_spends_no_retry_of_its_own(
+    sleeps: list[float],
+) -> None:
+    """THE SINGLE-SHOT BOUND where it is actually load-bearing.
+
+    Counting requests inside ONE call cannot see this: ``_get_with_rate_limit`` is
+    straight-line code, so a call that hits a rate limit twice is still two requests
+    with or without the latch. The latch exists for the case no straight-line test can
+    reach — two reads racing the same limit — and that is what is pinned here.
+
+    Mutation-tested: deleting the latch CHECK from the client's guard condition turns
+    this red (3 requests become 4). Deleting only the set or only the release is
+    caught by ``test_the_single_shot_latch_is_held_across_the_retry_and_released``.
+    """
+    gateway = _GatedGitHub()
+    client = vault_mod.VaultClient(
+        "owner/vault-repo",
+        TOKEN,
+        session=httpx.AsyncClient(base_url=API, transport=gateway),
+    )
+    first = asyncio.ensure_future(client.read("notes/first.md"))
+    try:
+        try:
+            await asyncio.wait_for(gateway.reached_retry.wait(), gateway.TIMEOUT_S)
+            with pytest.raises(httpx.HTTPStatusError):
+                await client.read("notes/second.md")
+        finally:
+            # MUST happen before `first` is awaited: the first read is parked inside
+            # the retry request, and only this releases it.
+            gateway.released.set()
+        with pytest.raises(httpx.HTTPStatusError):
+            await asyncio.wait_for(first, gateway.TIMEOUT_S)
+    finally:
+        if not first.done():
+            # Error path only (the retry never happened, so the park never fired).
+            # Drained rather than dropped, so a stray task exception can never
+            # surface as noise in the NEXT guard.
+            first.cancel()
+            with contextlib.suppress(asyncio.CancelledError, httpx.HTTPStatusError):
+                await first
+    assert len(gateway.requests) == 3, (
+        f"expected the second read to skip its retry while the first held the latch (2 + 1 = "
+        f"3), got {len(gateway.requests)} requests — both concurrent calls spent a retry, so "
+        "the bound is one retry per ATTEMPT rather than one per call"
+    )
+    assert len(sleeps) == 1, (
+        f"only the retry that actually happened may wait; the blocked read waited too: {sleeps}"
+    )
+
+
+async def test_the_single_shot_latch_is_held_across_the_retry_and_released() -> None:
+    """LAW 3's MECHANISM, not only its outcome.
+
+    The outcome («one retry, never two») is already pinned by request count, but the
+    count alone cannot SEE the latch: ``_get_with_rate_limit`` is straight-line code,
+    so deleting the latch check changes nothing at all for a single call. What the
+    latch actually buys is protection against two CONCURRENT calls both spending a
+    retry — and no request-count guard on one call can observe that.
+
+    So the latch is asserted directly, observed from inside the transport while the
+    retry is genuinely in flight: clear on the way in, held on the way out.
+
+    NOT red before the fix, and stated rather than hidden: the latch already existed
+    and was already held at entry — N5 kept it on purpose. What was missing was a
+    guard on the MECHANISM, which is what a mutation removing the latch exposed.
+    Mutation-tested: deleting the latch check, the set, or the release turns this red.
+    """
+    held: list[bool] = []
+    holder: list[object] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        held.append(bool(getattr(holder[0], "_rate_limit_used", False)))
+        return _limited_403()
+
+    client = vault_mod.VaultClient(
+        "owner/vault-repo",
+        TOKEN,
+        session=httpx.AsyncClient(base_url=API, transport=httpx.MockTransport(handler)),
+    )
+    holder.append(client)
+    with pytest.raises(httpx.HTTPStatusError):
+        await client.read("notes/x.md")
+    assert held == [False, True], (
+        "the first request must run with the latch CLEAR and the retry with it HELD; observed "
+        f"{held}. Without it, a second concurrent read spends its own retry and the bound "
+        "becomes «one retry per attempt» rather than one per call."
+    )
+    assert getattr(client, "_rate_limit_used", False) is False, (
+        "the latch must be RELEASED after the retry, or every later read in the session would "
+        "be denied its one retry"
+    )
 
 
 async def test_the_single_shot_latch_is_released_for_the_next_call() -> None:
@@ -864,7 +1021,7 @@ async def test_the_two_states_stay_distinguishable_end_to_end(make_settings, mon
     refused = await health_mod.healthcheck(settings, transport=_GitHub(403, {}).transport())
     assert throttled["lanes"]["vault"]["state"] == health_mod.STATE_UNREACHABLE
     assert refused["lanes"]["vault"]["state"] == health_mod.STATE_MISCONFIGURED
-    assert throttled["lanes"]["vault"]["reason"] != refused["lanes"]["vault"]["reason"], (
+    assert throttled["reasons"]["vault"] != refused["reasons"]["vault"], (
         "the reason must say which of the two happened, not repeat the HTTP status"
     )
 
@@ -974,7 +1131,7 @@ def test_the_old_to_new_acceptance_table() -> None:
         ("429 bare", {}, 429, "surface", "TOO_MANY", True),
         ("429 with a malformed hint", {"Retry-After": "soon"}, 429, "surface", "TOO_MANY", True),
         (
-            "403 bad scope carrying a hint  <- THE BUG",
+            "403 retry hint only (the brief's contested row)",
             {"Retry-After": "5"},
             403,
             "retry",
@@ -999,11 +1156,11 @@ def test_the_old_to_new_acceptance_table() -> None:
             True,
         ),
         (
-            "403 secondary limit (hint only)",
+            "429 with a hint",
             {"Retry-After": "5"},
-            403,
+            429,
             "retry",
-            "SECONDARY",
+            "TOO_MANY",
             True,
         ),
         (
@@ -1032,7 +1189,9 @@ def test_the_old_to_new_acceptance_table() -> None:
         )
 
 
-async def test_the_backoff_the_old_code_clamped_at_thirty_now_waits_the_reset() -> None:
+async def test_the_backoff_the_old_code_clamped_at_thirty_now_waits_the_reset(
+    sleeps: list[float],
+) -> None:
     """Failure 3, stated as the delta rather than as a table row: the old code
     slept ``min(retry_after, 30)``, so a reset 40 s out was never waited out."""
     headers = _exhausted(40.0)

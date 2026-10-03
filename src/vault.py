@@ -11,17 +11,24 @@ retried up to THREE times as a full re-merge — re-read the sha, re-run the cal
 VaultConflictError (a merge callback must therefore assume it can be invoked more than
 once); timeouts propagate; malformed frontmatter YAML raises ValueError naming the
 path; missing reads raise FileNotFoundError; oversize payloads are refused pre-flight.
-A 429/403 on a READ is retried at most once, honoring `Retry-After` (`_get_with_rate_limit`).
+A 429/403 on a READ is retried at most once, and only when `classify_rate_limit` proves
+a rate limit rather than a refused credential — an under-scoped PAT is NEVER retried
+(`_get_with_rate_limit`).
 """
 
 from __future__ import annotations
 
 import asyncio
 import base64
+import math
 import re
+import time
+from collections.abc import Mapping
+from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
+from enum import StrEnum
 from pathlib import Path
-from typing import Any
+from typing import Any, Final
 
 import httpx
 import yaml
@@ -329,6 +336,187 @@ def zettel_link(
     return ("!" if embed else "") + f"[[{inner}]]"
 
 
+# ── the 429/403 discriminator ──────────────────────────────────────────────────────
+#
+# GitHub answers HTTP 403 for BOTH an exhausted rate limit AND an under-scoped
+# PAT, so a status code alone cannot decide whether a read may be retried. The old
+# reader treated a 403 as «a rate limit iff it carries `Retry-After`» and got three
+# cases wrong: it RETRIED a bad-scope 403 that happened to carry that header; it
+# REFUSED to retry a primary rate-limit 403 that did not; and with no reset-header
+# fallback and a flat 30 s cap it abandoned a limit whose reset was 40 s out.
+#
+# The decision is ONE pure function so that `src/health.py` — which opens its own
+# `httpx.AsyncClient` and never touches this class, so there is no shared call site
+# to reuse — can consume the same law instead of reimplementing it.
+
+#: The hard ceiling on any wait this module takes for a read. GitHub's primary
+#: window is an hour, so the reset header can legitimately point far out and
+#: honouring it literally would pin a read handler for most of that hour. 60 s is
+#: GitHub's own documented floor for waiting out a secondary rate limit, and it
+#: covers the realistic «the reset is 40 s out» case the flat 30 s cap abandoned —
+#: while still bounding a user-visible read to a pause rather than a hang.
+RATE_LIMIT_BACKOFF_CAP_S: Final[float] = 60.0
+
+#: The wait when a rate limit carries NO usable timing hint at all. Short on
+#: purpose: the server said «slow down» without saying for how long, this is ONE
+#: retry, and it runs inside a chat turn rather than a batch job.
+RATE_LIMIT_FALLBACK_BACKOFF_S: Final[float] = 1.0
+
+
+class RateLimitKind(StrEnum):
+    """What a response's headers prove about a GitHub refusal. Closed vocabulary.
+
+    ``CLEAR`` and ``REFUSED`` are the two «do not retry» verdicts and they are not
+    the same fact: one is «this was never a rate limit», the other is «the
+    credential was refused». Collapsing them is what let a probe send an operator to
+    rotate a working PAT because GitHub was busy.
+    """
+
+    CLEAR = "clear"  # not a rate limit at all — return the response as it is
+    TOO_MANY = "too_many"  # 429: GitHub's unambiguous «slow down»
+    PRIMARY = "primary"  # 403 + X-RateLimit-Remaining: 0 — the quota is exhausted
+    REFUSED = "refused"  # 403 with no proof of a rate limit — NEVER retry
+
+
+#: The kinds that mean «a rate limit», i.e. the only ones that earn a retry. A
+#: consumer that does not want to enumerate them (the health probe does not) names
+#: this instead, so «is this throttling?» stays a single question.
+RATE_LIMIT_KINDS: Final[frozenset[RateLimitKind]] = frozenset(
+    {RateLimitKind.TOO_MANY, RateLimitKind.PRIMARY}
+)
+
+
+@dataclass(frozen=True, slots=True)
+class RateVerdict:
+    """The whole answer: retry or not, and how long to wait first.
+
+    ``backoff_s`` is ``0.0`` on every non-retrying verdict. A «do not retry» that
+    still carries a wait is a contradiction the caller cannot resolve, so the
+    invariant is on the shape, not on each branch remembering it.
+    """
+
+    kind: RateLimitKind
+    should_retry: bool
+    backoff_s: float
+    reason: str
+
+
+def _header(headers: Mapping[str, str], name: str) -> str | None:
+    """Case-insensitive header lookup, because HTTP header names are not cased.
+
+    Takes the name as an ARGUMENT rather than hard-coding it, so every rate-limit
+    header literal in this module lives inside `classify_rate_limit` and nowhere
+    else — which is what lets the one-decision-site guard be a whole-module scan
+    instead of a hunt.
+    """
+    value = headers.get(name)
+    if value is not None:
+        return value
+    lowered = name.lower()
+    for key, candidate in headers.items():
+        if key.lower() == lowered:
+            return candidate
+    return None
+
+
+def _seconds(value: str | None) -> float | None:
+    """A header that says how long, or ``None`` when it says nothing usable.
+
+    A server answering «soon» or «in a minute» must buy neither a crash nor an
+    arbitrary sleep, and neither must ``nan``/``inf`` — those parse as floats and
+    would defeat every clamp downstream, so they are rejected here rather than
+    defended against at each call site.
+    """
+    if value is None:
+        return None
+    try:
+        seconds = float(value.strip())
+    except (AttributeError, TypeError, ValueError):
+        return None
+    return seconds if math.isfinite(seconds) else None
+
+
+def _clamped(*candidates: float | None) -> float:
+    """The first usable hint, clamped at both ends; the short fallback if none.
+
+    Clamped at BOTH ends and guaranteed finite: ``0.0`` when the window has already
+    passed (the limit is over — retry now), never negative, never past the cap.
+    """
+    for candidate in candidates:
+        if candidate is not None:
+            return min(max(candidate, 0.0), RATE_LIMIT_BACKOFF_CAP_S)
+    return RATE_LIMIT_FALLBACK_BACKOFF_S
+
+
+def classify_rate_limit(headers: Mapping[str, str], status: int) -> RateVerdict:
+    """Decide whether a GitHub response is a RATE LIMIT or a REFUSED CREDENTIAL.
+
+    PURE BY CONTRACT, and the contract is the point: this takes headers and a status
+    and returns a verdict. No client, no I/O, no sleeping. That is what lets a second
+    module — `src/health.py`, which never touches `VaultClient` — reach the same
+    conclusion without reimplementing the discrimination, and therefore without
+    having a second copy of it drift.
+
+    THE DISCRIMINATOR, in priority order:
+
+    1. ``429`` is ALWAYS a rate limit. GitHub sends it for no other reason, so
+       nothing demotes it — not a missing header, not a malformed one.
+    2. ``X-RateLimit-Remaining`` present AND zero is a PRIMARY limit, retried with a
+       backoff read from the reset header. It is the only header that PROVES a rate
+       limit, and reading it is what fixes the case the old code abandoned: a 403
+       whose quota is exhausted but which carries no retry hint.
+    3. A 403 with none of the above is REFUSED: the credential was PRESENT and
+       DECLINED. NEVER retried — waiting on a refusal that cannot become a success
+       burns a request and hides the operator's only real action, which is to fix the
+       PAT's scopes.
+    4. Anything else is CLEAR. The rows above are deliberately gated on the two
+       statuses where a retry can still succeed: GitHub sends the quota headers on
+       EVERY response, so a 200 carrying ``X-RateLimit-Remaining: 0`` means «this one
+       went through and the next will not» — retrying a success would burn a request
+       and sleep for nothing.
+
+    ``Retry-After`` IS DEMOTED, and this is the mechanism rather than a conclusion:
+    GitHub attaches it to secondary rate limits AND an under-scoped PAT can receive
+    one, so its presence does not establish «rate limited». So it is kept as a WAIT and
+    demoted out of the DECISION: it can say how long to pause once something else has
+    already proven a limit, and it can never by itself buy a retry. The old reader
+    inverted that (hint ⇒ retry), which is exactly why it waited on refusals.
+
+    THE COST, stated because it is real: ``Retry-After`` is GitHub's only rate-limit
+    signal on a SECONDARY 403, so demoting it means that shape is now classified
+    REFUSED. There is nothing in the headers that separates it from an under-scoped
+    PAT, so retrying it would be a guess — and a guess here spends a request and
+    hides the operator's real action. The two states still stay distinct; a throttle
+    that arrives without a quota header surfaces as a refusal until GitHub says
+    otherwise.
+    """
+    if status not in (429, 403):
+        return RateVerdict(RateLimitKind.CLEAR, False, 0.0, f"HTTP {status} is not a rate limit")
+    hint_s = _seconds(_header(headers, "Retry-After"))
+    reset = _seconds(_header(headers, "x-ratelimit-reset"))
+    # The reset header is an ABSOLUTE unix epoch second, not a duration: ignoring it
+    # waits for nothing, and treating it as a duration waits for ~56 years.
+    reset_in = None if reset is None else reset - time.time()
+    if status == 429:
+        return RateVerdict(
+            RateLimitKind.TOO_MANY, True, _clamped(hint_s, reset_in), "HTTP 429 — throttled"
+        )
+    remaining = _header(headers, "X-RateLimit-Remaining")
+    if remaining is not None and remaining.strip() == "0":
+        return RateVerdict(
+            RateLimitKind.PRIMARY,
+            True,
+            _clamped(reset_in, hint_s),
+            "HTTP 403 with the primary quota exhausted",
+        )
+    return RateVerdict(
+        RateLimitKind.REFUSED,
+        False,
+        0.0,
+        "HTTP 403 with no exhausted-quota header — refused, not throttled",
+    )
+
+
 class VaultClient:
     """GitHub Contents API client over httpx (Bearer + versioned headers).
 
@@ -402,30 +590,37 @@ class VaultClient:
         return out
 
     async def _get_with_rate_limit(self, path: str) -> httpx.Response:
-        """2.10 (deferred queue): a 429/403 rate limit with Retry-After is
-        honored ONCE — a momentary limit never fails a read; anything
-        persistent surfaces loudly (no silent infinite retry loop)."""
-        response = await self._http.get(
-            f"/repos/{self._repo}/contents/{path}",
-            params={"ref": self._branch},
-            headers=self._headers,
-        )
-        if response.status_code not in (429, 403):
-            return response
-        retry_after = response.headers.get("Retry-After")
-        if retry_after is None or getattr(self, "_rate_limit_used", False):
-            return response  # no header, or we already retried once — surface it
-        try:
-            await asyncio.sleep(min(float(retry_after), 30.0))  # sane cap
-        except ValueError:
-            return response
+        """A rate-limited READ is retried ONCE — and only when `classify_rate_limit`
+        says it is one.
+
+        THE BOUND, stated where it lives: at most ONE extra request per CALL, and
+        never a loop. The `_rate_limit_used` latch is set across the retry and
+        released in a `finally`, so a limit that survives the retry SURFACES loudly
+        (the caller's `raise_for_status`, or FileNotFoundError on a 404) instead of
+        being waited out forever. An unbounded retry loop against a free API is how
+        the $0.00 invariant gets spent, so this is a bound and not a policy: the
+        same limit on the next call gets its own single retry.
+
+        WHAT CHANGED, because the old sentence («a 429/403 rate limit with
+        Retry-After is honored ONCE») was true only of the narrow case the old code
+        could detect. The retry no longer keys on `Retry-After` at all: it keys on
+        the verdict, which reads `X-RateLimit-Remaining: 0` FIRST. So a primary
+        rate-limit 403 that omits the hint is now retried (it used to surface), and
+        a bad-scope 403 that CARRIES the hint is now never retried (it used to be
+        waited on). The decision itself belongs to the predicate, which is the only
+        place it is made.
+        """
+        url = f"/repos/{self._repo}/contents/{path}"
+        response = await self._http.get(url, params={"ref": self._branch}, headers=self._headers)
+        verdict = classify_rate_limit(response.headers, response.status_code)
+        if not verdict.should_retry or getattr(self, "_rate_limit_used", False):
+            return response  # not a limit, or this call already spent its one retry
+        # `verdict.backoff_s` is finite and inside [0, RATE_LIMIT_BACKOFF_CAP_S] by
+        # construction, so this sleep cannot raise and needs no guard of its own.
+        await asyncio.sleep(verdict.backoff_s)
         self._rate_limit_used = True
         try:
-            return await self._http.get(
-                f"/repos/{self._repo}/contents/{path}",
-                params={"ref": self._branch},
-                headers=self._headers,
-            )
+            return await self._http.get(url, params={"ref": self._branch}, headers=self._headers)
         finally:
             self._rate_limit_used = False
 

@@ -32,22 +32,32 @@ reuses its session, its probe URL and its timeout, and its ``reason`` discipline
 (class name only, never a response body). What it adds is the classification
 ``probe_google`` deliberately does not make: that probe collapses "the grant was
 refused" and "nobody answered" into one ``healthy=False``, and this module's law
-is that those two are different states. The 403 rate-limit-vs-scope ambiguity is
-NOT solved here — it is N5's open work — so a GitHub 403 below reports
-``misconfigured`` meaning precisely «the credential was refused», never «go and
-rotate your token».
+is that those two are different states.
+
+THE GITHUB 403 IS NO LONGER AN AMBIGUITY. N3 reserved this as its own open work and
+N5 closed it, so the reservation is corrected here rather than left standing. GitHub
+answers 403 for BOTH an exhausted rate limit and an under-scoped PAT, which is a
+STATUS code that cannot answer the operator's question, and this module no longer
+guesses at it: the vault lane calls ``src.vault.classify_rate_limit``, the same pure
+predicate ``src.vault.VaultClient`` reads, and that predicate keys on
+``X-RateLimit-Remaining: 0`` — present AND zero — as the only proof of a rate limit.
+``Retry-After`` is DEMOTED, and the mechanism is why: GitHub attaches it to
+secondary rate limits AND an under-scoped PAT can receive one, so its presence does
+not establish «throttled». Consequently a rate-limited 403 reports ``unreachable``
+(«nobody could determine the state») and a 403 with no rate-limit evidence still
+reports ``misconfigured`` («the credential was PRESENT and REFUSED»). N3's vocabulary
+survives intact — N5 split one status into two TRUE answers instead of blurring the
+two states it had already defined.
 
 CACHING, and why the endpoint needs it. Every remote lane here costs one HTTP
 call, and ``/health`` is POLLED — a Space probe, a keep-alive ping, ``sara.ps1``.
 Probing per poll would be a self-inflicted rate limit against GitHub and Telegram,
-and GitHub answers 403 for both a rate limit and bad scopes, so the probe would
-manufacture the very ambiguity N5 has to resolve. ``PROBE_TTL_S`` bounds it at
-30 s: short enough that a lapsed credential surfaces inside half a minute of an
-operator looking, long enough that a 10 s poll loop costs at most one sweep every
-third request. The ``/health`` responder reads the cache and never awaits a probe,
-so it cannot block the bridge's event loop — which it shares with the
-authenticated WSS tunnel — and a cold cache answers every lane ``unreachable``
-rather than claiming health it has not measured.
+so ``PROBE_TTL_S`` bounds it at 30 s: short enough that a lapsed credential surfaces
+inside half a minute of an operator looking, long enough that a 10 s poll loop costs
+at most one sweep every third request. The ``/health`` responder reads the cache and
+never awaits a probe, so it cannot block the bridge's event loop — which it shares
+with the authenticated WSS tunnel — and a cold cache answers every lane
+``unreachable`` rather than claiming health it has not measured.
 
 THE HTTP STATUS. Report §48 step 1 offers 503 or «keep 200 with a
 machine-readable body»; this is the second, and ``HTTP_STATUS_BY_STATE`` is the
@@ -83,6 +93,7 @@ from src.google_auth import (
     GoogleSession,
     describe_probe_failure,
 )
+from src.vault import RATE_LIMIT_KINDS, classify_rate_limit
 
 # ── the closed vocabulary ──────────────────────────────────────────────────────────
 
@@ -448,12 +459,25 @@ async def _probe_vault(
     """The vault PAT, proven by GitHub rather than by its own non-emptiness.
 
     ``GET /user`` is the cheapest authenticated call GitHub has: it reads the
-    identity the token already belongs to and returns nothing new. THE 403
-    AMBIGUITY IS NOT SOLVED HERE: GitHub answers 403 for a bad scope AND for a
-    rate limit, and separating them is N5's open work. So ``misconfigured`` below
-    means precisely «the credential was PRESENT and REFUSED» — the operator's
-    next move is to check the rate limit first, and the reason does not pretend
-    to know which cause it was.
+    identity the token already belongs to and returns nothing new.
+
+    THE 403 IS DISCRIMINATED, NOT GUESSED. GitHub answers 403 for a bad scope AND
+    for a rate limit, and a status code cannot tell an operator which of the two to
+    act on. This probe does not read the headers itself — it calls
+    ``src.vault.classify_rate_limit``, the same pure predicate ``VaultClient``
+    reads, so the two can never reach opposite conclusions. That predicate keys on
+    ``X-RateLimit-Remaining: 0`` — present AND zero — as the only proof of a rate
+    limit, and DEMOTES ``Retry-After`` to a secondary signal because GitHub attaches
+    it to secondary limits AND an under-scoped PAT can receive one too: its presence
+    does not establish «throttled», which is exactly the signal the previous reader
+    trusted and therefore waited on a refusal.
+
+    So the two states N3 defined stay two states, and each is now TRUE: a
+    rate-limited 403 is ``unreachable`` — «I could not determine the state, do not go
+    rotate your token» — and a 403 carrying no rate-limit evidence is
+    ``misconfigured`` — «the credential was PRESENT and REFUSED». The probe makes ONE
+    call and never retries: it answers ``/health`` on a 5 s budget and reports what it
+    learned rather than waiting out a limit it cannot outlast.
     """
     token = _secret_text(settings.vault_github_token).strip()
     if not token:
@@ -474,6 +498,11 @@ async def _probe_vault(
             STATE_UNREACHABLE, reason=f"vault unreachable ({describe_probe_failure(error)})"
         )
     status = response.status_code
+    verdict = classify_rate_limit(response.headers, status)
+    if verdict.kind in RATE_LIMIT_KINDS:
+        # Throttled, not refused: the credential's state is UNDETERMINED, and an
+        # operator told «misconfigured» here would rotate a working PAT.
+        return Lane(STATE_UNREACHABLE, reason=f"github rate limited the vault probe ({status})")
     if 200 <= status < 300:
         return Lane(STATE_HEALTHY)
     if status in (401, 403):

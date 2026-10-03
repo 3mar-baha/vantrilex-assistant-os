@@ -186,11 +186,39 @@ async def test_rate_limit_honored_once_then_surfaces():
         await _client(session).read("notes/x.md")
 
 
-async def test_malformed_retry_after_surfaces_without_sleep():
+async def test_malformed_retry_after_falls_back_without_crashing_or_sleeping_garbage(
+    monkeypatch,
+):
+    """N5 CHANGED THIS GUARD'S LAW, and the old law was wrong.
+
+    It used to read: «a 429 whose ``Retry-After`` cannot be parsed SURFACES as an
+    error». That was true only because the old reader gave up whenever
+    ``float(retry_after)`` raised — and giving up on a 429 was one of the three
+    defects N5 exists to remove, because a 429 is GitHub's unambiguous «slow down»
+    and is now ALWAYS retried once. So the 429 no longer surfaces; the RETRIED
+    response does.
+
+    What survives, and is now asserted more tightly than before: a malformed hint
+    buys neither a parse crash nor a garbage wait. The read waits the short declared
+    fallback, makes exactly two requests, and reports what the second one said.
+    """
+    from src.vault import RATE_LIMIT_FALLBACK_BACKOFF_S
+
+    waits: list[float] = []
+
+    async def _sleep(seconds):
+        waits.append(seconds)
+
+    monkeypatch.setattr("asyncio.sleep", _sleep)
     session = _Session()
-    session.queue("notes/x.md", _Resp(429, {}, {"Retry-After": "soon"}))
-    with pytest.raises(RuntimeError):
+    session.queue("notes/x.md", _Resp(429, {}, {"Retry-After": "soon"}), _Resp(404, {}))
+    with pytest.raises(FileNotFoundError):
         await _client(session).read("notes/x.md")
+    assert len(session.queues["notes/x.md"]) == 0, "both responses were consumed"
+    assert waits == [RATE_LIMIT_FALLBACK_BACKOFF_S], (
+        f"a malformed hint must wait the declared fallback, never a parsed-from-garbage "
+        f"duration; waited {waits}"
+    )
 
 
 async def test_migrate_studies_non_list_returns_quietly():

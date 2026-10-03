@@ -4112,6 +4112,221 @@ above). One commit. **No `.py` file was touched — not `src/**`, not `tests/**`
 file was staged. `src/persona.py` hash-verified before and after.
 Zero new packages, no new environment variable, no new configuration knob.
 
+---
+
+## N5 — D-5: the 429/403 discriminator, and N3's open work is closed (2026-10-03)
+
+GitHub answers HTTP **403** for both an exhausted rate limit and an under-scoped PAT.
+`VaultClient._get_with_rate_limit` gated on `Retry-After` alone, so one status was
+driving three different wrong answers.
+
+### The OLD→NEW acceptance table (measured, not asserted)
+
+| Response | OLD behaviour | NEW verdict | Retried? |
+|---|---|---|---|
+| 200 ok | surface | `CLEAR` | no |
+| 404 / 500 / any non-429/403 | surface | `CLEAR` | no |
+| 429 + `Retry-After` | retry, `min(retry_after, 30)` | `TOO_MANY` | **yes** |
+| 429 bare (no headers) | **surface** | `TOO_MANY` | **yes** |
+| 429 + malformed `Retry-After` | **surface** | `TOO_MANY` | **yes** |
+| **403 + `Retry-After`, no exhausted quota** | **retry** | `REFUSED` | **no** ← *the live bug* |
+| 403 bare | surface | `REFUSED` | no |
+| **403 + `X-RateLimit-Remaining: 0`, no `Retry-After`** | **surface** | `PRIMARY` | **yes** ← *failure 2* |
+| 403 + `Remaining: 0` + `Retry-After` | retry, capped 30 s | `PRIMARY` | yes, wait from reset |
+| 403 + `Remaining` present and non-zero | surface | `REFUSED` | no |
+| 200 **carrying** `Remaining: 0` | surface | `CLEAR` | no |
+| any, reset 40 s out | never waited (30 s flat cap) | wait ≈40 s, cap 60 s | — ← *failure 3* |
+
+The «OLD» column is machine-checked against `_deleted_shipped_logic` — the
+shipped-then-deleted body, **run** — inside the guard file, so this table cannot drift
+into flattering the new behaviour. That helper lives in `tests/`; nothing in `src/`
+imports it, which is exactly what the one-decision-site guard turns on.
+
+### One pure decision site
+
+`src.vault.classify_rate_limit(headers, status) -> RateVerdict`, module level, taking
+**headers and a status and nothing else**:
+
+```python
+RateVerdict(kind: RateLimitKind, should_retry: bool, backoff_s: float, reason: str)
+# RateLimitKind: CLEAR | TOO_MANY | PRIMARY | REFUSED   (StrEnum, closed)
+RATE_LIMIT_BACKOFF_CAP_S      = 60.0   # stated ceiling
+RATE_LIMIT_FALLBACK_BACKOFF_S = 1.0    # 429 with no usable timing hint
+RATE_LIMIT_KINDS              = {TOO_MANY, PRIMARY}   # the retry-earning set
+```
+
+**No client, no I/O, no sleeping** — asserted three ways: the signature; a `dict` + `int`
+call under an `asyncio.sleep` rigged to raise; and an AST read of the body that rejects
+any `await`, any `yield`, and any networking/filesystem/subprocess/client name. That
+purity is the whole point: it is what lets `src/health.py` — which opens its **own**
+`httpx.AsyncClient` and never touches `VaultClient`, so there is no shared call site to
+reuse — consume the same law instead of reimplementing it.
+
+**Exactly one decision site** is enforced structurally, not by grep: a whole-module AST
+scan over `src/vault.py` + `src/health.py` asserts every rate-limit **header literal**
+lives inside `classify_rate_limit` and nowhere else. Mutation-tested — duplicating the
+decision inline in the probe turns it red.
+
+### `Retry-After` is demoted out of the DECISION, and the cost is stated
+
+Mechanism, not conclusion: GitHub attaches that header to secondary rate limits **and an
+under-scoped PAT can receive one**, so its presence does not establish «throttled». It is
+kept as a **WAIT** and removed from the **DECISION** — it can say how long to pause once
+something else has already proven a limit, and it can never by itself buy a retry. The old
+reader inverted that (hint ⇒ retry), which is precisely why it waited on refusals.
+
+**A conflict in the brief, resolved and recorded.** The brief's discriminator table said
+"a retry hint with no exhausted-quota header is a *secondary rate limit → retry*"; the same
+brief's Definition of Done said that exact shape "is the live bug" and **must not** retry.
+Both cannot hold — nothing in the headers separates a secondary 403 from an under-scoped
+PAT, so any rule retrying that shape retries a refusal. **The DoD wins.** The known cost,
+written into the predicate's docstring rather than hidden: `Retry-After` is GitHub's only
+rate-limit signal on a secondary 403, so demoting it means that shape now classifies
+`REFUSED` until a quota header says otherwise. The two states stay distinct; what changed
+is which guess we refuse to make.
+
+### The single-shot bound — kept, documented where it lives, asserted on its mechanism
+
+The `_rate_limit_used` latch survives unchanged: **one extra request per call, never a
+loop**. The docstring that said "a 429/403 rate limit with Retry-After is honored ONCE" was
+true only of the narrow case the old code could detect, so it was rewritten over what ships
+now (the retry keys on the verdict; a bad-scope 403 carrying the hint is never retried).
+
+**Mutation testing found the count-based guards could not see the latch**, because
+`_get_with_rate_limit` is straight-line code — deleting the latch changes nothing for a
+single call. Three guards now pin the mechanism:
+
+* two reads **racing** the same limit: the second spends no retry of its own (3 requests,
+  not 4) — observed by parking the retry inside the transport so the latch is *provably*
+  held, with both waits bounded so a broken discriminator **fails** instead of hanging;
+* the latch is **clear** on the way in and **held** on the way out;
+* the latch is **released** after, so the bound is per call and not per session.
+
+### Both N3 reservations corrected in place
+
+`src/health.py`'s module docstring and `_probe_vault`'s docstring both read *"THE 403
+AMBIGUITY IS NOT SOLVED HERE — it is N5's open work"*. That is now false, and a docstring
+claiming open work directly above shipped code teaches the next maintainer to distrust the
+probe. **Both copies** were rewritten, not one. Each now names `classify_rate_limit`,
+states that `X-RateLimit-Remaining: 0` is the deciding header, and says *why* the hint is
+demoted. A companion guard asserts the replacement text is TRUE of the shipped predicate
+rather than merely present.
+
+`misconfigured` and `unreachable` stay **distinguishable end to end**: a rate-limited 403
+reports `unreachable` («nobody could determine the state»), a 403 with no rate-limit
+evidence still reports `misconfigured` («PRESENT and REFUSED»), a 401 stays
+`misconfigured`, and the probe makes **exactly one** call — it never retries or sleeps,
+because it answers `/health` on a 5 s budget. Proved behaviourally by steering the
+predicate and watching the lane flip, not by reading source.
+
+### Backoff cap: 60.0 s, and why that number
+
+GitHub's primary window is an hour, so the reset header can legitimately point far out and
+honouring it literally would pin a read handler for most of that hour. **60 s** is GitHub's
+own documented floor for waiting out a secondary rate limit, it covers the realistic «reset
+is 40 s out» case the flat 30 s cap abandoned, and it still bounds a user-visible read to a
+pause rather than a hang. It is a named `Final` constant and is **asserted**, not assumed:
+the exact value, and that no hint a server can send (huge, negative, non-numeric, `nan`,
+`inf`, far-future reset) produces a wait outside `[0, cap]`. `1.0 s` is the no-hint
+fallback: short because the server said «slow down» without saying for how long, this is
+one retry, and it runs inside a chat turn.
+
+### The backoff the old code clamped at 30 s is now a 40 s wait
+
+Failure 3 was a silent abandon: `min(retry_after, 30.0)` with no reset-header fallback meant
+a limit 40 s out was never waited out. It now sleeps the verdict's clamped backoff — pinned
+by asserting the recorded sleep is ≈40 s and **> the old 30 s**.
+
+### Mutation testing — 8 mutants, all killed, every run with a real pass count
+
+Bytes-only I/O, sha256 recorded before and after each restore, **abort on a non-unique or
+missing anchor**, `finally`-restore, and a driver that **refuses** any run reporting no pass
+count (a collection error is not a result — that trap fired for real: mutant (h)'s first
+form scored "1 error" and was rejected rather than banked).
+
+| Mutant | Killed by |
+|---|---|
+| (a) drop the `X-RateLimit-Remaining` clause | 4 guards, incl. both rate-limit-read guards and the table |
+| (b) make a bad-scope 403 retry | 3 guards (the probe guard is correctly unaffected — it keys on `kind`) |
+| (c) make a rate-limit 403 not retry | 3 guards |
+| (d) duplicate the decision inline in the probe | the one-decision-site guard |
+| (e) remove the single-shot latch | the concurrent-reads guard |
+| (f) never release the latch | the held-and-released guard |
+| (g) never set the latch | the held-and-released guard |
+| (h) make the predicate touch `httpx` | the purity guard |
+
+**Mid-sweep crash, recovered and reported.** A hard process kill during the sweep defeated
+a `finally` and left `src/vault.py` in mutant (a)'s state for one run. It was caught
+because every mutant run re-checks the file's sha256, and restored from the byte backup
+with the hash verified against the entry value. That is why the sha check exists at all: a
+`finally` protects against an exception, never against a kill.
+
+### One pre-existing guard changed — and why that is not weakening it
+
+`tests/test_coverage_gaps_p67c.py::test_malformed_retry_after_surfaces_without_sleep`
+encoded *"a 429 whose `Retry-After` will not parse surfaces as an error"*. That was true
+only because the old reader gave up whenever `float(retry_after)` raised — and giving up on
+a 429 is one of the three defects N5 exists to remove. Renamed and rewritten to the new law,
+**more tightly** than before: the malformed hint must buy neither a parse crash nor a garbage
+wait — the read waits the declared fallback, makes exactly two requests, and reports what
+the **second** response said. No guard was weakened, skipped, xfailed or deleted.
+
+### Measured
+
+* Entry (before this node): **2 837 passed, 4 skipped, 1 xfailed** (2 842 collected).
+* After: **2 887 passed, 4 skipped, 1 xfailed** (2 892 collected), **0 failed** — exactly
+  **+50** collected and +50 passed, i.e. precisely the new guard file.
+* The baseline is **bimodal** (4 or 5 conditional live skips). Both post-fix runs reported
+  honestly rather than the favourable one alone: **2 884 / 5 skipped** and
+  **2 887 / 4 skipped**.
+* `ruff check` clean. `ruff format --check` shows **only the inherited N3 fence** at
+  `docs/10-CHECKPOINT.md:3656`, verified by `--diff`; this entry adds no new instance and
+  **does not fix it** — it is N7's cosmetic prose.
+* Tiered coverage **PASSED**: **92.4 % total**, every core module ≥ 98.0 %, none lowered.
+  The new code (`src/vault.py` lines 358–540 and 592–620) has **zero** missed statements
+  and **zero** missed branches under the guard file alone.
+* `scripts/security_gate.py` OK. `scripts/docs_guard.py` OK.
+* `git diff --stat HEAD~2 -- src/gateway.py` → **empty**. `parse_retry_window_s` untouched:
+  that is model-call retry, a different mechanism.
+* `git hash-object src/persona.py` → `8b972942e785880a3de66121e7f808666250ed2f`, the
+  byte-lock, unchanged.
+
+### Guards that were NOT red before the fix — named, not buried
+
+Six guards in the new file were already green at entry, and each is a **regression** guard
+protecting behaviour the old code got right, not a demonstration of a defect:
+
+1. `test_a_429_read_is_retried_and_succeeds` — the old code already retried a 429 bearing
+   `Retry-After: 0`.
+2. `test_a_bare_bad_scope_403_reaches_the_network_exactly_once` — a 403 with no hint was
+   never retried.
+3. `test_the_probe_reports_a_rate_limited_429_as_unreachable` — 429 was already not in
+   `(401, 403)`, so it already fell through to `unreachable`.
+4. `test_the_probe_still_reports_a_refused_pat_as_misconfigured` — **load-bearing**: this is
+   N3's vocabulary, and N5 must not blur it.
+5. `test_a_401_stays_misconfigured_and_a_transport_error_stays_unreachable` — unchanged.
+6. `test_the_probe_body_carries_no_header_lookup_of_its_own` — **vacuous at entry**, because
+   the old probe read no rate-limit headers at all. It only becomes load-bearing once the
+   predicate exists, which is why it is listed rather than claimed as a catch.
+
+Two further guards were added in the **fix** commit after mutation testing exposed the gap,
+and are reported as such rather than presented as red-first:
+`test_the_single_shot_latch_is_held_across_the_retry_and_released` and
+`test_a_read_arriving_during_another_reads_retry_spends_no_retry_of_its_own`. Both pin a
+law that was **already true at entry** (the latch existed and was already held), so they
+could not have been red before it. The *documentation* half of the single-shot law was
+red-first and is pinned separately.
+
+### Write-set
+
+`src/vault.py` (the discriminator, the reader, the module docstring), `src/health.py` (the
+probe, the import, **both** docstrings), the NEW test file
+`tests/test_vault_rate_limit_discriminator.py`, the one changed guard in
+`tests/test_coverage_gaps_p67c.py`, and this file. Nothing else. `src/persona.py`
+hash-verified before and after. No forbidden file was staged. **Zero new packages, no new
+environment variable, no new configuration knob** — the cap and the fallback are named
+module constants, not knobs.
+
 - [07 — Implementation Plan](./07-IMPLEMENTATION-PLAN.md)
 - [11 — Testing](./11-TESTING.md)
 - [Objectives Ledger](./reports/OBJECTIVES_LEDGER_MET_VS_PENDING.md)
