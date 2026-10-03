@@ -64,7 +64,7 @@ ENV_EXAMPLE: dict[str, str] = {
     "MEDIUM_MODEL": "gemini/gemini-3.8-flash",
     "MEDIUM_MODEL_FALLBACKS": "groq/openai/gpt-oss-120b,openrouter/poolside/laguna-s-2.1:free,openrouter/nvidia/nemotron-3-ultra-550b-a55b:free",
     "HEAVY_MODEL": "gemini/gemini-3.8-flash",
-    "HEAVY_MODEL_FALLBACKS": "openrouter/poolside/laguna-s-2.1:free,openrouter/nvidia/nemotron-3-ultra-550b-a55b:free,openrouter/google/gemma-4-31b-it:free",
+    "HEAVY_MODEL_FALLBACKS": "groq/openai/gpt-oss-120b,openrouter/poolside/laguna-s-2.1:free,openrouter/nvidia/nemotron-3-ultra-550b-a55b:free,openrouter/google/gemma-4-31b-it:free",
     "HEAVY_ESCALATION_MODEL": "openrouter/poolside/laguna-s-2.1:free",
     "HEAVY_ESCALATION_FALLBACKS": "openrouter/nvidia/nemotron-3-ultra-550b-a55b:free,groq/openai/gpt-oss-120b",
     "HEAVY_CONCURRENCY_THRESHOLD": "3",

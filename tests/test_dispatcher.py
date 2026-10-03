@@ -35,7 +35,12 @@ FAST_FB1 = "groq/openai/gpt-oss-120b"
 MEDIUM_PIN = "gemini/gemini-3.8-flash"
 MEDIUM_FB1 = "groq/openai/gpt-oss-120b"
 HEAVY_PIN = "gemini/gemini-3.8-flash"
-HEAVY_FB1 = "openrouter/poolside/laguna-s-2.1:free"
+# 2026-10-03 (owner): HEAVY's first fallback is now groq/gpt-oss-120b, measured at
+# 1.2-2.4 s with tool_choice VERIFIED (correct `get_weather` call, args {"city":
+# "Amman"}). HEAVY is coordinator+executor, so tool_choice is a hard requirement,
+# not a preference — and without a groq slot a Gemini throttle cost 8,093 ms
+# before reaching any live fallback.
+HEAVY_FB1 = "groq/openai/gpt-oss-120b"
 HEAVY_ESC_PIN = "openrouter/poolside/laguna-s-2.1:free"
 
 CHAINS = {
@@ -96,6 +101,7 @@ def test_env_pins_match_adr16():
         f"MEDIUM_MODEL={MEDIUM_PIN}",
         f"MEDIUM_MODEL_FALLBACKS={MEDIUM_FB1}",
         f"HEAVY_MODEL={HEAVY_PIN}",
+        f"HEAVY_MODEL_FALLBACKS={HEAVY_FB1},",  # groq leads HEAVY's fallbacks
         f"HEAVY_ESCALATION_MODEL={HEAVY_ESC_PIN}",
         "HEAVY_CONCURRENCY_THRESHOLD=3",
     ):
@@ -107,12 +113,14 @@ def test_env_pins_match_adr16():
         for line in template.splitlines()
         if line.startswith("HEAVY_MODEL_FALLBACKS=")
     )
-    # 2026-10-03 (owner): HEAVY now carries THREE free-tier fallbacks, ordered by
-    # measured latency — laguna 8.0 s, nemotron 19.7 s, gemma 42.2 s last. The old
-    # two-entry assertion pinned a two-entry chain whose second slot was the
-    # escalation model; the chain is now latency-ordered per tier role, and
-    # `tests/test_env_model_slugs.py` owns the ordering law.
-    assert heavy_fb.split(",")[0] == HEAVY_ESC_PIN
+    # 2026-10-03 (owner): HEAVY carries FOUR free-tier fallbacks, ordered by measured
+    # latency and capability — groq 1.2-2.4 s (tool_choice VERIFIED, required for
+    # coordinator+executor), laguna 8.0 s, nemotron 19.7 s, gemma 42.2 s last. The
+    # 2026-09-13 assertion tied HEAVY's first fallback to the escalation model;
+    # that coupling is exactly what made a Gemini throttle cost 8,093 ms. The
+    # escalation MODEL is still asserted above, and
+    # `tests/test_env_model_slugs.py` owns the full ordering law.
+    assert heavy_fb.split(",")[0] == HEAVY_FB1
     assert len(heavy_fb.split(",")) >= 2
     assert "PRIMARY_MODEL" not in template
 
