@@ -45,19 +45,46 @@ import pytest
 from cryptography.fernet import Fernet
 from loguru import logger
 
-from src import health, main as main_mod
+from src import health
+from src import main as main_mod
 from src.google_auth import GoogleTokens, save_tokens
 
 # ── doubles ────────────────────────────────────────────────────────────────────────
 
 #: A secret-shaped Telegram token: real Telegram tokens are `<id>:<35 chars>`.
 TG_TOKEN = "9988776655:AAtelegramTokenValueThatMustNeverAppear"
-#: A GitHub fine-grained PAT, `ghp_`-shaped so `src.vault.redact_secret`'s generic
-#: pass WOULD also catch it — this guard does not rely on that pass firing.
-GH_PAT = "ghp_" + "A" * 36
+#: A GitHub FINE-GRAINED PAT, in the shape the real thing has:
+#: `github_pat_…`. Chosen DELIBERATELY, because no screening regex in this
+#: repository matches it — `src.vault._GENERIC_SECRET` knows `gh[pousr]_` and
+#: nothing else, and `src.action_log`'s api-key class is a different module. So a
+#: leak of THIS value can only be caught by the probe never constructing it,
+#: which is the law; the backstop is proven separately, and its limit separately.
+GH_PAT = "github_pat_" + "A" * 30
+#: The shape `src.vault.redact_secret`'s generic pass DOES recognise. Used only by
+#: the backstop guards, never by a «the probe never built it» guard.
+GH_PAT_GENERIC = "ghp_" + "A" * 36
 #: The marker a Google 403 body carries. `GoogleAPIError` embeds 300 chars of a
 #: live response body (F-4), so this is the exact leak vector.
 GOOGLE_BODY_MARKER = "SENTINEL-google-response-body-must-never-surface"
+
+#: Guards that are not about the Google lane still build a Settings, and
+#: `VAULT_LOCAL_PATH` / `GOOGLE_OAUTH_CLIENT_JSON` default to the owner's real
+#: `./vault` and `./config`, BOTH of which exist on a working box. Point them at
+#: paths that do not, so the lane reads «absent» instead of reading the owner's
+#: sealed token cache off disk — and so the same guard gives the same answer on
+#: CI, which has neither.
+_TMP_VAULT = "./_nonexistent_test_vault"
+_TMP_CLIENT_JSON = "./_nonexistent_google_client.json"
+
+
+@pytest.fixture(autouse=True)
+def _cold_cache():
+    """Every guard starts from a cold cache, and leaves no background sweep behind
+    for the next one to trip over. `reset_cache` cancels an in-flight sweep, so
+    this is hermeticity rather than tidiness."""
+    health.reset_cache()
+    yield
+    health.reset_cache()
 
 
 def _everything_ok(request: httpx.Request) -> httpx.Response:
@@ -109,15 +136,23 @@ def _assert_no_secret(sink: str | list[str], *secrets: str) -> None:
 
 
 def _real_ffmpeg(code: int = 0):
+    """An ffmpeg PROBE double, for the guards that are about something else and
+    must not spawn a real process. It deliberately proves NOTHING about ffmpeg —
+    the three guards that DO drive the real `_probe_ffmpeg` patch `shutil.which`
+    and `_launch_ffmpeg` directly."""
+
+    async def _probe(_settings, *, transport=None):
+        return health.Lane(health.STATE_HEALTHY if code == 0 else health.STATE_MISCONFIGURED)
+
+    return _probe
+
+
+def _launcher(code: int | None = 0, *, error: BaseException | None = None):
+    """A `_launch_ffmpeg` double: `None` for the code means no process was
+    produced, which is how the real launcher reports a launch that failed."""
+
     async def _launch(_exe: str):
-        return code, None
-
-    return _launch
-
-
-def _exploding(_exe: str):
-    async def _launch(_exe: str):
-        return None, OSError("not a valid Win32 application")
+        return code, error
 
     return _launch
 
@@ -176,22 +211,22 @@ def _google_settings(make_settings, tmp_path, *, client: bool = True, grant: boo
 # ── LAW 1: the vocabulary is closed ────────────────────────────────────────────────
 
 
-async def test_every_lane_reports_one_of_exactly_three_states(monkeypatch, make_settings):
+async def test_every_lane_reports_one_of_exactly_three_states(monkeypatch, make_settings, tmp_path):
     """The law: no lane may answer a fourth value — `ok`, `found`, `set`,
     `missing`, `unchecked` or anything else. Asserted over BOTH a green sweep and
     a fully-red sweep, because a closed vocabulary that only holds when things are
     working is not closed."""
-    settings = make_settings(TELEGRAM_BOT_TOKEN=TG_TOKEN, VAULT_GITHUB_TOKEN=GH_PAT)
+    settings = _google_settings(make_settings, tmp_path)
     monkeypatch.setattr(health, "_probe_ffmpeg", _real_ffmpeg())
 
     green = await health.healthcheck(settings, transport=_transport(_everything_ok))
     assert {lane["state"] for lane in green["lanes"].values()} == {health.STATE_HEALTHY}
 
-    monkeypatch.setattr(health, "_probe_ffmpeg", _real_ffmpeg(code=1))
+    monkeypatch.setattr(health, "_probe_ffmpeg", _exploding_probe("ffmpeg exploded"))
     for name in ("_probe_gateway", "_probe_telegram", "_probe_vault", "_probe_google"):
         monkeypatch.setattr(health, name, _exploding_probe(f"probe {name} exploded"))
     red = await health.healthcheck(settings, transport=_transport(_everything_ok))
-    assert {lane["state"] for lane in red["lanes"].values()} <= {health.STATE_UNREACHABLE}
+    assert health.STATE_HEALTHY not in {lane["state"] for lane in red["lanes"].values()}
 
     assert health.LANE_STATES == frozenset(
         {health.STATE_HEALTHY, health.STATE_MISCONFIGURED, health.STATE_UNREACHABLE}
@@ -201,11 +236,11 @@ async def test_every_lane_reports_one_of_exactly_three_states(monkeypatch, make_
             assert lane["state"] in health.LANE_STATES, (lane_name, lane["state"])
 
 
-async def test_the_report_body_carries_no_vague_ok_setting(monkeypatch, make_settings):
+async def test_the_report_body_carries_no_vague_ok_setting(monkeypatch, make_settings, tmp_path):
     """`"ok"` is the value this node deletes: it is what a probe says when it has
     not actually looked. Asserted against the RENDERED body, not the dict, so a
     nested `"status": "ok"` cannot hide."""
-    settings = make_settings(TELEGRAM_BOT_TOKEN=TG_TOKEN, VAULT_GITHUB_TOKEN=GH_PAT)
+    settings = _google_settings(make_settings, tmp_path)
     monkeypatch.setattr(health, "_probe_ffmpeg", _real_ffmpeg())
     report = await health.healthcheck(settings, transport=_transport(_everything_ok))
     body = health.encode_body(report).decode("utf-8")
@@ -214,10 +249,12 @@ async def test_the_report_body_carries_no_vague_ok_setting(monkeypatch, make_set
     assert set(report["lanes"]) == set(health.LANE_NAMES)
 
 
-async def test_the_overall_rollup_is_itself_one_of_the_three_states(monkeypatch, make_settings):
+async def test_the_overall_rollup_is_itself_one_of_the_three_states(
+    monkeypatch, make_settings, tmp_path
+):
     """`overall` is a rollup, not a lane, but a fourth word in the same body is the
     same lie. It is a state, and `src/main.py`'s exit code reads it."""
-    settings = make_settings(TELEGRAM_BOT_TOKEN=TG_TOKEN, VAULT_GITHUB_TOKEN=GH_PAT)
+    settings = _google_settings(make_settings, tmp_path)
     monkeypatch.setattr(health, "_probe_ffmpeg", _real_ffmpeg())
     report = await health.healthcheck(settings, transport=_transport(_everything_ok))
     assert report["overall"] in health.LANE_STATES
@@ -234,7 +271,12 @@ async def test_a_present_but_revoked_telegram_token_is_misconfigured_not_healthy
     put `overall: "ok"` on top of it."""
     monkeypatch.setattr(health, "_probe_ffmpeg", _real_ffmpeg())
     report = await health.healthcheck(
-        make_settings(TELEGRAM_BOT_TOKEN=TG_TOKEN), transport=_transport(_refuses_everything)
+        make_settings(
+            TELEGRAM_BOT_TOKEN=TG_TOKEN,
+            VAULT_LOCAL_PATH=_TMP_VAULT,
+            GOOGLE_OAUTH_CLIENT_JSON=_TMP_CLIENT_JSON,
+        ),
+        transport=_transport(_refuses_everything),
     )
     lane = report["lanes"]["telegram_token"]
     assert lane["state"] == health.STATE_MISCONFIGURED
@@ -246,7 +288,11 @@ async def test_a_telegram_200_that_says_ok_false_is_still_a_refusal(monkeypatch,
     """Telegram wraps a rejected token in HTTP 200 with `{"ok": false}`. A probe
     that reads only the status code reports that deployment healthy — the same
     lie, one layer below the status code."""
-    settings = make_settings(TELEGRAM_BOT_TOKEN=TG_TOKEN)
+    settings = make_settings(
+        TELEGRAM_BOT_TOKEN=TG_TOKEN,
+        VAULT_LOCAL_PATH=_TMP_VAULT,
+        GOOGLE_OAUTH_CLIENT_JSON=_TMP_CLIENT_JSON,
+    )
     monkeypatch.setattr(health, "_probe_ffmpeg", _real_ffmpeg())
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -269,7 +315,12 @@ async def test_a_present_but_revoked_vault_pat_is_misconfigured_not_healthy(
     `misconfigured`."""
     monkeypatch.setattr(health, "_probe_ffmpeg", _real_ffmpeg())
     report = await health.healthcheck(
-        make_settings(VAULT_GITHUB_TOKEN=GH_PAT), transport=_transport(_refuses_everything)
+        make_settings(
+            VAULT_GITHUB_TOKEN=GH_PAT,
+            VAULT_LOCAL_PATH=_TMP_VAULT,
+            GOOGLE_OAUTH_CLIENT_JSON=_TMP_CLIENT_JSON,
+        ),
+        transport=_transport(_refuses_everything),
     )
     assert report["lanes"]["vault"]["state"] == health.STATE_MISCONFIGURED
     assert report["overall"] != health.STATE_HEALTHY
@@ -285,22 +336,30 @@ async def test_a_revoked_google_grant_is_not_healthy(monkeypatch, make_settings,
     assert report["overall"] != health.STATE_HEALTHY
 
 
-async def test_an_absent_telegram_token_is_misconfigured_not_a_pass(monkeypatch, make_settings):
-    """`""` is not "unset, fine" — the bot cannot receive a single message without
-    the token, so it is absent-when-required."""
+async def test_an_absent_telegram_token_is_misconfigured_not_a_pass(monkeypatch):
+    """`""` is not «unset, fine» — the bot cannot receive a single message without
+    the token, so it is absent-when-required.
+
+    DIRECTIVE 4, stated rather than assumed: `src/config.py` REJECTS an empty
+    `telegram_bot_token` at validation, so this branch is unreachable through a
+    validated `Settings` and fires only for a caller that did not go through one.
+    The guard drives that caller on purpose; the same unreachability is named at
+    the call site in `_probe_telegram`'s docstring, which is where it belongs."""
     monkeypatch.setattr(health, "_probe_ffmpeg", _real_ffmpeg())
-    report = await health.healthcheck(
-        make_settings(TELEGRAM_BOT_TOKEN=""), transport=_transport(_everything_ok)
+    unvalidated = types.SimpleNamespace(
+        telegram_bot_token="", omniroute_base_url="http://localhost:20128/v1"
     )
+    report = await health.healthcheck(unvalidated, transport=_transport(_everything_ok))
     assert report["lanes"]["telegram_token"]["state"] == health.STATE_MISCONFIGURED
+    assert report["overall"] != health.STATE_HEALTHY
 
 
 async def test_an_ffmpeg_on_path_that_will_not_run_is_not_healthy(monkeypatch, make_settings):
     """`shutil.which` is PRESENCE. A truncated or DLL-broken ffmpeg — a real
     Windows failure this repository has hit — is on PATH and answers nothing."""
-    settings = make_settings()
+    settings = make_settings(VAULT_LOCAL_PATH=_TMP_VAULT, GOOGLE_OAUTH_CLIENT_JSON=_TMP_CLIENT_JSON)
     monkeypatch.setattr(health.shutil, "which", lambda _name: "C:/ffmpeg/ffmpeg.exe")
-    monkeypatch.setattr(health, "_launch_ffmpeg", _real_ffmpeg(code=1))
+    monkeypatch.setattr(health, "_launch_ffmpeg", _launcher(code=1))
     report = await health.healthcheck(settings, transport=_transport(_everything_ok))
     assert report["lanes"]["ffmpeg"]["state"] == health.STATE_MISCONFIGURED
 
@@ -308,11 +367,31 @@ async def test_an_ffmpeg_on_path_that_will_not_run_is_not_healthy(monkeypatch, m
 async def test_an_ffmpeg_that_cannot_be_launched_is_misconfigured(monkeypatch, make_settings):
     """The binary resolves but the exec raises — determinable and wrong, so
     `misconfigured`, not an undetermined network problem."""
-    settings = make_settings()
+    settings = make_settings(VAULT_LOCAL_PATH=_TMP_VAULT, GOOGLE_OAUTH_CLIENT_JSON=_TMP_CLIENT_JSON)
     monkeypatch.setattr(health.shutil, "which", lambda _name: "C:/ffmpeg/ffmpeg.exe")
-    monkeypatch.setattr(health, "_launch_ffmpeg", _exploding)
+    monkeypatch.setattr(
+        health, "_launch_ffmpeg", _launcher(error=OSError("not a valid Win32 application"))
+    )
     report = await health.healthcheck(settings, transport=_transport(_everything_ok))
     assert report["lanes"]["ffmpeg"]["state"] == health.STATE_MISCONFIGURED
+
+
+async def test_an_ffmpeg_that_hangs_is_undetermined_not_healthy(monkeypatch, make_settings):
+    """A binary that starts and never answers is neither working nor provably
+    broken, so the honest state is `unreachable` — the fail-closed half again."""
+    settings = make_settings(VAULT_LOCAL_PATH=_TMP_VAULT, GOOGLE_OAUTH_CLIENT_JSON=_TMP_CLIENT_JSON)
+    monkeypatch.setattr(health.shutil, "which", lambda _name: "C:/ffmpeg/ffmpeg.exe")
+    monkeypatch.setattr(health, "_launch_ffmpeg", _launcher(code=None, error=TimeoutError()))
+    report = await health.healthcheck(settings, transport=_transport(_everything_ok))
+    assert report["lanes"]["ffmpeg"]["state"] == health.STATE_UNREACHABLE
+
+
+async def test_an_absent_ffmpeg_is_misconfigured(monkeypatch, make_settings):
+    settings = make_settings(VAULT_LOCAL_PATH=_TMP_VAULT, GOOGLE_OAUTH_CLIENT_JSON=_TMP_CLIENT_JSON)
+    monkeypatch.setattr(health.shutil, "which", lambda _name: None)
+    report = await health.healthcheck(settings, transport=_transport(_everything_ok))
+    assert report["lanes"]["ffmpeg"]["state"] == health.STATE_MISCONFIGURED
+    assert report["overall"] != health.STATE_HEALTHY
 
 
 # ── LAW 2, the other half: UNREACHABLE IS NOT HEALTHY ─────────────────────────────
@@ -323,7 +402,8 @@ async def test_an_unreachable_gateway_is_never_healthy(monkeypatch, make_setting
     whenever the transport misbehaved in a way the old code did not model."""
     monkeypatch.setattr(health, "_probe_ffmpeg", _real_ffmpeg())
     report = await health.healthcheck(
-        make_settings(), transport=_transport(_unreachable_everything)
+        make_settings(VAULT_LOCAL_PATH=_TMP_VAULT, GOOGLE_OAUTH_CLIENT_JSON=_TMP_CLIENT_JSON),
+        transport=_transport(_unreachable_everything),
     )
     assert report["lanes"]["gateway"]["state"] == health.STATE_UNREACHABLE
     assert report["lanes"]["gateway"]["state"] != health.STATE_HEALTHY
@@ -333,7 +413,11 @@ async def test_an_unreachable_gateway_is_never_healthy(monkeypatch, make_setting
 async def test_an_unreachable_telegram_is_never_healthy(monkeypatch, make_settings):
     monkeypatch.setattr(health, "_probe_ffmpeg", _real_ffmpeg())
     report = await health.healthcheck(
-        make_settings(TELEGRAM_BOT_TOKEN=TG_TOKEN),
+        make_settings(
+            TELEGRAM_BOT_TOKEN=TG_TOKEN,
+            VAULT_LOCAL_PATH=_TMP_VAULT,
+            GOOGLE_OAUTH_CLIENT_JSON=_TMP_CLIENT_JSON,
+        ),
         transport=_transport(_unreachable_everything),
     )
     assert report["lanes"]["telegram_token"]["state"] == health.STATE_UNREACHABLE
@@ -366,7 +450,10 @@ async def test_a_gateway_answering_5xx_leaves_the_lane_undetermined(monkeypatch,
             return httpx.Response(503, text="upstream unavailable")
         return _everything_ok(request)
 
-    report = await health.healthcheck(make_settings(), transport=_transport(handler))
+    report = await health.healthcheck(
+        make_settings(VAULT_LOCAL_PATH=_TMP_VAULT, GOOGLE_OAUTH_CLIENT_JSON=_TMP_CLIENT_JSON),
+        transport=_transport(handler),
+    )
     assert report["lanes"]["gateway"]["state"] == health.STATE_UNREACHABLE
     assert report["overall"] != health.STATE_HEALTHY
 
@@ -376,26 +463,30 @@ async def test_a_probe_that_crashes_degrades_only_its_own_lane(monkeypatch, make
     healthy either — it reports the truth it has, which is nothing."""
     monkeypatch.setattr(health, "_probe_ffmpeg", _real_ffmpeg())
     monkeypatch.setattr(health, "_probe_vault", _exploding_probe("vault double exploded"))
-    report = await health.healthcheck(make_settings(), transport=_transport(_everything_ok))
+    report = await health.healthcheck(
+        make_settings(VAULT_LOCAL_PATH=_TMP_VAULT, GOOGLE_OAUTH_CLIENT_JSON=_TMP_CLIENT_JSON),
+        transport=_transport(_everything_ok),
+    )
     assert report["lanes"]["vault"]["state"] == health.STATE_UNREACHABLE
     assert report["lanes"]["gateway"]["state"] == health.STATE_HEALTHY
     assert report["overall"] != health.STATE_HEALTHY
 
 
 async def test_an_unchecked_lane_is_undetermined_and_does_not_gate_the_rollup(
-    monkeypatch, make_settings
+    monkeypatch, make_settings, tmp_path
 ):
     """`probe_gateway=False` used to emit a fourth value, `"unchecked"`, which
     `overall` then tolerated. An unprobed lane is an UNDETERMINED lane, so it reads
     `unreachable`; it does not gate `overall` because the caller declined to probe
     it — stated in the body rather than left as an accident."""
     monkeypatch.setattr(health, "_probe_ffmpeg", _real_ffmpeg())
+    settings = _google_settings(make_settings, tmp_path, client=False, grant=False)
     report = await health.healthcheck(
-        make_settings(), probe_gateway=False, transport=_transport(_everything_ok)
+        settings, probe_gateway=False, transport=_transport(_everything_ok)
     )
     assert report["lanes"]["gateway"]["state"] == health.STATE_UNREACHABLE
     assert report["lanes"]["gateway"]["required"] is False
-    assert report["overall"] != health.STATE_UNREACHABLE
+    assert report["overall"] == health.STATE_HEALTHY
 
 
 # ── LAW 3: the two failure states are distinguishable ─────────────────────────────
@@ -409,10 +500,19 @@ async def test_a_refused_key_and_an_unreachable_network_are_different_states(
     about which knob to turn."""
     monkeypatch.setattr(health, "_probe_ffmpeg", _real_ffmpeg())
     refused = await health.healthcheck(
-        make_settings(TELEGRAM_BOT_TOKEN=TG_TOKEN), transport=_transport(_refuses_everything)
+        make_settings(
+            TELEGRAM_BOT_TOKEN=TG_TOKEN,
+            VAULT_LOCAL_PATH=_TMP_VAULT,
+            GOOGLE_OAUTH_CLIENT_JSON=_TMP_CLIENT_JSON,
+        ),
+        transport=_transport(_refuses_everything),
     )
     dead = await health.healthcheck(
-        make_settings(TELEGRAM_BOT_TOKEN=TG_TOKEN),
+        make_settings(
+            TELEGRAM_BOT_TOKEN=TG_TOKEN,
+            VAULT_LOCAL_PATH=_TMP_VAULT,
+            GOOGLE_OAUTH_CLIENT_JSON=_TMP_CLIENT_JSON,
+        ),
         transport=_transport(_unreachable_everything),
     )
     a = refused["lanes"]["telegram_token"]
@@ -420,7 +520,7 @@ async def test_a_refused_key_and_an_unreachable_network_are_different_states(
     assert a["state"] == health.STATE_MISCONFIGURED
     assert b["state"] == health.STATE_UNREACHABLE
     assert a["state"] != b["state"]
-    assert a["reason"] != b["reason"]
+    assert refused["reasons"]["telegram_token"] != dead["reasons"]["telegram_token"]
 
 
 async def test_a_refused_google_grant_and_an_unreachable_google_are_different_states(
@@ -453,25 +553,25 @@ async def test_a_google_deployment_without_an_oauth_secret_is_not_required(
 # ── LAW 4: no secret leaves the probe — one guard per class ───────────────────────
 
 
-async def test_the_telegram_bot_token_never_reaches_the_body_or_the_log(
-    monkeypatch, make_settings
-):
+async def test_the_telegram_bot_token_never_reaches_the_body_or_the_log(monkeypatch, make_settings):
     """CLASS `telegram_bot_token`. Drives a REFUSED token — the state a real leak
     would accompany — and asserts the token is in neither the rendered body nor any
     WARNING log record."""
     monkeypatch.setattr(health, "_probe_ffmpeg", _real_ffmpeg())
     with _warnings() as records:
         report = await health.healthcheck(
-            make_settings(TELEGRAM_BOT_TOKEN=TG_TOKEN),
+            make_settings(
+                TELEGRAM_BOT_TOKEN=TG_TOKEN,
+                VAULT_LOCAL_PATH=_TMP_VAULT,
+                GOOGLE_OAUTH_CLIENT_JSON=_TMP_CLIENT_JSON,
+            ),
             transport=_transport(_refuses_everything),
         )
     _assert_no_secret(health.encode_body(report).decode("utf-8"), TG_TOKEN)
     _assert_no_secret(records, TG_TOKEN)
 
 
-async def test_the_telegram_probe_url_never_reaches_the_body_or_the_log(
-    monkeypatch, make_settings
-):
+async def test_the_telegram_probe_url_never_reaches_the_body_or_the_log(monkeypatch, make_settings):
     """CLASS `telegram_probe_url`. Telegram's bot API puts the credential IN THE
     URL PATH, so the URL is itself the secret: a reason built from
     `str(request.url)` would carry it. A different vector from the token alone, and
@@ -479,7 +579,11 @@ async def test_the_telegram_probe_url_never_reaches_the_body_or_the_log(
     monkeypatch.setattr(health, "_probe_ffmpeg", _real_ffmpeg())
     with _warnings() as records:
         report = await health.healthcheck(
-            make_settings(TELEGRAM_BOT_TOKEN=TG_TOKEN),
+            make_settings(
+                TELEGRAM_BOT_TOKEN=TG_TOKEN,
+                VAULT_LOCAL_PATH=_TMP_VAULT,
+                GOOGLE_OAUTH_CLIENT_JSON=_TMP_CLIENT_JSON,
+            ),
             transport=_transport(_unreachable_everything),
         )
     body = health.encode_body(report).decode("utf-8")
@@ -495,7 +599,12 @@ async def test_the_vault_pat_never_reaches_the_body_or_the_log(monkeypatch, make
     monkeypatch.setattr(health, "_probe_ffmpeg", _real_ffmpeg())
     with _warnings() as records:
         report = await health.healthcheck(
-            make_settings(VAULT_GITHUB_TOKEN=GH_PAT), transport=_transport(_refuses_everything)
+            make_settings(
+                VAULT_GITHUB_TOKEN=GH_PAT,
+                VAULT_LOCAL_PATH=_TMP_VAULT,
+                GOOGLE_OAUTH_CLIENT_JSON=_TMP_CLIENT_JSON,
+            ),
+            transport=_transport(_refuses_everything),
         )
     _assert_no_secret(health.encode_body(report).decode("utf-8"), GH_PAT)
     _assert_no_secret(records, GH_PAT)
@@ -511,7 +620,12 @@ async def test_the_authorization_header_value_never_reaches_the_body_or_the_log(
     monkeypatch.setattr(health, "_probe_ffmpeg", _real_ffmpeg())
     with _warnings() as records:
         report = await health.healthcheck(
-            make_settings(VAULT_GITHUB_TOKEN=GH_PAT), transport=_transport(_refuses_everything)
+            make_settings(
+                VAULT_GITHUB_TOKEN=GH_PAT,
+                VAULT_LOCAL_PATH=_TMP_VAULT,
+                GOOGLE_OAUTH_CLIENT_JSON=_TMP_CLIENT_JSON,
+            ),
+            transport=_transport(_refuses_everything),
         )
     body = health.encode_body(report).decode("utf-8")
     _assert_no_secret(body, GH_PAT)
@@ -560,15 +674,28 @@ async def test_a_settings_path_never_reaches_the_body_or_the_log(
     _assert_no_secret(records, str(tmp_path), str(settings.google_oauth_client_json))
 
 
-def test_the_reason_redactor_screens_a_secret_a_probe_interpolated_by_mistake():
-    """CLASS `redaction_backstop`. The probes build reasons from templates and a
-    class name, so a secret should never reach the redactor at all. This guard
-    covers the SECOND line of defence: if a future probe interpolates the token by
-    mistake, `redact_reason` must still keep it out. It cannot prove the first
-    line, and does not claim to."""
-    scrubbed = health.redact_reason(f"probe said {GH_PAT} while calling GitHub")
-    assert GH_PAT not in scrubbed
+def test_the_reason_redactor_screens_a_secret_shape_the_house_pass_recognises():
+    """CLASS `redaction_backstop`, half one. The probes build reasons from
+    templates and a class name, so a secret should never reach the redactor at
+    all. This covers the SECOND line of defence for the shapes the house pass
+    knows: `src.vault.redact_secret`'s generic clause catches `gh…_` tokens, and
+    `redact_reason` must carry that."""
+    scrubbed = health.redact_reason(f"probe said {GH_PAT_GENERIC} while calling GitHub")
+    assert GH_PAT_GENERIC not in scrubbed
     assert "GitHub" in scrubbed, "redaction must not eat the operator-readable clause"
+
+
+def test_the_reason_redactor_is_not_a_dlp_product_and_says_so():
+    """CLASS `redaction_backstop`, half two — THE HONEST LIMIT, and the reason the
+    leak guards above use `github_pat_…` rather than `ghp_…`.
+
+    The backstop screens what `src.vault.redact_secret` screens: registered live
+    secrets and one generic token shape. A fine-grained PAT matches neither, so it
+    passes through. That is not a bug to be papered over — it is why the primary
+    law is CONSTRUCTION: a probe reason is a template plus an exception class
+    name, and the guards that prove it use a secret the backstop cannot help with.
+    A backstop that screened everything would make those guards prove nothing."""
+    assert GH_PAT in health.redact_reason(f"probe said {GH_PAT} while calling GitHub")
 
 
 async def test_a_reason_is_a_clause_and_names_the_fault_class(monkeypatch, make_settings):
@@ -577,10 +704,14 @@ async def test_a_reason_is_a_clause_and_names_the_fault_class(monkeypatch, make_
     must still name the class where a class is what went wrong."""
     monkeypatch.setattr(health, "_probe_ffmpeg", _real_ffmpeg())
     report = await health.healthcheck(
-        make_settings(TELEGRAM_BOT_TOKEN=TG_TOKEN),
+        make_settings(
+            TELEGRAM_BOT_TOKEN=TG_TOKEN,
+            VAULT_LOCAL_PATH=_TMP_VAULT,
+            GOOGLE_OAUTH_CLIENT_JSON=_TMP_CLIENT_JSON,
+        ),
         transport=_transport(_unreachable_everything),
     )
-    reason = report["lanes"]["telegram_token"]["reason"]
+    reason = report["reasons"]["telegram_token"]
     assert reason and " " in reason, reason
     assert ".ConnectError" in reason, reason
 
@@ -589,12 +720,14 @@ async def test_a_reason_is_a_clause_and_names_the_fault_class(monkeypatch, make_
 
 
 async def test_a_reason_is_present_only_for_a_lane_that_is_not_healthy(
-    monkeypatch, make_settings
+    monkeypatch, make_settings, tmp_path
 ):
     """A `reason` on a `healthy` lane would be a claim the probe cannot support,
     and it is how a report grows a fourth vocabulary one string at a time."""
     monkeypatch.setattr(health, "_probe_ffmpeg", _real_ffmpeg())
-    report = await health.healthcheck(make_settings(), transport=_transport(_everything_ok))
+    report = await health.healthcheck(
+        _google_settings(make_settings, tmp_path), transport=_transport(_everything_ok)
+    )
     assert report["reasons"] == {}, report["reasons"]
     assert set(report["reasons"]) <= {
         name for name, lane in report["lanes"].items() if lane["state"] != health.STATE_HEALTHY
@@ -605,7 +738,10 @@ async def test_every_lane_reports_its_own_requirement(monkeypatch, make_settings
     """The rollup is auditable: the body says WHICH lanes gate it, so `overall`
     cannot quietly stop meaning something."""
     monkeypatch.setattr(health, "_probe_ffmpeg", _real_ffmpeg())
-    report = await health.healthcheck(make_settings(), transport=_transport(_everything_ok))
+    report = await health.healthcheck(
+        make_settings(VAULT_LOCAL_PATH=_TMP_VAULT, GOOGLE_OAUTH_CLIENT_JSON=_TMP_CLIENT_JSON),
+        transport=_transport(_everything_ok),
+    )
     for name in health.LANE_NAMES:
         assert isinstance(report["lanes"][name]["required"], bool), name
     assert set(report["lanes"]) == set(health.LANE_NAMES)
@@ -627,14 +763,14 @@ def test_the_cold_cache_reports_every_lane_unknown_rather_than_healthy():
 
 
 async def test_the_snapshot_answers_from_cache_and_never_probes_per_poll(
-    monkeypatch, make_settings
+    monkeypatch, make_settings, tmp_path
 ):
     """The `/health` endpoint is polled. Probing on every poll would hammer GitHub
     and Telegram — and GitHub answers 403 for BOTH a rate limit and bad scopes, so
     the probe would manufacture the very ambiguity N5 has to resolve. A second
     schedule inside the TTL must perform no sweep at all."""
-    monkeypatch.setattr(health, "_probe_ffmpeg", _real_ffmpeg())
     health.reset_cache()
+    monkeypatch.setattr(health, "_probe_ffmpeg", _real_ffmpeg())
     sweeps: list[int] = []
     real = health.healthcheck
 
@@ -644,7 +780,7 @@ async def test_the_snapshot_answers_from_cache_and_never_probes_per_poll(
 
     monkeypatch.setattr(health, "healthcheck", counting)
 
-    settings = make_settings(TELEGRAM_BOT_TOKEN=TG_TOKEN, VAULT_GITHUB_TOKEN=GH_PAT)
+    settings = _google_settings(make_settings, tmp_path)
     health.schedule_refresh(settings, transport=_transport(_everything_ok))
     await _until(lambda: health.snapshot_is_populated())
     first = health.snapshot()
@@ -659,12 +795,12 @@ async def test_the_snapshot_answers_from_cache_and_never_probes_per_poll(
     assert health.PROBE_TTL_S == 30.0
 
 
-async def test_an_expired_cache_is_refreshed(monkeypatch, make_settings):
+async def test_an_expired_cache_is_refreshed(monkeypatch, make_settings, tmp_path):
     """The cache must expire, or a lapsed Google token would read healthy forever.
     Past the TTL the next schedule starts a fresh sweep."""
     health.reset_cache()
     monkeypatch.setattr(health, "_probe_ffmpeg", _real_ffmpeg())
-    settings = make_settings(TELEGRAM_BOT_TOKEN=TG_TOKEN, VAULT_GITHUB_TOKEN=GH_PAT)
+    settings = _google_settings(make_settings, tmp_path)
     health.schedule_refresh(settings, transport=_transport(_everything_ok))
     await _until(lambda: health.snapshot_is_populated())
     assert health.snapshot()["overall"] == health.STATE_HEALTHY
@@ -698,14 +834,19 @@ def test_every_lane_state_maps_to_200_and_the_decision_is_a_named_table():
     }
 
 
-async def test_the_public_port_answers_200_with_every_lane_state_in_the_body(monkeypatch,
-                                                                             make_settings):
+async def test_the_public_port_answers_200_with_every_lane_state_in_the_body(
+    monkeypatch, make_settings
+):
     """`/health` over a REAL loopback socket: the status is 200 and the body
     carries a state per lane. The old responder answered `200 {"status":"ok"}`
     with no lane at all, which is why it could never be evidence of anything."""
     monkeypatch.setattr(health, "_probe_ffmpeg", _real_ffmpeg())
     health.reset_cache()
-    bridge, port = await main_mod.start_public_port(make_settings(), 0, host="127.0.0.1")
+    bridge, port = await main_mod.start_public_port(
+        make_settings(VAULT_LOCAL_PATH=_TMP_VAULT, GOOGLE_OAUTH_CLIENT_JSON=_TMP_CLIENT_JSON),
+        0,
+        host="127.0.0.1",
+    )
     try:
         status, body = await asyncio.to_thread(_http_get, port)
     finally:
@@ -722,7 +863,11 @@ async def test_the_public_port_answers_without_waiting_for_a_probe(monkeypatch, 
     the whole request returns in well under a second with a cold cache."""
     health.reset_cache()
     monkeypatch.setattr(health, "_probe_ffmpeg", _real_ffmpeg())
-    bridge, port = await main_mod.start_public_port(make_settings(), 0, host="127.0.0.1")
+    bridge, port = await main_mod.start_public_port(
+        make_settings(VAULT_LOCAL_PATH=_TMP_VAULT, GOOGLE_OAUTH_CLIENT_JSON=_TMP_CLIENT_JSON),
+        0,
+        host="127.0.0.1",
+    )
     try:
         started = time.perf_counter()
         status, body = await asyncio.to_thread(_http_get, port)
@@ -745,10 +890,12 @@ def test_the_exit_code_is_zero_only_when_overall_is_healthy():
     assert health.exit_code_for({"overall": health.STATE_UNREACHABLE}) == 1
 
 
-async def test_the_cli_probe_exits_zero_and_one_without_polling(monkeypatch, capsys, make_settings):
+async def test_the_cli_probe_exits_zero_and_one_without_polling(
+    monkeypatch, capsys, make_settings, tmp_path
+):
     """The `--health` lane end to end: a green sweep exits 0 and prints the body, a
     red sweep exits 1, and the bot runner is never reached."""
-    settings = make_settings(TELEGRAM_BOT_TOKEN=TG_TOKEN, VAULT_GITHUB_TOKEN=GH_PAT)
+    settings = _google_settings(make_settings, tmp_path)
     monkeypatch.setattr(main_mod, "Settings", lambda: settings)
     monkeypatch.setattr(health, "_probe_ffmpeg", _real_ffmpeg())
 

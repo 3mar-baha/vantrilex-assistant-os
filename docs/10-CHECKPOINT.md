@@ -3582,6 +3582,319 @@ honest form of the same fact.
 entry). One commit. Zero new packages, no new environment variable, no new configuration
 knob. No executable line of any file touched; no test added, changed or deleted.
 
+## N3 / F-8 — deploy truthfulness: the probe stops answering "set" (2026-10-03)
+
+Owner-released Phase 1 node. **Two commits, no squash**: the RED guards alone
+(`d02969d`), then this fix. HEAD at start `acedd63`.
+
+### The gap, measured on the tree before anything was written
+
+| Lane | What it actually measured | Presence or validity? |
+|---|---|---|
+| `telegram_token` | `"set" if settings.telegram_bot_token else "missing"` (`src/health.py:23`) | **PRESENCE.** A token that is set AND revoked reads `"set"`, and `overall` reads `"ok"` on top of it |
+| `vault` | `getattr(settings, "vault_github_token", None)` non-empty (`:55`) | **PRESENCE — and worse than it looks.** `str(SecretStr)` is literally `"**********"`, so *any* token at all, revoked or dead, returned `"ok"` |
+| `google` | `google_token.json.enc` exists on disk (`:65`) | **PRESENCE.** A Fernet-sealed file is a file, not a working grant |
+| `ffmpeg` | `shutil.which("ffmpeg")` (`:24`) | **PRESENCE.** A path on PATH is not an executable that runs — a broken shim or a missing DLL passes |
+| `gateway` | `GET {base}/models` status code (`:70-80`) | **VALIDITY**, but collapsed: a 5xx and a refused key both returned `"unreachable"` |
+| `/health` body | `200 {"status":"ok"}`, unconditional (`src/main.py:27`) | **NOTHING.** A body that cannot disagree with reality is not evidence |
+
+**Four of the six lanes were reporting PRESENCE while the report labelled them
+states.** The only one that made a real call was the gateway, and it threw away
+the distinction that matters.
+
+### The acceptance artefact — every lane, before and after
+
+| Lane | BEFORE | AFTER | NEW or RENAMED |
+|---|---|---|---|
+| `gateway` | `ok` | `healthy` | **renamed** |
+| | `unreachable` | `unreachable` | unchanged |
+| | — | `misconfigured` (401 / 403 / 404 / 422 — the gateway ANSWERED and refused) | **new** |
+| | — | `unreachable` (5xx and anything else: the answer says nothing about us) | widened from «transport failed» |
+| `telegram_token` | `set` | `healthy` | **new** — `getMe` returned `{"ok": true}` |
+| | `missing` | `misconfigured` | **renamed** |
+| | — | `misconfigured` (HTTP 401 / 403 / 404, **and HTTP 200 carrying `ok: false`**) | **new** |
+| | — | `unreachable` (transport error, 5xx, unreadable envelope) | **new** |
+| `ffmpeg` | `found` | `healthy` | **renamed**, and it now means `ffmpeg -version` exited 0 |
+| | `missing` | `misconfigured` | **renamed** |
+| | — | `misconfigured` (on PATH, exits non-zero / will not launch) | **new** |
+| | — | `unreachable` (started and hung past 5 s) | **new** |
+| `vault` | `ok` | `healthy` | **renamed**, and it now means GitHub answered `GET /user` with 200 |
+| | `unreachable` | `unreachable` | unchanged (transport only) |
+| | — | `misconfigured` (PAT absent; GitHub 401/403) | **new** |
+| `google` | `ok` | `healthy` | **renamed**, and it now means `calendarList.list(maxResults=1)` succeeded |
+| | `missing` | `misconfigured`, and **non-REQUIRED** when the OAuth client secret is absent | **rewritten** |
+| | — | `misconfigured` (secrets but no cached grant; a grant Google REFUSES) | **new** |
+| | — | `unreachable` (transport, 5xx, timeout) | **new** |
+| `overall` | `ok` / `degraded` | `healthy` / `misconfigured` / `unreachable` | **rewritten** — the vague pair is gone from the body entirely |
+| `/health` body | `{"status":"ok"}` | `{"overall", "lanes": {name: {state, required}}, "reasons", "probed_at", "ttl_s", "stale"}` | **new** |
+| `--health` exit | `0` / `1` | `0` / `1` | **unchanged contract, new word compared against** |
+
+`healthy` / `misconfigured` / `unreachable` is the WHOLE vocabulary. `test_every_lane_reports_one_of_exactly_three_states`
+asserts it is closed over a green sweep AND a fully-red sweep, and
+`test_the_report_body_carries_no_vague_ok_setting` asserts against the RENDERED
+body that the strings `"ok"`, `"found"`, `"set"`, `"missing"`, `"unchecked"` and
+`"degraded"` appear nowhere.
+
+### `misconfigured` vs `unreachable` — where the line sits, per lane
+
+* **HTTP 2xx** → `healthy`.
+* **HTTP 401 / 403** → `misconfigured`: the credential was PRESENT and REFUSED.
+* **HTTP 5xx, or any other status** → `unreachable`: the answer was not about the
+  credential, so its validity is undetermined. A 503 must NOT send an operator to
+  rotate a working key.
+* **Transport error / timeout** → `unreachable`.
+* **The probe itself crashed** → `unreachable`, never healthy.
+* **Nobody probed it** → `unreachable` and not required (see below).
+
+### The status-code decision — REPORT §48 step 1, resolved and NAMED
+
+§48 offered 503 *or* «keep 200 with a machine-readable body». **This is the
+second**, and it is a named table rather than an accident:
+
+```python
+HTTP_STATUS_BY_STATE: Final[dict[str, int]] = {
+    STATE_HEALTHY: 200, STATE_MISCONFIGURED: 200, STATE_UNREACHABLE: 200,
+}
+```
+
+**The operator consequence, stated plainly.** Every `/health` response is 200,
+whatever the lanes say. A Space (or any hosting platform) reads a non-200 as
+«the app is down» and may **restart the container** — so a lapsed Google token
+would flap the whole process, and every restart would re-open the vault session,
+re-drop the OAuth grant cache and take the bot offline. Truth in a body nobody
+alerts on beats a false alarm that restarts a healthy app. **The operator's
+non-zero alarm is `--health`'s EXIT CODE**, which is `0` only when the rollup is
+`healthy`; the same code path (`exit_code_for`) serves the CLI and is asserted.
+
+I do not disagree with the brief's reasoning, and I have implemented its
+decision. The cost is stated rather than hidden: an external uptime monitor that
+watches only the status code sees a green box with a dead Google grant. The body
+is the mitigation, and the fix for that class of monitor is a separate decision
+about who alerts — not something this node decides by accident.
+
+### The cache — TTL 30 s, and why the endpoint had to get one
+
+§48 risk (a): `/health` is POLLED (Space probe, keep-alive ping, `sara.ps1`) and
+each remote lane costs one HTTP call, so probing per poll would be a
+self-inflicted rate limit. GitHub answers **403 for both a rate limit and bad
+scopes**, so a chatty probe would manufacture the very ambiguity **N5** has to
+resolve.
+
+`PROBE_TTL_S = 30.0`: short enough that a lapsed credential surfaces inside half
+a minute of an operator looking; long enough that a 10 s poll loop costs at most
+one sweep every third request. Two guards: the cache is consulted before any
+sweep (`test_an_expired_cache_is_refreshed`) and a second schedule inside the
+TTL performs **no** sweep at all (`test_the_snapshot_answers_from_cache_and_never_probes_per_poll`,
+which counts sweeps through a wrapper on `healthcheck`).
+
+**The responder cannot block the bridge's event loop.** `process_request` is
+awaited on the same loop as the authenticated WSS tunnel, so awaiting four
+network calls there (worst case ~23 s of timeouts) would freeze the tunnel. The
+responder therefore reads the cache SYNCHRONOUSLY and starts the sweep
+fire-and-forget, single-flighted. `test_the_public_port_answers_without_waiting_for_a_probe`
+measures it over a real loopback socket with a cold cache: under 1 s, and the
+body says `unreachable`.
+
+**A cold cache answers every lane `unreachable`, never healthy**
+(`test_the_cold_cache_reports_every_lane_unknown_rather_than_healthy`). That is
+the fail-closed half of the endpoint: before any sweep has run there is no
+evidence at all, and «I do not know» is not health.
+
+### Google is required only once its credentials exist
+
+F-4's supported pure-local box (no OAuth client secret) must not degrade the
+rollup — that would make the previous `"google": "missing"` tolerance illegal
+under a closed vocabulary. So every lane carries its own `required` flag in the
+body, Google included, and `overall` is the worst state among the REQUIRED lanes.
+The rollup is therefore auditable from the body instead of being an assertion in
+prose (`test_every_lane_reports_its_own_requirement`).
+
+`unreachable` outranks `misconfigured` at the rollup: «we could not find out» is
+the less actionable of the two and the more likely transient, and an operator who
+reads `unreachable` checks the network first.
+
+### Secrets — one guard per class, and the limit stated
+
+| Class | Guard | What it proves |
+|---|---|---|
+| `telegram_bot_token` | `test_the_telegram_bot_token_never_reaches_the_body_or_the_log` | the token is in neither the rendered body nor any WARNING record, on the refusal path |
+| `telegram_probe_url` | `test_the_telegram_probe_url_never_reaches_the_body_or_the_log` | the URL, which **is** the secret because Telegram puts the token in the PATH — a separate vector from the token alone |
+| `vault_pat` | `test_the_vault_pat_never_reaches_the_body_or_the_log` | the `SecretStr` is unwrapped to make the CALL and nowhere else |
+| `authorization_header` | `test_the_authorization_header_value_never_reaches_the_body_or_the_log` | `Bearer <PAT>` is not echoed even as a labelled fragment — the exact shape N1 closed inside `redact_arg`, at a second, independent site |
+| `google_response_body` | `test_a_google_response_body_never_reaches_the_body_or_the_log` | **F-4's regression**: a 403 body stuffed with a sentinel surfaces nowhere; `describe_probe_failure` still returns the class name only |
+| `filesystem_path` | `test_a_settings_path_never_reaches_the_body_or_the_log` | the owner's vault root and OAuth client path are absent, per F-4's «never a path» law |
+| `redaction_backstop` | `test_the_reason_redactor_screens_a_secret_shape_the_house_pass_recognises` + `test_the_reason_redactor_is_not_a_dlp_product_and_says_so` | what the second line of defence covers, AND that it does not cover everything |
+
+**Why the leak guards use `github_pat_…` and not `ghp_…`.** Mutation mutant **e**
+put the vault PAT straight into the report body and the suite stayed GREEN — the
+first sweep's own finding. The cause: `src.vault.redact_secret`'s generic clause
+(`gh[pousr]_[A-Za-z0-9]{16,}`) screened the `ghp_`-shaped value the guards were
+using, so the backstop was doing the guards' work and the probes' construction-time
+discipline was UNMEASURED. The guard value is now a real fine-grained PAT shape
+(`github_pat_…`), which **no** screening regex in this repository matches — so a
+leak of it can only be caught by the probe never constructing it. The backstop is
+proven separately, and its honest limit is proven separately, in the same spirit
+as `src/action_log`'s «personalization is detected structurally» paragraph.
+
+### The Google lane diverges from `probe_google` ON PURPOSE, and F-4 is not regressed
+
+F-4's `probe_google` returns one `healthy=False` for three different operator
+problems: no client secret, no cached grant, and a grant Google refuses. This
+node's law is that those are different states, so `src/health.py` reuses
+F-4's **pieces** — `GoogleSession`, `GOOGLE_PROBE_URL`, `GOOGLE_PROBE_TIMEOUT_S`,
+`GoogleAuthError`, `GoogleAPIError`, `describe_probe_failure` — and adds only the
+**classification** F-4 deliberately does not make. `src/google_auth.py` is
+outside this node's write-set and was **read, never edited**; `probe_google` is
+untouched and still the boot probe. Its `reason` discipline (class name, never a
+body, never a path, never token material) is inherited unchanged and re-asserted
+by the `google_response_body` guard above.
+
+**THE 403 RATE-LIMIT AMBIGUITY IS NOT SOLVED HERE AND IS NOT CLAIMED.** GitHub
+answers 403 for a bad scope AND for a rate limit; separating them is N5's open
+work. `misconfigured` in the vault lane therefore means precisely «the credential
+was PRESENT and REFUSED», and the reason does not pretend to know which cause it
+was. The operator's next move is to check the rate limit first.
+
+### One defect this node introduced and then fixed — stated, not hidden
+
+`_probe_google` initially left `GoogleSession`'s `httpx.AsyncClient` unclosed,
+mirroring `probe_google`. The first full-suite run then produced
+`ERROR tests/test_bot_shell.py::test_forced_voice_reply_on_text_message` with
+`'ProactorEventLoop' object has no attribute '_ssock'` — a stale transport
+collected after its loop closed, attributed to whichever test was running. `GoogleSession`
+exposes no close surface and `src/google_auth.py` is not in this write-set, so the
+`finally` closes the private handle through `getattr` (a future refactor degrades
+to «nothing to close» rather than raising). **Three subsequent full runs and two
+coverage runs are clean.** The reason it matters beyond tidiness: this probe runs
+from a 30 s sweep for the life of the process, and an unclosed client per sweep
+is a transport leaked per sweep.
+
+### The exit-code contract
+
+`src/main.py:47` was `return 0 if report["overall"] == "ok" else 1`. The CONTRACT
+is unchanged — 0 for healthy, 1 otherwise — and the WORD it compares against is
+now a member of the closed vocabulary, via `health.exit_code_for`. Two guards:
+`test_the_exit_code_is_zero_only_when_overall_is_healthy` and the end-to-end
+`test_the_cli_probe_exits_zero_and_one_without_polling`, which also pins that
+`--health` never reaches the bot runner.
+
+### Three test files changed, by name — DECLARED
+
+Two test files outside this node's stated write-set were edited, because the
+guards there encoded the old vocabulary and Directive 5 requires repairing a guard
+that pins the wrong law rather than reverting the fix to keep it green. **No
+assertion was weakened, skipped, xfailed or deleted**; every law and every test
+name survived.
+
+* `tests/test_health.py` — **rewritten**, four guards, same names, same laws,
+  same import idiom. Its assertions were literally `report == {"gateway": "ok",
+  "telegram_token": "set", "ffmpeg": "found", "vault": "ok", "google": "ok",
+  "overall": "ok"}` and `overall == "degraded"`; those are the values this node
+  deletes. It also gained the `transport=` seam (the lanes no longer share one
+  client) and non-existent `VAULT_LOCAL_PATH` / `GOOGLE_OAUTH_CLIENT_JSON`
+  overrides, because both default to the owner's REAL `./vault` and `./config`,
+  both exist on a working box, and a guard whose answer changes with the machine
+  is not a guard.
+* `tests/test_coverage_gaps_p65.py` — **two string literals**, `{"overall": "ok"}`
+  → `{"overall": "healthy"}` and `{"overall": "degraded"}` →
+  `{"overall": "misconfigured"}` in `test_main_health_exits_and_invalid_env`. The
+  guard's law (exit 0 / exit 1) is untouched; only the word it feeds changed.
+* `tests/test_health_truthfulness.py` — the new file, **repaired twice after the
+  RED commit** (both repairs are test bugs, not implementation bugs, and both are
+  named here rather than folded in silently): the ffmpeg double was written
+  launcher-shaped and used as a probe double (`TypeError` in every ffmpeg lane),
+  and the green-sweep guards depended on the AMBIENT `./config/` and `./vault`,
+  so their answer changed with the machine. Both repairs strengthen the guards; no
+  assertion was loosened.
+
+**Guards that were NOT red before the fix, stated plainly.** Of the 42 in the new
+file, the ones that were already GREEN at `acedd63` are those that pin laws the
+fix COULD break rather than laws missing today: the closed-vocabulary guards'
+negative halves (`"found"` / `"set"` / `"missing"` / `"unchecked"` / `"degraded"`
+absent from the rendered body), `test_a_reason_is_present_only_for_a_lane_that_is_not_healthy`
+(a green sweep having an empty `reasons` map), `test_every_lane_reports_its_own_requirement`,
+`test_the_probe_timeout_is_declared_so_no_lane_can_hang_the_report`,
+`test_every_lane_state_maps_to_200_and_the_decision_is_a_named_table`,
+`test_the_exit_code_is_zero_only_when_overall_is_healthy`, the three
+`redaction_backstop` halves, and the two ffmpeg guards for the paths this probe
+reached but the old module could not (`exited 1`, `will not launch`). Every other
+guard in the file was red at `acedd63`, and the whole-file measurement confirms
+it: **at the RED commit's source state the suite is 2,795 passed / 39 failed —
+every failure one of the new guards, and nothing pre-existing disturbed.**
+
+### Verification, re-derived by running the commands
+
+| Measurement | Value |
+|---|---|
+| `tests/test_health_truthfulness.py` | **42 guards, all green** |
+| RED proof (source state at `acedd63`, new guards present) | **39 failed / 2,795 passed** — every failure one of the new guards |
+| Full suite, `--ignore=tests/live_harness` | **2,837 passed** / 0 failed / 4 skipped / 1 xfailed — baseline **2,795** + exactly the 42 new |
+| `check_tiered_coverage.py` | **GATE PASSED**, **92.39% TOTAL** (≥ 90.0%); `src/tool_overlay.py` 98.4%, `src/associative.py` 98.2%, `src/dispatcher.py` 98.6%, `src/decision_loop.py` 99.3%, `src/cognition.py` 99.7%, `src/memory.py` 99.2% — **every core module ≥ 98.0%, none lowered** |
+| `ruff check` | All checks passed |
+| `ruff format --check` | 323 files already formatted |
+| `security_gate.py` | OK (bandit + secret scan) |
+| `docs_guard.py` | OK — 16 canonical files present |
+| `git hash-object src/persona.py` | `8b972942e785880a3de66121e7f808666250ed2f` — identical before and after |
+| mutation check | **7 mutants, 7 RED, 0 survivors**, every restore sha256-verified |
+
+The 2 failures inside `check_tiered_coverage.py`'s own full-suite run are the
+pre-existing `tests/live_harness` free-provider flakes (`test_h04_ttft_monitor`,
+`test_h06_joda_dialogues`). **Not weakened, not skipped, not xfailed, not
+touched.** Skip counts vary 3–5 run to run for the same reason the checkpoint
+already records: live free-provider probes that skip or pass depending on whether
+a provider answers.
+
+### Mutation run — mutant → named guards
+
+Driver discipline, because this repository has been burned by a driver that
+reported seven mutants RED while all seven were collection errors: **bytes-only**
+read/write of every target, sha256 captured before each mutation and **verified
+after every restore** (a mismatch ABORTS the run), an anchor that does not match
+**exactly once** aborts that mutant, `python -m pytest` and never
+`python.exe pytest`, and **any result without a pass count is REFUSED** — the
+driver refuses to score a mutant at all if its control run is dirty. The control
+was `passed=46 failed=0` before the sweep.
+
+| # | Mutant | Verdict | Named guards that went RED |
+|---|---|---|---|
+| a | a present-but-revoked Telegram token reports `healthy` | **RED** (2) | `test_a_present_but_revoked_telegram_token_is_misconfigured_not_healthy`, `test_a_refused_key_and_an_unreachable_network_are_different_states` |
+| b | an unreachable gateway reports `healthy` | **RED** (3) | `test_an_unreachable_gateway_is_never_healthy`, `test_healthcheck_reports_gateway_status`, `test_main_dash_health_exits_without_polling` |
+| c | `misconfigured` and `unreachable` collapsed to one value | **RED** (1) | `test_a_refused_key_and_an_unreachable_network_are_different_states` |
+| d | the probe cache removed (every poll re-probes) | **RED** (1) | `test_the_snapshot_answers_from_cache_and_never_probes_per_poll` |
+| e | the vault PAT leaks into the report body | **RED** (2) | `test_the_vault_pat_never_reaches_the_body_or_the_log`, `test_the_authorization_header_value_never_reaches_the_body_or_the_log` |
+| f | `/health` answers 503 for a non-healthy rollup | **RED** (3) | `test_every_lane_state_maps_to_200_and_the_decision_is_a_named_table`, `test_the_public_port_answers_200_with_every_lane_state_in_the_body`, `test_the_public_port_answers_without_waiting_for_a_probe` |
+| g | a cold cache reports every lane healthy | **RED** (2) | `test_the_cold_cache_reports_every_lane_unknown_rather_than_healthy`, `test_the_public_port_answers_without_waiting_for_a_probe` |
+
+**Mutant e survived the FIRST sweep and that is the finding, not an embarrassment.**
+It is written up above under *Secrets*: the guards were using a `ghp_`-shaped PAT
+that `redact_secret`'s generic clause screens, so the backstop was silently doing
+the guards' work. The guard value is now a shape nothing screens.
+
+### Not done, deliberately
+
+* **N4 (D-4), N5 (429/403), N6 (citation guards), N7 (doc debt) are NOT started.**
+  In particular the GitHub 403 rate-limit-vs-scope split is named in the vault
+  lane's comment as N5's, not guessed at here.
+* `probe_google` itself was not touched, and no method was added to
+  `src/google_auth.py`; the divergence is a classification added in `src/health.py`,
+  not a fork.
+* `src/main.py`'s edit is confined to the module docstring, the `/health`
+  responder, the `--health` block and the import block. `run_bot` wiring,
+  `start_public_port`'s binding contract and the startup path are byte-unchanged
+  apart from those.
+* The seven defensive branches not driven by a guard are named in the module
+  rather than guarded, and no guarantee is claimed for them.
+
+### Write-set
+
+`src/health.py` (rewritten), `src/main.py` (the `/health` responder, the
+`--health` block, the import block and the module docstring), the NEW test file
+`tests/test_health_truthfulness.py`, plus the three declared test-file changes
+above and this file. Nothing else. `src/persona.py` hash-verified before and
+after. No forbidden file was touched. **Zero new packages, no new environment
+variable, no new configuration knob** — `PROBE_TTL_S` and `PROBE_TIMEOUT_S` are
+module constants, not settings fields.
+
 - [07 — Implementation Plan](./07-IMPLEMENTATION-PLAN.md)
 - [11 — Testing](./11-TESTING.md)
 - [Objectives Ledger](./reports/OBJECTIVES_LEDGER_MET_VS_PENDING.md)

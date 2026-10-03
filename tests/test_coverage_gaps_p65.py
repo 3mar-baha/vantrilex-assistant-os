@@ -309,10 +309,10 @@ def test_main_health_exits_and_invalid_env(monkeypatch):
         log_level = "INFO"
 
     async def _ok(settings):
-        return {"overall": "ok"}
+        return {"overall": "healthy"}
 
     async def _bad(settings):
-        return {"overall": "degraded"}
+        return {"overall": "misconfigured"}
 
     monkeypatch.setattr(main_mod, "Settings", lambda: _Settings())
     monkeypatch.setattr(main_mod, "configure_logging", lambda level: None)
