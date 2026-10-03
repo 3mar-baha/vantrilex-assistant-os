@@ -1,12 +1,12 @@
 r"""Decision 1 — Terminal 1 must answer in authentic Amman dialect (ar-JO).
 
 MEASURED DEFECT (Directive 3, re-derived from the tree, not from the brief):
-`src/bot_shell.py:90` calls `self._front_door.handle(text, history=...)` and never
-passes `system`. `FrontDoorDispatcher._plain_messages` (`src/dispatcher.py:1073`)
+`src/bot_shell.py:124` calls `self._front_door.handle(text, history=...)` and never
+passes `system`. `FrontDoorDispatcher._plain_messages` (`src/dispatcher.py:1159`)
 emits NO system message at all when `system` is falsy, so the FAST conversation
 call leaves the model with a bare user turn and it answers in MSA. The seam is
-already there and already used by Telegram (`src/bot.py:615` builds the persona,
-`:689` passes it as `handle(..., system=system)`); Terminal 1 just never supplies it.
+already there and already used by Telegram (`src/bot.py:654` builds the persona,
+`:728` passes it as `handle(..., system=system)`); Terminal 1 just never supplies it.
 
 The guards below, in the order they bite:
 
@@ -19,7 +19,7 @@ The guards below, in the order they bite:
   3. the prompt reaches the gateway as `messages[0]["system"]` — the end-to-end
      proof that Terminal 1 is not running on the front door's default.
   4. the import boundary is NARROWED, deliberately and exactly: `src.persona`
-     is no longer fully banned (`tests/test_bot_shell_repl.py:163` asserted the
+     is no longer fully banned (`tests/test_bot_shell_repl.py:173` asserted the
      blanket ban), but exactly ONE symbol is permitted — `build_persona_joda`,
      the single-sourced dialect + gender builder. The literals
      (`SARA_PERSONA_AR`, `JODA_EXEMPLARS_AR`, `JODA_EXEMPLARS_HEADER_AR`) and
@@ -222,7 +222,7 @@ def test_build_shell_declares_a_system_keyword() -> None:
     """RED: `build_shell(gateway, settings)` has no system prompt parameter.
 
     The keyword is pinned as `system` to match `FrontDoorDispatcher.handle`
-    (`src/dispatcher.py:828`) and the Telegram call site (`src/bot.py:689`), so
+    (`src/dispatcher.py:885`) and the Telegram call site (`src/bot.py:728`), so
     one word names the same contract on both surfaces.
     """
     params = inspect.signature(_shell_mod().build_shell).parameters
@@ -261,7 +261,7 @@ async def test_the_prompt_reaches_the_gateway_as_the_system_message(make_setting
 
     This is the defect itself, observed the way `tests/test_dispatcher.py:136-138`
     observes it: read the recorded request body. With `system=None`,
-    `_plain_messages` (`src/dispatcher.py:1076`) emits only the user turn, so the
+    `_plain_messages` (`src/dispatcher.py:1159`) emits only the user turn, so the
     model has no persona and answers in MSA.
     """
     shell_mod = _shell_mod()
