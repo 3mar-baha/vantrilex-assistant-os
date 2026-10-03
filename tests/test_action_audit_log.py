@@ -313,6 +313,16 @@ _KEY_SLACK = "xox" + "b-" + "2949384725-2847301928-aBcDeFgHiJkLmNoPqRsTuVwX"
 _KEY_AWS = "AKIA" + "IOSFODNN7EXAMPLE"
 _LIVE_SHARED_SECRET = "gh" + "p_" + "actionlogguardTOKEN0123456789abcdefABCDEF"
 
+#: A Google-OAuth-SHAPED bearer credential, 58 characters of the exact charset
+#: `_BEARER_RE` targets (`[A-Za-z0-9._~+/=-]{8,}`). The shape is load-bearing in
+#: the guard below and every other choice of token makes that guard LYING:
+#: a `ghp_…`/`AIza…`/`sk-…` fixture is eaten by the `api_key` pass one line
+#: earlier, an `eyJ…` one by the JWT clause, and a 64+ character one by the
+#: session-blob clause — any of which would let the labelled-Bearer leak pass for
+#: the WRONG reason, which is how it survived review in the first place. This
+#: token is catchable by the bearer clause ALONE.
+_BEARER_SECRET = "ya29.a0AfB_byC7dEfGhIjKlMnOpQrStUvWxYz0123456789AbCdEfGhIj"
+
 
 # ── 1. the universe, pinned ───────────────────────────────────────────────────────
 
@@ -476,6 +486,55 @@ def test_tokens_are_redacted():
         out = redact_arg(f"token={secret} done")
         assert secret not in out, f"token leaked: {out}"
         assert "«redacted»" in out, out
+
+
+def test_a_labelled_bearer_header_loses_the_token_and_keeps_the_scheme():
+    """CLASS: token — THE LEAK, and the shape the module docstring PROMISED while
+    no guard tested it («a `Bearer` header value», `src/action_log.py` REDACTION
+    §2). `_LABELLED_RE` ran FIRST and read `Bearer` as the label's value — its
+    value pattern stops at whitespace, so `Bearer` WAS the first whitespace-
+    delimited word after the colon — redacted that word, and left the real
+    secret dangling. `_BEARER_RE` then found nothing to match, because the `Bearer`
+    it keys on had already been consumed. The log kept the credential.
+
+    Only the SECRET is replaced. The label and the word `Bearer` both stay
+    readable, deliberately: a reader who cannot see that a bearer credential was
+    offered at all cannot audit the call, and `«redacted» «redacted»` says less
+    than the shape it replaced. Both capitalisations are covered because
+    `_LABELLED_RE` and `_BEARER_RE` both carry `(?i)`.
+
+    The last case is the second-order one: `auth=` is a DIFFERENT member of
+    `_SENSITIVE_KEYS`, which is the proof that the leak was never about
+    authorization headers specifically — any `key: Bearer` shape hit it.
+    """
+    for label, shaped in (
+        ("Authorization", f"Authorization: Bearer {_BEARER_SECRET}"),
+        ("authorization", f"authorization: bearer {_BEARER_SECRET}"),
+        ("authorization", f'"authorization": "Bearer {_BEARER_SECRET}"'),
+        ("auth", f"auth=Bearer {_BEARER_SECRET}"),
+    ):
+        out = redact_arg(shaped)
+        assert _BEARER_SECRET not in out, f"bearer token leaked: {out}"
+        assert "«redacted»" in out, out
+        assert label in out, f"the label must survive so a reader sees THAT: {out}"
+        assert "bearer" in out.lower(), f"the scheme must survive for readability: {out}"
+
+
+def test_a_bare_bearer_token_is_still_redacted():
+    """THE REGRESSION WITNESS for the guard above, and the reason the fix cannot
+    be a blind reorder. The BARE shape — no sensitive label in front of it, so
+    `_LABELLED_RE` never fires — was ALREADY correct, and a fix that moves the
+    passes around without thinking about which one wins can easily break it. It is
+    pinned so that any future reordering has to answer for this case too."""
+    for shaped in (
+        f"Bearer {_BEARER_SECRET}",
+        f"bearer {_BEARER_SECRET}",
+        f"headers Bearer {_BEARER_SECRET} accept json",
+    ):
+        out = redact_arg(shaped)
+        assert _BEARER_SECRET not in out, f"bearer token leaked: {out}"
+        assert "«redacted»" in out, out
+        assert "bearer" in out.lower(), f"the scheme must survive for readability: {out}"
 
 
 def test_credentials_are_redacted():
