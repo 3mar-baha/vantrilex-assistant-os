@@ -3872,7 +3872,10 @@ the guards' work. The guard value is now a shape nothing screens.
 
 ### Not done, deliberately
 
-* **N4 (D-4), N5 (429/403), N6 (citation guards), N7 (doc debt) are NOT started.**
+* **N5 (429/403), N6 (citation guards), N7 (doc debt) are NOT started.**
+  N3 did not start **N4 (D-4)** either, but D-4 has since been **closed on evidence** —
+  see *N4 — D-4* below; it was a verify-then-record node, so nothing it observed was in
+  this write-set.
   In particular the GitHub 403 rate-limit-vs-scope split is named in the vault
   lane's comment as N5's, not guessed at here.
 * `probe_google` itself was not touched, and no method was added to
@@ -3894,6 +3897,220 @@ above and this file. Nothing else. `src/persona.py` hash-verified before and
 after. No forbidden file was touched. **Zero new packages, no new environment
 variable, no new configuration knob** — `PROBE_TTL_S` and `PROBE_TIMEOUT_S` are
 module constants, not settings fields.
+
+## N4 — D-4: the catalog gap closes, and the deny-list it feeds is now complete (2026-10-03)
+
+**Docs-only. One file. Zero behaviour change, zero test change, zero new tests.** HEAD at
+start `3f4acae`. This node **verifies** a state reached in Phase 0 (2026-10-01) and closes
+D-4 on that evidence. It fixes nothing, because nothing was broken at entry — and a node
+that discovers a defect and patches it has destroyed the very evidence its close depends on.
+Every number below was re-derived by running the tree at `3f4acae`, not copied from a
+prior report; the four citations were re-read from the file, not trusted.
+
+### D-4 is CLOSED ON EVIDENCE, not on restatement
+
+The distinction is the whole point of the node. D-4 is not "the gap is believed to be
+closed" — it is: at commit `3f4acae`, measured, the set of routed names that are neither
+catalogued nor explicitly marked is **empty**, and the four names that were once in that
+gap are each individually accounted for at a cited line. Nothing below is a promise about
+one function's argument list.
+
+### The four citations — re-derived at `3f4acae`, CONFIRMED, none had moved
+
+| Name | `file:line` | what is actually there | handler? |
+|---|---|---|---|
+| `analytics` | `src/skills/capabilities.py:400` | `"analytics": {` — its capability record; `reversible: True` at **:403**, `needs: "local"` at **:404**, `chains_with: ("app_sessions", "telemetry")` at **:405** | **yes** |
+| `cloud_backup` | `src/skills/capabilities.py:407` | `"cloud_backup": {` — its capability record; **`reversible: False` at :410**, `needs: "google"` at **:411**, `chains_with: ()` at **:412** | **yes** |
+| `quota_safety` | `src/skills/capabilities.py:414` | `"quota_safety": {` — its capability record; `reversible: True` at **:417**, `needs: "google"` at **:418**, `chains_with: ("brief",)` at **:419** | **yes** |
+| `none` | `src/skills/capabilities.py:434` | `INTERNAL_ONLY_TOOLS: Final[frozenset[str]] = frozenset({"none"})` — the marker, with its rationale in the comment block at **:423-433** | **no** |
+
+**All four line numbers are confirmed correct as cited.** None was corrected, and no
+`file:line` in this entry points at a stale row. `cloud_backup`'s `reversible: False` is
+the load-bearing one and it is at **:410**, inside the record that starts at :407.
+
+### The measured counts
+
+| Quantity | Measured at `3f4acae` |
+|---|---|
+| routed names (`set(valid_tools())`) | **46** |
+| catalogued (`set(TOOL_CAPABILITIES)`) | **45** |
+| internal-only (`INTERNAL_ONLY_TOOLS`) | **1** — exactly `{"none"}` |
+| deny-listed (`IRREVERSIBLE_TOOLS`) | **7** — `cancel_reminder`, `close`, **`cloud_backup`**, `create_event`, `create_task`, `openclaw_browse`, `openclaw_desktop` |
+| **gap** = routed − catalogued − internal | **∅** |
+| catalogued ∩ internal (both, wrongly) | **∅** — disjoint, the correct shape |
+| catalogued − routed (orphan records) | **∅** |
+| `cloud_backup` in `IRREVERSIBLE_TOOLS` | **True** |
+
+The gap is empty, and it is empty for the right reason: the one routed-but-uncatalogued
+name is `none`, and `none` is explicitly marked. A **disjoint** catalog and internal-only
+set is the shape to insist on — a name in *both* would be claiming an executable record for
+a non-tool, and a name in *neither* is the leak D-4 exists to close.
+
+`ToolRegistry` exposes **46** live `_do_*` handlers; `analytics`, `cloud_backup` and
+`quota_safety` each have one, and **`none` has none** — which is the whole basis for
+marking it rather than cataloguing it.
+
+### Why three were catalogued and `none` was marked instead
+
+This is a distinction, not an inconsistency, and the tree draws it on purpose.
+
+**The three catalogued (`analytics`, `cloud_backup`, `quota_safety`) each have a live
+handler.** `ToolRegistry.call` resolves `getattr(self, f"_do_{tool}")`, so a name with a
+handler is a name whose code *runs*. Each therefore needs a record for the three consumers
+that read the catalog: `markers_for()` (narration and goal marking), the honest-offline
+`needs` lane, and `chains_with` (chaining plans). Their reversibility differs because their
+code differs, and each decision is recorded **in the record itself**:
+
+- `analytics` — **reversible**, `needs: "local"`. A read: `sqlite_life_analytics` over the
+  local SQLite log. The data plane is local, never the network, so the lane can degrade
+  honestly until the query exists.
+- `quota_safety` — **reversible**, `needs: "google"`. A read: `free_tier_usage_percent`
+  over the Service Usage API. Google *credential*, but nothing mutated — the breaker
+  mutates nothing, so there is nothing to un-do.
+- `cloud_backup` — **NOT reversible** (`reversible: False`, :410), `needs: "google"`. An
+  upload: a Fernet-sealed vault snapshot to Google Cloud Storage. **An external state change
+  the owner cannot un-do.** This is an owner decision, and it is recorded as such in the
+  comment on the line itself.
+
+**`none` was marked instead, because it is not a tool.** It is the dispatcher's rewrite
+target — "no tool selected", and the target a router verdict naming a name `valid_tools()`
+rejects becomes. It has **no `_do_<name>` handler**. Giving it a capability record would
+assert a handler that does not exist and would drag a narration guide and an audit-matrix
+prompt into existence for a non-tool — a lie with three downstream consumers. So it is
+named machine-visibly in `INTERNAL_ONLY_TOOLS` instead, and the comment at :423-433 says so
+explicitly: *"This set is what closes the completeness invariant … every name in
+`valid_tools()` is either a `TOOL_CAPABILITIES` key or listed here."*
+
+### The structural consequence — why this matters for F-1
+
+The deny-list is not hand-maintained. It is **derived** (`src/skills/capabilities.py:439`):
+
+```python
+IRREVERSIBLE_TOOLS: Final[frozenset[str]] = frozenset(
+    tool for tool, cap in TOOL_CAPABILITIES.items() if not cap["reversible"]
+)
+```
+
+So the consequence of a missing record is stronger than "absent from the deny-list": an
+uncatalogued routed tool is **structurally incapable of being in it**. A tool can be routed,
+have a live `_do_*` handler, and be invisible to `markers_for()`, to narration, and to every
+confirmation gate that reads that set — including F-1's irreversible gate.
+
+With the gap empty, **no executable routed tool sits outside the catalog**, so the set
+derived from the catalog is complete over the routed set. `cloud_backup` — the external
+cloud upload, the one name whose handler changes state the owner cannot reverse — **is** in
+the deny-list. That is the part F-1's gate depends on, and it is a property of the tree now
+rather than a claim in a document.
+
+### The guard that pins it
+
+`tests/test_tool_catalog_completeness.py:141` —
+`test_every_routed_tool_is_either_catalogued_or_explicitly_internal_only`. It asserts that
+`set(valid_tools()) − set(TOOL_CAPABILITIES) − INTERNAL_ONLY_TOOLS` is empty, and its
+failure message states the consequence in the terms above: a routed name with no capability
+record *"cannot enter IRREVERSIBLE_TOOLS (that set is derived from TOOL_CAPABILITIES), so
+no confirmation gate can see it."* The guard exists at the line the DAG names.
+
+Two details make it trustworthy rather than decorative, and both are why the marker is
+resolved **lazily by name** (:64-87): a module-level `from … import INTERNAL_ONLY_TOOLS`
+would abort collection with a bare `ImportError` while the marker is unbuilt, and then *no
+guard in the file is ever seen failing*. Its helper also fails **loudly and specifically** if
+the marker is missing, and says in terms: *"Do not add a capability record for it to make
+this go green."*
+
+A second guard restates the invariant on the subset that can actually run —
+`:153 test_the_accounting_holds_for_the_EXECUTABLE_routed_names_specifically`. Routability
+and executability are different properties, and the leak was a name that had one while the
+other went unchecked; `_executable()` therefore reads `vars(ToolRegistry)` for callable
+`_do_*` members rather than trusting `_VALID_TOOLS`.
+
+Run against this tree, using the guard's **own** helpers rather than a re-implementation:
+
+| Assertion, computed via the guard's helpers | Result |
+|---|---|
+| `unaccounted` = `_routed() − TOOL_CAPABILITIES − internal_only` | **∅** |
+| `executable ∩ routed` not catalogued | **∅** |
+| `EXTERNAL_STATE_WRITERS − IRREVERSIBLE_TOOLS` (invariant I2, hand-audited table) | **∅** |
+| `IRREVERSIBLE_TOOLS − TOOL_CAPABILITIES` | **∅** |
+| whole module `tests/test_tool_catalog_completeness.py` | **56 passed** |
+
+I2 is deliberately checked against a hand-audited table (`EXTERNAL_STATE_WRITERS`, :117,
+each row citing its call site) and **not** against a set derived from the catalog — a check
+derived from the dict it audits cannot detect the dict being wrong.
+
+### Corroboration from the guard's own date-scoped docstring — history, not drift
+
+`tests/test_tool_catalog_completeness.py:15-16` records: *"MEASURED at the commit this
+guard was written against: 46 routed names, 42 catalogued, four routed-but-uncatalogued —
+`analytics`, `cloud_backup`, `none`, `quota_safety`."* 42 + 4 = 46. The delta to today's
+45 + 1 = 46 is **exactly the three catalogued by Phase 0**, with `none` correctly still in
+the gap and now explicitly marked. That docstring is explicitly scoped to the commit the
+guard was written against, so it is honest history rather than a live falsehood, and it is
+**left byte-untouched** — rewriting a dated record to match today would be rewriting history
+to fix a record, not a live claim. (N2 reached the same conclusion about this line at
+:3575-3577.)
+
+### Verification, re-derived by running the commands
+
+| Measurement | Value |
+|---|---|
+| Full suite, `--ignore=tests/live_harness` | **0 failed** on every run; passed count **2,836–2,837** depending on conditional live skips (see below) — **the recorded 2,837 baseline was reproduced exactly** |
+| `check_tiered_coverage.py` | **GATE PASSED**, 92.4% TOTAL; every core module at its prior value — none lowered |
+| `ruff check` | **clean** ("All checks passed!") |
+| `ruff format --check` | **1 file would be reformatted** — **pre-existing at `3f4acae`, NOT introduced here**; see below |
+| `security_gate.py` | **OK** (bandit + secret scan) |
+| `docs_guard.py` | **OK** — 16 canonical files present |
+| `git hash-object src/persona.py` | `8b972942e785880a3de66121e7f808666250ed2f` — before **and** after, byte-locked |
+| `git diff --stat HEAD` | `docs/10-CHECKPOINT.md` only |
+
+**The baseline was reproduced exactly, and one honest variance is reported rather than
+smoothed over.** Three runs of the suite at this tree gave **2,836 passed / 5 skipped**,
+**2,837 passed / 4 skipped**, and **2,836 passed / 5 skipped** — **0 failed every time**.
+The one-test swing is a *conditionally skipped live test*, not a regression: the skips are
+an offline bridge (`ws://localhost:8443/bridge` and port 8000), a free-provider live brain
+(`all models exhausted`), and an un-fetched OmniRoute clone, so the count moves with local
+availability and not with the tree. The recorded **2,837 / 0** baseline was hit on run 2,
+which is why it is reported as reproduced — but the invariant that matters for a docs-only
+node is **0 failed**, and that held on all three. Reporting only the favourable run would
+overstate the determinism, so the range is stated instead. No test was skipped, weakened or
+touched to produce any of these numbers.
+
+The 2 failures visible inside the coverage script's own full-suite run are the pre-existing
+`tests/live_harness` free-provider flakes (`test_h04_ttft_monitor`,
+`test_h06_joda_dialogues`), which that script runs *without* the `--ignore` flag.
+**Not weakened, not skipped, not touched.**
+
+### A pre-existing failure found at entry — reported, not fixed
+
+`ruff format --check` exits non-zero at `3f4acae`, **before this node's edit**, on a Python
+code fence inside the *N3* entry above: `docs/10-CHECKPOINT.md:3656`, the
+`HTTP_STATUS_BY_STATE` dict literal, which ruff would reformat. The file is unmodified in
+the working tree at entry, so this is inherited, not introduced.
+
+It is **not fixed here on purpose.** It is another node's prose; repairing it would put a
+second node's words in this node's diff for a cosmetic gain, and cosmetic doc repair is
+what **N7 (doc debt)** exists for. This entry's own fences were written to be
+ruff-clean and add no new instance. Reported, per this programme's standing rule that
+measured drift outside a write-set gets named rather than quietly absorbed.
+
+### Ledger hygiene — one stale forward-reference updated, not contradicted
+
+The only prior mention of D-4 in this file was inside **N3's** *"Not done, deliberately"*
+list, which asserted *"N4 (D-4) … NOT started."* That was true when N3 was written and is
+now false, and left alone it would directly contradict the close above — two statements in
+one ledger disagreeing about the same node, which is worse than either one being corrected.
+That bullet was **updated in place** to keep N3's historical scope intact ("N3 did not start
+N4") while recording that D-4 is now closed, rather than leaving a second entry to argue
+with the first. No prior D-4 *entry* existed — this is the first — so there was no stale
+ledger entry to supersede.
+
+### Write-set
+
+`docs/10-CHECKPOINT.md` (this entry, plus the one stale cross-reference bullet named
+above). One commit. **No `.py` file was touched — not `src/**`, not `tests/**`, not
+`scripts/**`. No test was written, changed, deleted, skipped or weakened.** No forbidden
+file was staged. `src/persona.py` hash-verified before and after.
+Zero new packages, no new environment variable, no new configuration knob.
 
 - [07 — Implementation Plan](./07-IMPLEMENTATION-PLAN.md)
 - [11 — Testing](./11-TESTING.md)
