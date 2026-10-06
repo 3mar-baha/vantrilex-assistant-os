@@ -511,3 +511,154 @@ the branch that would have cascaded on it.
 from outside — both raise something the chain does not retry — so the symptom could not
 distinguish them. Only reading the branch settles it. Recorded so the next reader does not
 re-derive it.
+
+---
+
+## §A-corrections-2 — A-3's mechanism withdrawn, the arg-refinement log misnamed, and the A-series completed (2026-10-06)
+
+*Append-only addendum. No line above this rule is edited, reordered, or deleted —
+this addendum overrides prior statements only where it says so, explicitly. All
+code claims below were re-verified on 2026-10-06 by reading the source; line
+numbers are quoted where they were read.*
+
+### Item 1 — §7 proposal 3 is WITHDRAWN
+
+§7 proposal 3 (report lines 339–340) states: "Extract tool arguments instead of
+passing the raw turn — `normalize_tool_arg` is currently identity. *Fixes F-3.*
+One function, four reproductions." The companion table in §A-correction (line
+390) likewise records A-3 as "argument hygiene — `normalize_tool_arg` is the
+identity function." **That is wrong, and is withdrawn.**
+
+- `normalize_tool_arg` is NOT the identity function. It lives at
+  `src/decision_loop.py:65-68`: it strips whitespace and dictated quotes
+  (straight and smart/curly), and folds Arabic-Indic digits to ASCII. Both
+  behaviours are already pinned by `tests/test_scratchpad_healing.py:12-17`
+  (quotes/whitespace at :12-13, digit folding at :16-17). Describing it as
+  identity risks a reviewer deleting working code.
+- It is applied at only ONE of the THREE `tools.call` sites: the heal path in
+  the dispatcher, `src/dispatcher.py:1072-1077`, which guards the call at
+  `:1101`. The other two sites bypass it entirely: the ReAct loop at
+  `src/decision_loop.py:472` and the agent manager at `src/agent_manager.py:272`.
+- Therefore fixing it alone CANNOT fix the reproductions. Two of the four are
+  DIRECT handler calls — `weather('عمّان هسا')` and `weather('عمّان اليوم')`
+  in §2's A-3 block — which by definition never traverse the seam.
+- The defects are in the PRODUCERS, not the seam §7 named:
+  - `src/dispatcher.py:672` `_keyword_net` — its weather capture at `:454`
+    uses `([^؟?،,]+)`, which takes everything to end-of-string; the post-strip
+    at `:752-755` then yields args like `'عمّان اليوم'` and `'اليوم'`.
+  - `src/cognition.py:512-524` `_extract_arg` — for a generic tool it ends in
+    `" ".join(parts[-2:])` (`:521-523`), a last-two-words heuristic that keeps
+    the topic noun or the preposition.
+  - `src/dispatcher.py:985-995` — the merge rule. On a matching tool
+    (`net_tool == tool`) the keyword net's arg OVERWRITES the other arg
+    unconditionally (`arg = net_arg` at `:995`). Because `cognition._normalize`
+    (`src/cognition.py:266-272`) strips tashkeel/shadda/tatweel (`:271`) while
+    `_keyword_net`'s whitespace-only `clean` (`src/dispatcher.py:674`) does not,
+    the two args never compare equal for a shadda'd city such as `عمّان`, so the
+    WORSE arg deterministically overwrites the better one.
+  - `src/task_orchestrator.py:58-72` `_strip_command` — reproduction 4 lives
+    here. Its verb alternation at `:71` matches bare `ذكرني` while the input
+    is `ذكّرني` (U+0651), and both substitutions run on the raw text, so **the
+    verb survives even in the happy path**. Separately, `قبل ساعتين` is not a
+    supported delay form: `_DELAY_RE` (`src/task_orchestrator.py:32-34`) matches
+    only a `بعد` unit, so both parsers (`parse_delay_ar` / `parse_wallclock_ar`)
+    return `None` and `src/tools.py:1035` sets the task title to `arg.strip()`
+    verbatim.
+- Note what is deliberately NOT a filler-trimming defect:
+  `src/dispatcher.py:730-734` and `src/cognition.py:513-514` pass the WHOLE
+  turn through for `schedule`/`multi_task`, because the schedule parser scans
+  the timing words wherever they sit in the sentence. Reproduction 4 cannot be
+  fixed by trimming; it needs the `_strip_command` / `_DELAY_RE` repairs above.
+- Corrected decomposition: **A-3a** — producer-side entity extraction
+  (`_keyword_net`'s weather capture, `_extract_arg`'s trailing-words heuristic,
+  and the overwrite-never-merge rule); **A-3b** — consumer-side title hygiene
+  (`_strip_command`'s shadda-blind verb alternation, plus the missing
+  `قبل`-delay form and the verbatim-title fallback). §7 proposal 3 is withdrawn
+  in favour of that split.
+
+### Item 2 — the arg-refinement log line is misnamed
+
+The log line `dispatcher keyword net refined cognition arg`
+(`src/dispatcher.py:990-994`) **misnames what it refines.** Cognition only runs
+inside `if tool == "none":` at `src/dispatcher.py:939` — i.e. only after the
+LLM router MISSED. When the refinement branch fires with a matching tool and
+the router had in fact routed, `arg` came from the router at `:936`, not from
+cognition. (Cognition populates `arg` via `:972` only on a router miss, and it
+aanounces itself with "dispatcher cognition deduced router-miss" at `:965-971`.)
+
+Consequence for this report's own evidence: the `refined cognition arg` line
+quoted for reproduction 3 proves the ROUTER's argument was overwritten, not
+cognition's. This is the same class of correction as the A-1 mechanism
+correction recorded in `§A-correction`, and it is labelled as such.
+
+### Item 3 — the A-series is completed
+
+Owner's decision, effective 2026-10-06:
+
+- ALL acceptance findings `F-1` through `F-14` in this report are now
+  **`A-1` through `A-14`**. The A-series now covers every acceptance finding,
+  completing the partial rename recorded in `§A-correction` §A.1 (which renamed
+  only F-1..F-4 and deliberately left F-5..F-14 unrenamed — that note, lines
+  413–415, is SUPERSEDED by this completion).
+
+Complete explicit mapping:
+
+| Was (this report, §2 / §7) | Now | Subject |
+|---|---|---|
+| `F-1` | `A-1` | provider-cooldown SSE errors are fatal, do not cascade, stall ~65 s |
+| `F-2` | `A-2` | `FIRST_TOKEN_TIMEOUT_S = 4.0` vs Gemini at 11.7 s |
+| `F-3` | `A-3` | argument hygiene destroys working tools — 4 reproductions (mechanism corrected by Item 1 above) |
+| `F-4` | `A-4` | retrieved results are not treated as authoritative |
+| `F-5` | `A-5` | the acknowledgement asserts an action that did not and could not happen |
+| `F-6` | `A-6` | the acknowledgement concatenates into the answer — no separator |
+| `F-7` | `A-7` | markdown in spoken output — catastrophic scale on one turn |
+| `F-8` | `A-8` | the answer lane drops dialect; the router keeps it |
+| `F-9` | `A-9` | gendered address flips between turns |
+| `F-10` | `A-10` | error messages blame the owner for internal failures |
+| `F-11` | `A-11` | the degrade exit path is missing where it is most needed |
+| `F-12` | `A-12` | eight tools are routable but not deducible |
+| `F-13` | `A-13` | latent: unknown coin silently becomes bitcoin |
+| `F-14` | `A-14` | no time tool exists |
+
+Every `F-n` (1 ≤ n ≤ 14) remaining in the body of this report resolves to the
+`A-n` row above. The findings themselves are unchanged — the labels moved, the
+content did not. This rename is confined to THIS REPORT'S findings.
+
+**The repository's own `F-1`..`F-6` milestone scheme is a SEPARATE scheme and
+is UNCHANGED.** Verified against `docs/10-CHECKPOINT.md` and the shipped
+commits it cites — not guessed:
+
+| Milestone | Subject |
+|---|---|
+| `F-1` | the irreversible gate, rewritten at the shared choke point `ToolRegistry.call` (shipped 2026-10-01) |
+| `F-2` | a forged confirmation id is refused (HMAC-SHA256 `cfm1.` ids) |
+| `F-3` | the `open_path` holes — containment, the 9→17 double-click set, the discarded id |
+| `F-4` | Google startup/deployment tells the truth |
+| `F-5` | the bridge acceptor's two auth gaps |
+| `F-6` | the P1 honesty batch (closed; completes P1) |
+
+(The planning brief's parenthetical list for these six — "the irreversible
+gate, the forged-confirmation-id guard, `open_path` containment, the honesty
+batch, the hermeticity guard, the one-prompt surface" — does NOT match the
+repo. Boot-path hermeticity was a work order briefly mislabelled "F-5" and was
+formally corrected in the ledger at `docs/10-CHECKPOINT.md:2547-2554`; it is
+not an `F-n` milestone. No "one-prompt surface" milestone exists in the
+ledger. Recorded so the two lists are never merged.)
+
+**The one place in the report body where the collision is already live**, as a
+worked example of why the two namespaces must never be conflated. §6 states:
+
+> `close` is the coordinator's confirmation channel under an owner-accepted
+> **F-1** exemption, so it returned an argument request (*"شو البرنامج اللي
+> بدك أسكّره؟"*).
+> (line 328)
+
+That `F-1` is the MILESTONE irreversible gate, not this report's finding
+F-1/A-1. After the completed rename, every finding label in this report's body
+is `A-n`, and any bare `F-n` left in this report denotes the milestone scheme
+— disjoint namespaces, staying that way.
+
+**This addendum records corrections and decisions; no code change was made by
+this node.** A-1 and A-3 fixes are still unbuilt, pending owner approval.
+When A-3 is approved, the fix is the A-3a / A-3b split above — not §7
+proposal 3.
