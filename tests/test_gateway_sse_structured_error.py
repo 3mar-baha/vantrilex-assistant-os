@@ -522,3 +522,117 @@ async def test_an_announced_window_parks_on_the_first_occurrence_and_a_bare_429_
     assert script.models()[2:] == [PRIMARY, PRIMARY, SECOND], (
         "a window-LESS 429 keeps one fast retry, and only the SECOND parks the model"
     )
+
+
+# ── 11: the same field loss on the NON-200 branch ─────────────────────────────────
+# A-1's second site, split into its own commit because its symptom is different:
+# an HTTP 429 always CASCADES (via the bare-429 streak, on the second occurrence),
+# so what is lost there is the announced WINDOW — slower mitigation, never a dead
+# turn. `response.text[:500]` is classified as a string, so the structured
+# reset_seconds inside the body is invisible to `_classify`, and neither
+# `_RETRY_WINDOW_RE` nor the quota keywords match `"reset_seconds":48`.
+
+
+async def test_http_cooldown_parks_for_the_announced_window_on_the_first_occurrence():
+    """The observed body, verbatim, as a real HTTP 429 body. The park must be the
+    provider's 48s and it must happen on the FIRST request — today this shape
+    burns one wasted attempt before the streak engages.
+    """
+    script = _Scripted(
+        httpx.Response(429, text=json.dumps(OBSERVED_COOLDOWN_BODY)),
+        httpx.Response(200, content=_sse(_chunk("تم"))),
+    )
+    async with _client(script) as client:
+        deltas = await _collect(client.stream_chat([{"role": "user", "content": "hi"}]))
+    assert deltas == ["تم"]
+    assert script.models() == [PRIMARY, SECOND], (
+        "a declared cooldown must not be retried against, not even once"
+    )
+    remaining = _model_hot(PRIMARY)
+    assert remaining is not None and 0 < remaining <= 48 + 1, f"parked {remaining}"
+    assert remaining < gateway_mod.BARE_429_COOLDOWN_S, (
+        "the declared 48s must not be inflated to the 15-minute unannounced quarantine"
+    )
+
+
+@pytest.mark.parametrize(
+    ("label", "body", "status"),
+    [
+        ("an unparseable body", "{not json", 429),
+        ("a JSON array, not an object", "[1, 2, 3]", 429),
+        ("a 429 with no error object", '{"detail": "slow down"}', 429),
+        (
+            "a declared cooldown with no usable window",
+            '{"error": {"type": "rate_limit_error"}}',
+            429,
+        ),
+        (
+            "a hostile window",
+            (
+                '{"error": {"type": "rate_limit_error", "code": "model_cooldown",'
+                ' "reset_seconds": 99999999999}}'
+            ),
+            429,
+        ),
+        (
+            "a body that declares a rate limit but is NOT a 429",
+            (
+                '{"error": {"type": "rate_limit_error", "code": "model_cooldown",'
+                ' "reset_seconds": 48}}'
+            ),
+            500,
+        ),
+        (
+            "a non-429 body carrying reset_seconds",
+            '{"error": {"type": "server_error", "reset_seconds": 48}}',
+            500,
+        ),
+    ],
+)
+async def test_the_http_branch_declares_a_window_only_when_the_body_says_so(label, body, status):
+    """This branch has no parsed field to arbitrate with, so it refuses to guess:
+    every shape that cannot be read unambiguously returns None, and the
+    classification below it stays exactly as it was. A 500 carrying a
+    rate_limit_error is the sharpest case — honouring it would park a model on a
+    body that never claimed to be a rate limit.
+    """
+    script = _Scripted(
+        httpx.Response(status, text=body),
+        httpx.Response(200, content=_sse(_chunk("تم"))),
+    )
+    async with _client(script) as client:
+        deltas = await _collect(client.stream_chat([{"role": "user", "content": "hi"}]))
+    assert deltas == ["تم"], f"{label}: the turn must still be served"
+    remaining = _model_hot(PRIMARY)
+    if remaining is not None:
+        assert math.isfinite(remaining), f"{label}: parked for a non-finite window"
+        assert 0 < remaining <= COOLDOWN_CAP_S + 1, f"{label}: parked {remaining}s, past the cap"
+
+
+def test_the_http_window_reader_is_pure_and_takes_only_a_body_and_a_status():
+    """Same purity contract as its SSE sibling, read from the signature and the
+    body rather than from the docstring.
+    """
+    assert hasattr(gateway_mod, "_http_declared_window"), (
+        "src.gateway._http_declared_window is absent — the non-200 branch still discards "
+        "the structured reset_seconds in its body"
+    )
+    params = list(inspect.signature(gateway_mod._http_declared_window).parameters.values())
+    assert [p.name for p in params] == ["body", "status_code"], (
+        f"must accept exactly (body, status_code), got {[p.name for p in params]}"
+    )
+    func = _function(GATEWAY_PY, "_http_declared_window")
+    blocking: list[str] = []
+    referenced: set[str] = set()
+    for node in ast.walk(func):
+        if isinstance(node, ast.Await):
+            blocking.append("awaits")
+        if isinstance(node, (ast.Yield, ast.YieldFrom)):
+            blocking.append("yields")
+        if isinstance(node, ast.Name):
+            referenced.add(node.id)
+        if isinstance(node, ast.Attribute):
+            referenced.add(node.attr)
+    assert not blocking, f"_http_declared_window {blocking} — it must be a pure mapping"
+    leaked = referenced & _FORBIDDEN_IN_A_PURE_FUNCTION
+    assert not leaked, f"_http_declared_window references {sorted(leaked)} — it is not pure"

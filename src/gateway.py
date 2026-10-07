@@ -441,6 +441,39 @@ def _sse_error_signal(error: object) -> _SseErrorSignal:
     return _SseErrorSignal(status, window, message)
 
 
+def _http_declared_window(body: str, status_code: int) -> float | None:
+    """The recovery window a NON-200 body declared about a rate limit, or None.
+
+    PURE BY CONTRACT, like `_sse_error_signal`, and for the same reason: the
+    decision is one readable site instead of a conditional inside the streaming
+    loop. A payload in, a clamped number or None out.
+
+    NARROWER THAN ITS SSE SIBLING, ON PURPOSE. Here the body is available as raw
+    text, not as a parsed mapping, so a body's several shapes can disagree with
+    each other and this function has no parsed field to arbitrate with. It
+    therefore refuses to guess at all: it reads a status and a window that the
+    SAME nested error object agrees on, and returns None whenever the body cannot
+    be parsed or says nothing unambiguous. None is the safe answer twice over —
+    it leaves the classification below this line exactly as it was.
+    """
+    if status_code != 429:
+        return None
+    try:
+        payload = json.loads(body)
+    except (json.JSONDecodeError, TypeError, ValueError):
+        return None
+    if not isinstance(payload, Mapping):
+        return None
+    error = payload.get("error")
+    if not isinstance(error, Mapping):
+        return None
+    kind = f"{error.get('type', '')} {error.get('code', '')}".lower()
+    if not any(marker in kind for marker in _SSE_RATE_LIMIT_TYPES + _SSE_RATE_LIMIT_CODES):
+        return None
+    window = _sse_seconds(error.get("reset_seconds"))
+    return None if window is None else min(window, COOLDOWN_CAP_S)
+
+
 def _raise_for_gateway_error(
     model: str,
     kind: str,
@@ -759,6 +792,20 @@ class OmniRouteClient:
                 await response.aclose()
             snippet = response.text[:500]
             kind = _classify(response.status_code, snippet)
+            # A-1, second site: the same field loss the SSE branch carried, on the
+            # HTTP branch. `_classify` is handed a STRING here, so the structured
+            # reset_seconds inside the body is invisible to it — and neither
+            # _RETRY_WINDOW_RE nor the quota keywords match `"reset_seconds":48`,
+            # so a declared cooldown classifies "transient" and only the bare-429
+            # streak engages, on the SECOND occurrence. The symptom differs from
+            # the SSE branch (slower mitigation, never a dead turn), which is why
+            # this is its own change and not part of the SSE fix.
+            declared = _http_declared_window(snippet, response.status_code)
+            if declared is not None:
+                raise _WindowRateLimit(
+                    f"HTTP {response.status_code} declared cooldown {declared:.0f}s: {snippet[:200]}",
+                    window_s=declared,
+                )
             if response.status_code == 429 and kind == "transient" and _note_bare_429(model):
                 raise _WindowRateLimit(
                     f"HTTP 429 (streak skip, {BARE_429_SKIP_AFTER} consecutive)",
