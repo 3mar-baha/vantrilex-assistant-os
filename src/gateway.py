@@ -10,9 +10,11 @@ serves the turn.
 
 import asyncio
 import json
+import math
 import re
 import time
 from collections.abc import AsyncIterator, Mapping, Sequence
+from dataclasses import dataclass
 from enum import Enum
 from typing import Final, Literal, Self
 
@@ -332,6 +334,112 @@ def _classify(
 
 _EMBEDDED_STATUS: Final = re.compile(r"\[(\d{3})\]")
 
+#: Structured rate-limit vocabulary. Matched as SUBSTRINGS of a lower-cased
+#: `type`/`code`, so a provider that namespaces its own values (`model_cooldown`,
+#: `gemini_model_cooldown`, `rate_limit_exceeded`) still reads as what it is.
+_SSE_RATE_LIMIT_TYPES: Final[tuple[str, ...]] = ("rate_limit", "insufficient_quota")
+_SSE_RATE_LIMIT_CODES: Final[tuple[str, ...]] = ("cooldown", "rate_limit", "throttl")
+#: Auth-shaped codes recover 401 so the loud stop keeps its honest status instead
+#: of the invented `0`. BEHAVIOUR-PRESERVING, not a widening: `_classify(401)`
+#: returns "fatal" (:313-314) exactly as `_classify(0)` does (:330), so every one
+#: of these shapes stops just as loudly — only the number in the message is real.
+_SSE_AUTH_CODES: Final[tuple[str, ...]] = (
+    "auth",
+    "forbidden",
+    "permission",
+    "invalid_api_key",
+    "unauthorized",
+    "invalid_token",
+)
+
+
+@dataclass(frozen=True, slots=True)
+class _SseErrorSignal:
+    """What one SSE ``error`` event actually said.
+
+    ``status`` is the status the PROVIDER stated, recovered from its structured
+    fields, falling back to the prose bracket. ``window_s`` is the recovery window
+    it announced, already clamped; ``None`` means it announced none, which is a
+    real distinction and not a failure to parse.
+    """
+
+    status: int
+    window_s: float | None
+    message: str
+
+
+def _sse_seconds(value: object) -> float | None:
+    """A number a server sent as a duration, or ``None`` when it sent nothing
+    usable. ``nan``/``inf`` are rejected here rather than defended against at each
+    call site: they parse as floats and would defeat every clamp downstream — a
+    ``nan`` window parks a model for ``time.time() + nan``, which is never now.
+    Zero is ``None`` too: it means «retry now», never a zero-length window.
+    """
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    seconds = float(value)
+    if not math.isfinite(seconds) or seconds <= 0.0:
+        return None
+    return seconds
+
+
+def _sse_error_signal(error: object) -> _SseErrorSignal:
+    """Recover the status and the recovery window from ONE SSE error payload.
+
+    PURE BY CONTRACT, and the contract is the point: a payload in, a verdict out.
+    No client, no I/O, no sleeping, no clock. That is what lets the decision be
+    read from the signature and the body rather than trusted from a docstring,
+    and it keeps the whole classification in one place instead of scattered
+    through the streaming loop.
+
+    THE LADDER, and the order IS the argument. A structured field is something the
+    provider SENT about this event; the prose bracket is something we GUESSED out
+    of a sentence. A guess never overrides a field.
+
+    1. A non-mapping payload is «no signal» — not an ``AttributeError``. The old
+       inline ``.get("message", ...)`` raised out of the stream on a bare string.
+    2. ``type`` naming a rate limit is 429, and nothing demotes it — a missing or
+       malformed window does not make a declared throttle less of one.
+    3. ``code`` naming a cooldown / rate limit is 429.
+    4. ``type``/``code`` naming an AUTH condition is 401 (see _SSE_AUTH_CODES).
+    5. The WINDOW, and only for a 429: ``reset_seconds`` when it is a finite
+       positive number, else the prose parser. Clamped to COOLDOWN_CAP_S.
+       ``THROTTLE_QUARANTINE_S`` is deliberately NOT the cap: it is the client's
+       policy for evidence it does NOT have (the bare-429 streak, an empty
+       stream, a first-token stall). An announced provider window is the opposite
+       case — the client HAS the number — so padding 48 s up to 15 minutes would
+       retire a model that recovers in under a minute.
+    6. The prose bracket, DEMOTED to last.
+
+    THE DEFAULT FAILS SAFE. With nothing recovered the status is 0, which
+    classifies «fatal» and produces the loud stop with its ``[0]`` intact — the
+    gateway honestly reporting that it could not find a status. This predicate
+    therefore CANNOT invent a cascade out of an unrecognised error: the unknown
+    case is exactly the case it leaves alone.
+    """
+    if not isinstance(error, Mapping):
+        return _SseErrorSignal(0, None, str(error))
+
+    message = str(error.get("message", error))
+    kind = f"{error.get('type', '')} {error.get('code', '')}".lower()
+
+    if any(marker in kind for marker in _SSE_RATE_LIMIT_TYPES + _SSE_RATE_LIMIT_CODES):
+        status = 429
+    elif any(marker in kind for marker in _SSE_AUTH_CODES):
+        return _SseErrorSignal(401, None, message)
+    else:
+        match = _EMBEDDED_STATUS.search(message)
+        status = int(match.group(1)) if match else 0
+
+    window: float | None = None
+    if status == 429:
+        window = _sse_seconds(error.get("reset_seconds"))
+        if window is None:
+            window = parse_retry_window_s(message)
+        if window is not None:
+            window = min(window, COOLDOWN_CAP_S)
+    return _SseErrorSignal(status, window, message)
+
 
 def _raise_for_gateway_error(
     model: str,
@@ -557,6 +665,10 @@ class OmniRouteClient:
                     # STT-3: the provider announced its recovery window — retrying
                     # against a server-side wall is pure waste. Mark the model hot
                     # for the window and let the NEXT model serve this turn.
+                    if deltas > 0:
+                        raise GatewayError(
+                            f"mid-stream rate limit on {model} after {deltas} deltas: {exc}"
+                        ) from exc
                     _MODEL_COOLDOWNS[model] = time.time() + exc.window_s
                     last_cause = str(exc)
                     logger.warning(
@@ -567,6 +679,13 @@ class OmniRouteClient:
                     )
                     break
                 except _TransientFailure as exc:
+                    if deltas > 0:
+                        # A partial answer must never be restarted: on a voice turn
+                        # the owner would hear the same reply twice. Same contract the
+                        # transport branch below honours.
+                        raise GatewayError(
+                            f"mid-stream failure on {model} after {deltas} deltas: {exc}"
+                        ) from exc
                     last_cause = str(exc)
                     if attempt < RETRY_ATTEMPTS:
                         logger.warning(
@@ -677,9 +796,21 @@ class OmniRouteClient:
                 if chunk.get("error"):
                     # Gateways stream upstream failures as 200 + SSE error events; swallowing
                     # them would deliver silent-empty replies instead of fallback/loud stop.
-                    message = str(chunk["error"].get("message", chunk["error"]))
-                    match = _EMBEDDED_STATUS.search(message)
-                    status = int(match.group(1)) if match else 0
+                    signal = _sse_error_signal(chunk["error"])
+                    message, status, window = signal.message, signal.status, signal.window_s
+                    # A-1 (live 2026-10-03): the provider SENT a 429 and a recovery
+                    # window, and the prose carried no [nnn] — so the status used to be
+                    # inferred as 0, classified "fatal", and raised a loud stop that no
+                    # cascade handler matched. Acted on the FIRST occurrence: the wall is
+                    # declared, so retrying against it is pure waste. This raise sits
+                    # BEFORE the bare-429 streak check on purpose, or a streak on a
+                    # second occurrence would park the model for the 15-minute
+                    # quarantine when the provider said 48 seconds.
+                    if status == 429 and window is not None:
+                        raise _WindowRateLimit(
+                            f"SSE error [429] declared cooldown {window:.0f}s: {message[:200]}",
+                            window_s=window,
+                        )
                     kind = _classify(status, message)
                     if status == 429 and kind == "transient" and _note_bare_429(model):
                         raise _WindowRateLimit(

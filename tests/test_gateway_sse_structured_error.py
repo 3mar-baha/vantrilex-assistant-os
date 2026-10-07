@@ -231,7 +231,9 @@ async def test_structured_cooldown_outranks_a_prose_five_hundred():
     The field wins — under the guess, ``_classify(500)`` returns ``"transient"``
     and burns three retries against a wall we were already told about.
     """
-    error = dict(OBSERVED_COOLDOWN_BODY["error"], message="upstream exploded [500]", reset_seconds=12)
+    error = dict(
+        OBSERVED_COOLDOWN_BODY["error"], message="upstream exploded [500]", reset_seconds=12
+    )
     script = _Scripted(
         httpx.Response(200, content=_sse(_error_line(error))),
         httpx.Response(200, content=_sse(_chunk("تم"))),
@@ -270,7 +272,10 @@ async def test_structured_rate_limit_outranks_a_prose_four_oh_three():
 @pytest.mark.parametrize(
     ("label", "message"),
     [
-        ("the observed message with its structure removed", OBSERVED_COOLDOWN_BODY["error"]["message"]),
+        (
+            "the observed message with its structure removed",
+            OBSERVED_COOLDOWN_BODY["error"]["message"],
+        ),
         ("a message with nothing to read at all", "boom"),
     ],
 )
@@ -462,7 +467,9 @@ async def test_the_sse_cooldown_path_is_tier_agnostic(monkeypatch, tier):
     how the FAST first-token budget is later set.
     """
     monkeypatch.setattr(gateway_mod, "FIRST_TOKEN_TIMEOUT_S", 30.0)
-    chains = {Tier.FAST: [PRIMARY], Tier.MEDIUM: [PRIMARY], Tier.HEAVY: [PRIMARY, SECOND]}
+    # Every tier gets a fallback: a chain of one can only end in a loud stop, so
+    # a single-model chain would not be able to express «cascaded» at all.
+    chains = {tier: [PRIMARY, SECOND] for tier in (Tier.FAST, Tier.MEDIUM, Tier.HEAVY)}
     script = _Scripted(
         httpx.Response(200, content=_sse(_error_line(OBSERVED_COOLDOWN_BODY["error"]))),
         httpx.Response(200, content=_sse(_chunk("تم"))),
@@ -489,11 +496,15 @@ async def test_an_announced_window_parks_on_the_first_occurrence_and_a_bare_429_
     """
     monkeypatch.setattr(gateway_mod, "_sleep", _instant)
     cold = {"type": "rate_limit_error", "code": "model_cooldown", "message": "cooling down"}
+    # A bare 429 is a 429 that announces NO window — the status still has to be
+    # recoverable, so it carries the prose bracket the gateway has always emitted
+    # for this shape (see test_coverage_gaps_p64b.py:169).
+    bare = {"message": "[primary-x:free] [429]: too many requests"}
     script = _Scripted(
         httpx.Response(200, content=_sse(_error_line(dict(cold, reset_seconds=48)))),
         httpx.Response(200, content=_sse(_chunk("بعد النافذة"))),
-        httpx.Response(200, content=_sse(_error_line({"message": "429 too many requests"}))),
-        httpx.Response(200, content=_sse(_error_line({"message": "429 too many requests"}))),
+        httpx.Response(200, content=_sse(_error_line(bare))),
+        httpx.Response(200, content=_sse(_error_line(bare))),
         httpx.Response(200, content=_sse(_chunk("بعد التكرار"))),
     )
     async with _client(script) as client:
@@ -506,6 +517,8 @@ async def test_an_announced_window_parks_on_the_first_occurrence_and_a_bare_429_
         "an ANNOUNCED window is acted on the FIRST occurrence — no retry against a known wall"
     )
     assert second == ["بعد التكرار"]
-    assert script.models()[2:] == [PRIMARY, PRIMARY, PRIMARY, SECOND], (
+    # Two primaries, not three: the streak trips on the SECOND consecutive 429
+    # (BARE_429_SKIP_AFTER = 2), so the first keeps its one fast retry.
+    assert script.models()[2:] == [PRIMARY, PRIMARY, SECOND], (
         "a window-LESS 429 keeps one fast retry, and only the SECOND parks the model"
     )
