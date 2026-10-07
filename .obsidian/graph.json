@@ -1,1 +1,65 @@
-{"centerStrength": 0.72, "close": false, "collapse-color-groups": false, "collapse-display": true, "collapse-filter": true, "collapse-forces": false, "colorGroups": [{"color": {"a": 1, "rgb": 10066329}, "opacity": 1, "query": "path:docs"}, {"color": {"a": 1, "rgb": 37767}, "opacity": 1, "query": "path:src"}, {"color": {"a": 1, "rgb": 37632}, "opacity": 1, "query": "path:vault"}, {"color": {"a": 1, "rgb": 16724736}, "opacity": 1, "query": "path:bridge"}, {"color": {"a": 1, "rgb": 16746496}, "opacity": 1, "query": "path:tests"}, {"color": {"a": 1, "rgb": 16776960}, "opacity": 1, "query": "path:scripts"}], "hideUnresolved": false, "lineSizeMultiplier": 1, "linkDistance": 200, "linkStrength": 1.4, "nodeSizeMultiplier": 1, "repelStrength": 12, "scale": 1, "search": "", "showArrow": false, "showAttachments": false, "showOrphans": true, "showTags": true, "textFadeMultiplier": 0}
+{
+  "collapse-filter": true,
+  "search": "",
+  "showTags": true,
+  "showAttachments": false,
+  "hideUnresolved": false,
+  "showOrphans": true,
+  "collapse-color-groups": false,
+  "colorGroups": [
+    {
+      "query": "path:docs",
+      "color": {
+        "a": 1,
+        "rgb": 3663587
+      }
+    },
+    {
+      "query": "path:src",
+      "color": {
+        "a": 1,
+        "rgb": 2642160
+      }
+    },
+    {
+      "query": "path:vault",
+      "color": {
+        "a": 1,
+        "rgb": 7995571
+      }
+    },
+    {
+      "query": "path:bridge",
+      "color": {
+        "a": 1,
+        "rgb": 1411399
+      }
+    },
+    {
+      "query": "path:tests",
+      "color": {
+        "a": 1,
+        "rgb": 40447
+      }
+    },
+    {
+      "query": "path:scripts",
+      "color": {
+        "a": 1,
+        "rgb": 16776960
+      }
+    }
+  ],
+  "collapse-display": false,
+  "showArrow": false,
+  "textFadeMultiplier": 3,
+  "nodeSizeMultiplier": 1.0838243902439,
+  "lineSizeMultiplier": 0.808468292682927,
+  "collapse-forces": false,
+  "centerStrength": 0.818926829268293,
+  "repelStrength": 19.8694010815223,
+  "linkStrength": 1,
+  "linkDistance": 30,
+  "scale": 0.2066334725133495,
+  "close": true
+}
