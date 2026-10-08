@@ -144,7 +144,7 @@ guillotine it cannot clear, will hit provider cooldowns routinely — and this i
 ### F-2 · `FIRST_TOKEN_TIMEOUT_S = 4.0` vs Gemini at 11.7 s — "Gemini-first" is fiction in steady state
 
 ```python
-first_token_timeout = FIRST_TOKEN_TIMEOUT_S if tier is Tier.FAST else None   # gateway.py:497
+first_token_timeout = FIRST_TOKEN_TIMEOUT_S if tier is Tier.FAST else None  # gateway.py:497
 ```
 
 The guillotine is **FAST-only**, and every chain leads with Gemini. Gemini's measured latency is

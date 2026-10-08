@@ -130,20 +130,29 @@ def test_glued_arabic_comma_does_not_hide_the_verb_from_the_strip():
 
 
 @pytest.mark.parametrize(
-    "phrase",
+    ("phrase", "conjunction"),
     [
-        "ذكرني بعد ما أكل أتابع الدايت",
-        "ذكّرني بعد ما أكل أتابع الدايت",
-        "ذكّرني بعد أن أخلّص شغلي قلي",
+        ("ذكرني بعد ما أكل أتابع الدايت", "بعد ما"),
+        ("ذكّرني بعد ما أكل أتابع الدايت", "بعد ما"),
+        ("ذكّرني بعد أن أخلّص شغلي قلي", "بعد أن"),
     ],
 )
-def test_strip_command_never_eats_بعد_ما(phrase: str):
+def test_strip_command_never_eats_a_conjunctive_بعد(phrase: str, conjunction: str):
     """THE OVER-TRIM CANARY, and it is RED today. At `b5f3953`
     `_strip_command('ذكرني بعد ما أكل أتابع الدايت')` returned
     `'أكل أتابع الدايت'`. `بعد` here is a CONJUNCTION, not a delay marker, and
     the two are told apart only by what follows: a digit or a unit from
-    `_UNITS_S` (`src/task_orchestrator.py:45-55`)."""
-    assert "بعد ما" in _strip_command(phrase), phrase
+    `_UNITS_S` (`src/task_orchestrator.py:45-55`).
+
+    THE CONJUNCTION, NOT THE VERB, is the pinned thing. «بعد أن» and «بعد ما»
+    are the owner's own construction; the scheduling verb IS still removed,
+    because the verb is not what he wants to remember
+    (`src/skills/sara_tool_skills.py:170-172`). Both assertions below hold at
+    once, and a guard that pinned only one of them would pass on a fix that
+    broke the other."""
+    title = _strip_command(phrase)
+    assert conjunction in title, f"the conjunction was eaten: {title!r}"
+    assert "ذكرني" not in title, f"the verb survived into the title: {title!r}"
 
 
 def test_strip_command_keeps_real_delay_content_out_of_the_title():
@@ -217,8 +226,10 @@ def test_supported_wallclock_forms_are_unchanged():
 
 def test_the_delay_parser_returns_a_title_that_is_actually_a_title():
     """The title contract is pinned NOW because
-    `tests/test_task_orchestrator.py:53-83` DISCARDS `_title` (`_delay, _title =
-    result` at :60; `when, _title = result` at :82). Before this node the title
-    contract was pinned by NOTHING, which is how D1 and D2 shipped."""
+    `tests/test_task_orchestrator.py:76-83` DISCARDS the title half of the
+    parser's return (`when, _title = result`). Before this node the title
+    contract was pinned by NOTHING, which is how D1 and D2 shipped: the delay
+    and the wallclock matrices both pass while the title quietly carried the
+    owner's acknowledgement and the verb."""
     _delay, title = parse_delay_ar(f"{ACK} {REMIND} بعد ساعتين أحضر حليب", now=NOW)
     assert title == "أحضر حليب", title

@@ -22,7 +22,7 @@ import re
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any
+from typing import Any, Final
 from zoneinfo import ZoneInfo
 
 from loguru import logger
@@ -54,22 +54,129 @@ _UNITS_S = {
     "ساعات": 3600,
 }
 
+# A-3b. Tashkeel stripped for MATCHING ONLY, and only by substitution — same
+# length, same offsets — so a match on the canon can be applied to the original
+# by prefix length. The title is the owner's own words and goes back to him
+# verbatim, so no word he wrote may be respelled.
+_TASHKEEL_RE: Final = re.compile(r"[ً-ْٰـ]")
+
+
+def _strip_tashkeel(text: str) -> str:
+    """Orthographic canon for matching only: same length, same offsets."""
+    return _TASHKEEL_RE.sub("", text)
+
+
+# A-3b. THE SCHEDULING VERB in every spelling the owner actually uses. The
+# previous alternation was the bare `ذكرني`, but he writes `ذكّرني` (U+0651), and
+# the substitution ran on RAW text, so the verb never matched and rode into the
+# title even on the happy path: `parse_delay_ar('ذكّرني بعد ساعتين أحضر حليب')`
+# returned the title `'ذكّرني أحضر حليب'`. One entry covers every diacritic
+# variant because each is matched through the canon.
+#
+# The task's own narration guide states what a title is
+# (`src/skills/sara_tool_skills.py:170-172`): what he needs to remember, without
+# the time word and WITHOUT THE VERB ITSELF.
+_VERB_CANON: Final[tuple[str, ...]] = (
+    "ذكّرني",
+    "ذكرني",
+    "ذكريني",
+    "نبّهيني",
+    "نبهيني",
+    "نبّهني",
+    "نبهني",
+    "فكّرني",
+    "فكرني",
+    "جبرني",
+    "تنبيه",
+    "تذكير",
+)
+_VERB_RE: Final = re.compile(
+    r"^(?:" + "|".join(re.escape(_strip_tashkeel(v)) for v in _VERB_CANON) + r")\s*"
+)
+
+# A-3b. THE OWNER'S OWN TURN CONTINUATION. «تمام، …» acknowledges what he just
+# said; it is not part of what he wants to be reminded about, and it rode into
+# the title verbatim: `parse_delay_ar('تمام، ذكّرني بعد ساعتين أحضر حليب')`
+# returned `'تمام، ذكّرني أحضر حليب'`.
+#
+# Arabic punctuation is a SEPARATOR in the character class below for the same
+# reason it is one in `cognition._normalize` (A-3a): it is written with no
+# following space, so the token is `تمام،ذكّرني` and a `^`-anchored pattern
+# never sees the verb behind it.
+_ACK_RE: Final = re.compile(
+    r"^(?:تمام|تماماً|تمامًا|تماما|اوكي|أوكي|كيفي|كفى|ماشي|الله"
+    r"|ما شاء الله|يسلمو|يسلمو|يعطيك العافية)"
+    r"\s*[،؛,;.\s]*"
+)
+
+# A-3b, THE BARE-«بعد» BUG — the over-trim hazard, already shipped. The old
+# first substitution was `(?:بعد\s+[\d٠-٩]*\s*\S+|…)` with `count=1`, NO `^`
+# anchor, and `[\d٠-٩]*` quantifying to ZERO digits, so a bare `بعد` followed by
+# any non-space token was eaten: «ذكرني بعد ما أكل» became «أكل», losing the
+# conjunction that carried the meaning.
+#
+# THE FIX IS NOT A LOOSER PATTERN, IT IS THE PARSER'S OWN TABLE: `بعد` here is a
+# CONJUNCTION unless a digit or a unit from `_UNITS_S` follows. Anything else —
+# «بعد ما», «بعد أن», or «بعد يوم ننتقل» inside a title — is the owner's content
+# and stays. `re.escape` on each unit keeps the table single-sourced: adding a
+# unit to `_UNITS_S` teaches the stripper about it automatically, so no second
+# vocabulary can drift out of step with the one the delay parser uses.
+_DELAY_STRIP_RE: Final = re.compile(
+    r"^بعد\s+(?:[\d٠-٩]+\s*)?(?:" + "|".join(re.escape(u) for u in _UNITS_S) + r")\s*"
+)
+
+# The wallclock prefix, am/pm included. Audit round-3 (2026-09-05) exists
+# because the old chain stopped BEFORE the am/pm word, so «على الساعة 3:47 مساء
+# ذكريني» produced the title «مساء ذكريني».
+_WALL_STRIP_RE: Final = re.compile(
+    r"^(?:على\s+)?الساعة\s+[\d٠-٩]{1,2}(?:[:،][\d٠-٩]{1,2})?"
+    r"\s*(?:صباحا?ً?|صباح|فجرا?ً?|فجر|مساءً?|مساء|مسا|مغرب|الليل)?\s*"
+)
+
 
 def _strip_command(text: str) -> str:
     """Drop the scheduling prefix so the TITLE is what remains to be said.
-    Audit round-3 (2026-09-05): the wallclock prefix's lazy chain stopped
-    BEFORE the am/pm word — «على الساعة 3:47 مساء ذكريني» titled «مساء
-    ذكريني». The am/pm markers now die with the time they qualify."""
-    cleaned = re.sub(
-        r"(?:بعد\s+[\d٠-٩]*\s*\S+|على\s+الساعة\s+[\d:،\s]*"
-        r"(?:صباحا?ً?|صباح|فجرا?ً?|فجر|مساءً?|مساء|مسا|مغرب|الليل)?)"
-        r"(?:\s+|$)",
-        "",
-        text,
-        count=1,
-    )
-    cleaned = re.sub(r"^(?:ذكريني|ذكرني|نبهيني|تنبيه|فكّرني)\s*", "", cleaned.strip())
-    return cleaned.strip() or text
+
+    FOUR PASSES, each one there because of a measured failure (A-3b; the
+    pre-2026-10-07 body is quoted in
+    `tests/test_a3_schedule_title_hygiene.py`'s module docstring):
+
+      1. the acknowledgement — «تمام، …» is turn continuation, not content;
+      2. a REAL delay phrase — anchored, and only when a digit or a `_UNITS_S`
+         unit follows, so «بعد ما» is never eaten;
+      3. a wallclock phrase, am/pm included (audit round-3, 2026-09-05);
+      4. the verb, matched tashkeel-insensitively so `ذكّرني` matches.
+
+    THE PREFIX AND THE CONTENT ARE SEPARATE STRINGS. Matching both in one
+    string meant folding tashkeel out of the CONTENT as well, which is not
+    acceptable: the title goes back to the owner verbatim. So each pattern is
+    matched against the canon and the content is advanced by the match's
+    LENGTH on the original — the same offsets, because `_strip_tashkeel` only
+    substitutes characters in place.
+
+    THE FAIL-SAFE. Every pattern is anchored or leading-only, and the result
+    falls back to the input: a title with no prefix comes back byte-identical.
+    This function only ever REMOVES a recognised prefix — it never reorders,
+    never rewrites a content word, and never touches the interior. That is what
+    keeps «اشتري حليب اليوم من السوق» whole.
+    """
+    cleaned = " ".join((text or "").split()).strip()
+    if not cleaned:
+        return text or ""
+
+    # Repeat, because a turn may stack prefixes: «تمام، على الساعة 3:47 مساء
+    # ذكريني» carries three, and each pass strips the one now at the front.
+    for _ in range(4):
+        before = cleaned
+        canon = _strip_tashkeel(cleaned)
+        for pattern in (_ACK_RE, _DELAY_STRIP_RE, _WALL_STRIP_RE, _VERB_RE):
+            match = pattern.match(canon)
+            if match is not None:
+                cleaned = cleaned[match.end() :].strip()
+                break
+        if cleaned == before:
+            break
+    return cleaned or (text or "").strip()
 
 
 def parse_delay_ar(text: str, *, now: datetime) -> tuple[timedelta, str] | None:

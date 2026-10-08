@@ -269,7 +269,7 @@ def _normalize(text: str) -> str:
     import re as _re
 
     bare = _re.sub(r"[\u064b-\u0652\u0640]", "", text or "")
-    return " ".join(bare.split()).strip()
+    return " ".join(_ARABIC_SEPARATORS.sub(" ", bare).split()).strip()
 
 
 # Drill-hardened (Stage-2 simulation 2026-09-12): short stems anchor at a
@@ -517,6 +517,11 @@ def _extract_arg(tool: str, clean: str) -> str:
         return url.group(0)
     if tool == "screenshot" and _NEGATION_RE.search(clean):
         return "no-send"
+    if tool in ARG_ENTITY_TOOLS:
+        # Entity-shaped: the ENTITY is the arg, never the sentence around it.
+        # The fallback below returned 'الطقس بعمان' (the topic noun) and
+        # 'في عمان' (the preposition); neither of those is a place.
+        return entity_from_phrase(clean)
     # Generic: trailing entity after the verb (best-effort, never empty-critical).
     parts = clean.split()
     if len(parts) >= 3:
@@ -557,6 +562,176 @@ def deduce(text: str, *, trace: ReflectiveTrace | None = None) -> IntentHypothes
             scores={},
         )
     return best
+
+
+# A-3a — Arabic punctuation is a WORD SEPARATOR. The Arabic comma, semicolon
+# and question mark are written with no following space in running text and from
+# a voice lane, so «تمام،ذكّرني» was ONE token by `.split()`. A short-stem marker
+# must anchor at a token START (`_SHORT_STEM_LEN`), so the imperative behind the
+# comma was invisible: `deduce` scored all 45 tools at 0.0 and returned `none`.
+# One missing space changed the ROUTE.
+#
+# WHY ONLY ARABIC PUNCTUATION, NOT ASCII. `.` and `:` are ASCII and appear in
+# every URL; splitting on them would shatter `https://example.com/a` into three
+# tokens, and this function feeds the BM25 index through `src/associative.py` — a
+# name-blind separator degrades retrieval everywhere, not just routing.
+_ARABIC_SEPARATORS: Final = re.compile(r"[،؛؟٪]+")
+
+
+# A-3a — THE ARGUMENT SHAPE, DECLARED.
+#
+# A tool's argument is not a string, it is a KIND OF THING, and the kinds are not
+# interchangeable:
+#
+#   `weather`          a place name. 'عمّان' works; 'عمّان اليوم' geocodes to
+#                      nothing and the owner is told he spelled it wrong.
+#   `schedule`         free text plus a time phrase ANYWHERE in the sentence.
+#   `multi_task`       every clause, or the planner swallows the siblings.
+#   `convert_currency` an amount and a currency; the handler scans the raw string.
+#   `crypto_price`     a coin; also substring-scanned by its own handler.
+#
+# A generic trimmer helps the first kind and DAMAGES the rest: deleting `اليوم` from
+# «اشتري حليب اليوم من السوق» turns it into «اشتري حليب السوق», and deleting `من`
+# loses the market. No tool fails and no error surfaces — the owner simply gets a
+# wrong answer presented as a right one.
+#
+# So the shape is DECLARED, and a tool absent from this set is IDENTITY by
+# construction rather than by accident. That IS the over-trim guard, and
+# `tests/test_a3_over_trim_guard.py` is the file that owns it.
+#
+# NOT `src/associative.STOPWORDS`, though it holds `هسا`/`هلق`/`اليوم`/`بكرا` —
+# exactly the right words and exactly the wrong policy: it is scoped to question
+# words matching a vault index, and it also carries `من`/`على`/`في`, the three whose
+# deletion destroys the phrase above.
+ARG_ENTITY_TOOLS: Final[frozenset[str]] = frozenset({"weather"})
+
+# Words that describe the REQUEST rather than name the THING. Trimmed from the EDGES
+# of a captured span, because in «شو الطقس اليوم بعمّان» the filler is INTERIOR and a
+# trailing-only trim cannot reach it.
+#
+# NOT `ال`-stripping. `الزرقاء`/`العقبة`/`المفكرة` are CANONICAL spellings in the
+# static coordinate table; `ال` is never removed. `src/associative._tokens` removes it
+# and is deliberately not reused: it also returns a `set`, so it carries no
+# deterministic order to pick an entity from.
+_ARG_NOUN_FILLER: Final[frozenset[str]] = frozenset(
+    {
+        # the topic the owner already named — never the entity
+        "الطقس",
+        "طقس",
+        "الحرارة",
+        "حرارة",
+        "درجة",
+        "الحالية",
+        "حالية",
+        # the interrogative frame
+        "شو",
+        "كم",
+        "ايش",
+        "بدي",
+        "بدك",
+        "بلدي",
+        "ليش",
+        # connectors that introduce the entity
+        "في",
+        "على",
+        "مع",
+        "الى",
+        "إلى",
+        "عن",
+        # politeness — a request, never a place
+        "لو",
+        "سمحت",
+        "لو سمحت",
+        "من",
+        "فضلك",
+        "رجاء",
+        "أهلا",
+        "وسهلا",
+        "يعطيك",
+        "العافية",
+        "عفا",
+        "الله",
+        "يعينك",
+        # temporal adverbs — «today» is filler in a weather ASK and CONTENT in a
+        # reminder, which is exactly why this list only runs on entity-shaped tools
+        "هسا",
+        "هلق",
+        "الان",
+        "اليوم",
+        "بكرا",
+        "بكرة",
+        "بكره",
+        "الغد",
+        "غدا",
+        "بعدين",
+        "لحظة",
+        "شوي",
+        "شوية",
+        "حالا",
+        "حاليا",
+    }
+)
+
+# Single-character Arabic proclitics, shaved from the FRONT of a surviving token
+# only — «بعمّان» -> «عمّان». Never mid-token, and never from a token that is itself
+# filler: that is how «بكرة» became «كرة» at the A-3 baseline, where the net shaved a
+# bare `ب` off ANY word, producing a wrong city name.
+_ARG_PROCLITICS: Final[str] = "بكلف"
+
+
+def entity_from_phrase(span: str) -> str:
+    """Reduce a captured span to the ENTITY it names. Edge-only, delete-only.
+
+    THE THREE RULES, each one there because of a measured failure.
+
+      G1 SHAPE-SCOPED — the CALLER decides, via `ARG_ENTITY_TOOLS`. This function
+         takes no tool argument on purpose: a tool-aware extractor is a tool-aware
+         extractor with a branch some future tool falls through, and the over-trim
+         hazard returns with it.
+
+      G2 EDGE-ONLY — filler is removed from both ends, never the interior.
+         «شو الطقس اليوم بعمّان» has filler on the LEFT and the entity on the right;
+         trimming the interior instead would corrupt a two-word place name.
+
+      G3 DELETE-ONLY — surviving tokens are never rewritten or reordered. The
+         function cannot SYNTHESISE, so it cannot invent a place that geocodes
+         somewhere real and wrong. The one exception is a front proclitic shave,
+         a word-boundary operation on a token that already exists in the input.
+
+    THE FAIL-SAFE, TWICE OVER. A span with nothing to trim comes back
+    byte-identical. A span that is ENTIRELY filler returns `""` — never the filler
+    — so the tool's home-city default governs instead of a politeness phrase
+    reaching the geocoder and entering the session's unknown-place set.
+
+    SURFACE FORM IS PRESERVED. Tashkeel folding belongs to the LOOKUP key, which
+    lives in the weather skill; that skill echoes the arg into the narration, so
+    «عمّان» goes downstream with the shadda the owner wrote. This function
+    removes; it never respells.
+    """
+    tokens = [t for t in (span or "").split() if t]
+    if not tokens:
+        return ""
+
+    def bare(token: str) -> str:
+        return token.strip("؟?!.,،؛ \t")
+
+    while tokens and bare(tokens[0]) in _ARG_NOUN_FILLER:
+        tokens.pop(0)
+    while tokens and bare(tokens[-1]) in _ARG_NOUN_FILLER:
+        tokens.pop()
+    if not tokens:
+        return ""
+
+    # G3, the one rewrite: a proclitic shaved at the WORD BOUNDARY only. A bare
+    # «ب» alone is not a token, so «بكرة» cannot be mistaken for «ب» + «كرة» here —
+    # and «بكرة» was already removed as filler above.
+    head = bare(tokens[0])
+    if len(head) > 2 and head[0] in _ARG_PROCLITICS and head not in _ARG_NOUN_FILLER:
+        head = head[1:]
+    tokens[0] = head
+    if not tokens[0]:
+        tokens.pop(0)
+    return " ".join(tokens)
 
 
 def expand_horizon(tool: str, *, blocked_reason: str = "") -> list[str]:

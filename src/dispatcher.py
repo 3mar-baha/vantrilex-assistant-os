@@ -18,7 +18,7 @@ from typing import Any, Final
 
 from loguru import logger
 
-from src.cognition import CompositionCache, ReflectiveTrace
+from src.cognition import ARG_ENTITY_TOOLS, CompositionCache, ReflectiveTrace, entity_from_phrase
 from src.config import Settings
 from src.gateway import GatewayError, OmniRouteClient, Tier
 from src.openclaw.intents import INTENT_PATTERNS, ROUTER_TOOL_LINES, VALID_OPENCLAW_TOOLS
@@ -746,14 +746,14 @@ def _keyword_net(text: str) -> tuple[str, str]:
             # the search query rides the net arg («دوّر بفيديو يوتيوب شرح الفيزياء»)
             return ("youtube", match.group(1).strip(" .!؟?،,"))
         if tool == "weather" and match.groups():
-            # the city rides the net arg: group(2) = a named city («شو الطقس في
-            # اربد»), group(1) = the inline default city («شو الطقس بعمان»)
-            city = (match.group(2) or match.group(1) or "").strip(" .!؟?،,")
-            for prefix in ("ب", "في", "مع", "الى", "إلى", "على"):
-                if city.startswith(prefix) and len(city) > len(prefix):
-                    city = city[len(prefix) :]
-                    break
-            return ("weather", city.strip())
+            # A-3a: the PLACE rides the arg, not the sentence around it. The old
+            # prefix-shave took a bare `ب` off ANY word — «بكرة» (tomorrow) became
+            # «كرة» (a ball) — and removed no filler at all: «شو الطقس في عمّان
+            # اليوم» -> «عمّان اليوم», «تمام، شو الطقس اليوم» -> «اليوم», the CITY
+            # IS THE FILLER. `entity_from_phrase` is word-boundary only, both
+            # edges, delete-only; an all-filler capture yields `""`, so the tool's
+            # home-city default governs. 9 in, 9 out: citation-neutral by design.
+            return ("weather", entity_from_phrase(match.group(2) or match.group(1) or ""))
         if tool == "openclaw_fetch":
             # Phase 3.5: the URL rides the arg (optional group — bare
             # extraction phrasing without a link still reaches the tool and
@@ -983,21 +983,21 @@ class FrontDoorDispatcher:
                 )
                 tool, arg = net_tool, net_arg
             elif net_tool == tool:
-                # Same verdict: the net confirms cognition; its precise arg
-                # wins (legacy device-clause/id parsing preserved). The log
-                # line stays as the safety-floor audit signal either way.
+                # Same verdict: the net confirms the ROUTER's tool choice — A-3a:
+                # `arg` came from the router, since `tool == "none"` is what gates
+                # cognition (§A-corrections-2 Item 2). Entity tools now RECONCILE
+                # through the extractor, so a filler-laden capture cannot overwrite
+                if net_tool in ARG_ENTITY_TOOLS:
+                    net_arg = entity_from_phrase(net_arg)
                 if net_arg != arg:
                     logger.warning(
-                        "dispatcher keyword net refined cognition arg -> tool={!r} arg={!r}",
+                        "dispatcher keyword net refined router arg -> tool={!r} arg={!r}",
                         net_tool,
                         net_arg,
                     )
                     arg = net_arg
                 else:
-                    logger.warning(
-                        "dispatcher keyword net confirmed cognition -> tool={!r}",
-                        net_tool,
-                    )
+                    logger.warning("dispatcher keyword net confirmed router tool", net_tool)
         if verdict_hit is None:
             self._store_verdict(user_text, route, ack, tool, arg)
         yield ack

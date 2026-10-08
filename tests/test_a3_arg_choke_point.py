@@ -7,22 +7,22 @@ decided, plus the two places a wrong answer would become a wrong tool call.
   T1  the SHAPE TABLE (`ARG_ENTITY_TOOLS`) — a tool absent from it is IDENTITY
       by construction, not by accident. This is the over-trim guard's structural
       premise (`tests/test_a3_over_trim_guard.py`) stated at its source.
-  T2  the MERGE RULE (`src/dispatcher.py:985-995`) — the branch that refines an
+  T2  the MERGE RULE (`src/dispatcher.py:1000-1039`) — the branch that refines an
       arg must reconcile both producers instead of overwriting one with the
       other.
   T3  `normalize_tool_arg` COVERAGE — the known, DEFERRED limitation, measured.
 
 THE DEFERRED CHOKE POINT, STATED HONESTLY. `normalize_tool_arg`
-(`src/decision_loop.py:65-68`) is applied at exactly ONE of the three
-`tools.call` sites — the dispatcher heal path (`src/dispatcher.py:1072-1077`),
-which guards the call at :1101. The ReAct loop
+(`src/decision_loop.py:65-68`) is applied at exactly ONE of the three dispatch
+surfaces — the dispatcher heal path (`src/dispatcher.py:1124-1129`), which
+guards the registry call inside `_tool_lane`. The ReAct loop
 (`src/decision_loop.py:472`) and the agent manager
 (`src/agent_manager.py:272`) bypass it entirely. Relocating the hygiene pass to
 `ToolRegistry.call` (`src/tools.py:277`, the ONE dispatch choke point, which
 already carries the irreversible gate and the action log) would cover all three
 — that is the approved plan's A-3c, and it is NOT this node: `src/tools.py`,
 `src/decision_loop.py` and `src/agent_manager.py` are outside this node's file
-ownership. `test_normalize_tool_arg_covers_one_of_three_call_sites` below pins
+ownership. `test_normalize_tool_arg_covers_one_of_three_surfaces` below pins
 that measurement so the day someone does A-3c, this file turns RED and the
 docstring has to be rewritten rather than the measurement quietly changing.
 
@@ -88,30 +88,69 @@ def test_entity_extractor_takes_no_tool_argument():
 
 
 def _same_tool_branch() -> str:
-    """The body of the same-tool refinement branch, read from the SOURCE rather
-    than from a re-implementation — a guard that copies the code it guards
-    cannot see the code changing."""
+    """The same-tool refinement branch's own source, COMMENTS REMOVED.
+
+    Read from the source rather than re-implemented: a guard that copies the
+    code it guards cannot see the code changing. Comments are stripped because
+    this branch quotes the old `arg = net_arg` line in its own explanation, and
+    a raw-text match would be reporting the documentation as the defect.
+
+    Located by the `elif net_tool == tool:` marker (the branch has no function
+    of its own), then extended to the next statement at the same indent."""
     source = inspect.getsource(dispatcher)
-    return source.split("elif net_tool == tool:", 1)[1].split("if verdict_hit is None:", 1)[0]
+    lines = source.splitlines()
+    start = next(
+        (i for i, line in enumerate(lines) if "elif net_tool == tool:" in line),
+        None,
+    )
+    assert start is not None, "the same-tool refinement branch was not found"
+
+    indent = len(lines[start]) - len(lines[start].lstrip())
+    body: list[str] = []
+    for line in lines[start + 1 :]:
+        if line.strip() and (len(line) - len(line.lstrip())) <= indent:
+            break
+        body.append(line.split("#", 1)[0])
+    return "\n".join(body)
 
 
 def test_refinement_branch_normalizes_both_sides():
-    """`src/dispatcher.py:985-995`. At `b5f3953` the body was
-    `if net_arg != arg: arg = net_arg` — one-sided, unconditional. The resolved
-    entity must now be computed for BOTH the incoming arg and the net's arg, so
-    that a shadda-only difference can no longer make the worse side win."""
+    """The merge branch, `src/dispatcher.py:1000-1039`. At the A-3 baseline the
+    body was `if net_arg != arg: arg = net_arg` — one-sided, unconditional. The
+    resolved entity must now be computed for BOTH the incoming arg and the net's
+    arg, so that a shadda-only difference can no longer make the worse side
+    win."""
     assert "entity_from_phrase" in _same_tool_branch(), (
         "the same-tool refinement branch must reconcile both args through the "
-        "entity extractor (src/dispatcher.py:985-995)"
+        "entity extractor, in FrontDoorDispatcher.handle"
     )
 
 
-def test_refinement_branch_does_not_write_a_bare_net_arg():
-    """The overwrite itself must be gone. Assigning `arg = net_arg` inside that
-    branch is the exact line that let a filler-laden city beat a clean one."""
-    assert "arg = net_arg" not in _same_tool_branch(), (
-        "src/dispatcher.py:995 assigned the net's arg unconditionally; the "
-        "refinement must reconcile, not overwrite"
+def test_refinement_branch_extracts_the_entity_before_the_shared_assignment():
+    """The merge rule's shape, pinned by ORDER rather than by the presence of a
+    string.
+
+    `arg = net_arg` survives, and it must: the net is the precise parser for
+    launch/close device clauses and cancel ids
+    (`tests/test_dispatcher.py:503-519`), and dropping it would regress the
+    calculator fix. What changed is WHAT `net_arg` HOLDS for an entity-shaped
+    tool — it is passed through `entity_from_phrase` first, so the shared
+    assignment can no longer carry a greedy end-of-string capture downstream.
+
+    So the extraction must come BEFORE the assignment, asserted as positions: a
+    guard that merely checked for the presence of the extractor would also pass if
+    the assignment came first."""
+    branch = _same_tool_branch()
+    assert "arg = net_arg" in branch, (
+        "the shared overwrite was removed; launch/close/id parsing depends on it"
+    )
+    assert branch.index("entity_from_phrase") < branch.index("arg = net_arg"), (
+        "entity_from_phrase must run BEFORE the shared `arg = net_arg`, or the "
+        "registry still receives the raw end-of-string capture"
+    )
+    assert "ARG_ENTITY_TOOLS" in branch, (
+        "the extraction must be scoped to entity-shaped tools; an unscoped "
+        "filler list would reach free-text args (tests/test_a3_over_trim_guard.py)"
     )
 
 
@@ -132,7 +171,10 @@ def _tools_call_sites() -> list[tuple[str, int]]:
     for path in sorted((ROOT / "src").rglob("*.py")):
         try:
             tree = ast.parse(path.read_text(encoding="utf-8"))
-        except (SyntaxError, UnicodeDecodeError):  # pragma: no cover — fails elsewhere
+        except (
+            SyntaxError,
+            UnicodeDecodeError,
+        ):  # pragma: no cover -- a broken file fails the suite anyway
             continue
         for node in ast.walk(tree):
             if not (
@@ -165,10 +207,10 @@ def test_normalize_tool_arg_covers_one_of_three_surfaces():
     """MEASURED, NOT CLAIMED-FIXED. `normalize_tool_arg` is a no-op on
     conversational filler by construction — it removes quotes, whitespace and
     Arabic-Indic digits and nothing else (`src/decision_loop.py:65-68`) — and
-    it is reached only from `src/dispatcher.py:1072-1077`, inside `_tool_lane`.
-    The ReAct loop (`src/decision_loop.py:472`) and the agent manager
-    (`src/agent_manager.py:272`) bypass it entirely, so two of the three
-    dispatch surfaces deliver an uncleaned arg today.
+    it is reached only from the dispatcher's heal block in `handle`, just above
+    the registry call. The ReAct loop (`src/decision_loop.py:472`) and the
+    agent manager (`src/agent_manager.py:272`) bypass it entirely, so two of the
+    three dispatch surfaces deliver an uncleaned arg today.
 
     This test pins the MEASUREMENT, not a defect: when A-3c relocates the pass
     to `ToolRegistry.call` this goes RED on purpose, and whoever does that must
@@ -183,4 +225,3 @@ def test_normalize_tool_arg_covers_one_of_three_surfaces():
         "expected exactly two dispatch surfaces that bypass "
         f"normalize_tool_arg today; they are now {sorted(bypassing)}"
     )
-

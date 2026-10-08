@@ -113,8 +113,8 @@ def test_schedule_arg_is_never_trimmed():
 
 
 def test_multi_task_arg_is_never_trimmed():
-    """`multi_task` needs EVERY clause (`src/dispatcher.py:679-682`): a single
-    tool's arg would swallow the sibling tasks."""
+    """`multi_task` needs EVERY clause (its arm in `_keyword_net` in
+    `src/dispatcher.py`): a single tool's arg would swallow the sibling tasks."""
     from src.dispatcher import _keyword_net
 
     turn = "ذكّرني اليوم اشتر حليب و افتحي كروم"
@@ -138,8 +138,13 @@ def test_reminder_content_survives_the_entity_extractor_unchanged():
 def test_trailing_filler_trim_never_deletes_the_interior():
     """Even when an entity extractor IS applied, the interior is untouchable."""
     assert _entity("خريبة السوف") == "خريبة السوف"
-    # a filler in the interior of an entity-ish span: the whole span survives
-    assert "اليوم" in _entity("بكرة اليوم")
+    # A filler between two entity words is INTERIOR: both edges are real tokens,
+    # so nothing is trimmed and the day survives. This is the case a naive
+    # delete-anywhere list destroys.
+    assert "اليوم" in _entity("الزرقاء اليوم العقبة")
+    # and both real tokens survive with it
+    assert "الزرقاء" in _entity("الزرقاء اليوم العقبة")
+    assert "العقبة" in _entity("الزرقاء اليوم العقبة")
 
 
 def test_reminder_content_keeps_both_the_day_and_the_source():

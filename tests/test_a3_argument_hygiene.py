@@ -181,17 +181,32 @@ def test_cognition_weather_arg_excludes_topic_noun_and_preposition():
     """At `b5f3953` `_extract_arg('weather', 'شو الطقس بعمان')` returned
     `'الطقس بعمان'` — the TOPIC NOUN is not the entity — and
     `_extract_arg('weather', 'شو الطقس في عمّان')` returned `'في عمان'` — the
-    PREPOSITION is not the entity."""
+    PREPOSITION is not the entity.
+
+    Both expectations are the FOLDED spelling, and that is not an accident of
+    the test: `_extract_arg` receives `clean`, which is `_normalize`d output, so
+    cognition's copy of «عمّان» has no shadda by the time it is called. The
+    merge rule compares on a folded key (`entity_key`) and keeps the net's
+    spelling for the outgoing value, precisely because these two disagree."""
     assert _cognition_extract("weather", _normalize("شو الطقس بعمان")) == AMMAN_BARE
-    assert _cognition_extract("weather", _normalize("شو الطقس في عمّان")) == AMMAN
+    assert _cognition_extract("weather", _normalize("شو الطقس في عمّان")) == AMMAN_BARE
 
 
-def test_cognition_and_net_agree_on_the_same_place():
-    """The merge rule exists to reconcile these two producers. When they
-    disagree about a shadda'd city, the disagreement is the bug (P3), so they
-    must now agree on the place itself."""
+def test_cognition_and_net_name_the_same_place():
+    """The merge rule exists to reconcile these two producers. At the A-3 baseline
+    they disagreed about a shadda'd city — `'في عمان'` vs `'عمّان'` — and the
+    merge rule resolved that by OVERWRITING, so it was never actually resolved.
+    Both must now emit the ENTITY, and both must name the same place.
+
+    THE COMPARISON IS ON THE FOLDED CANON, deliberately: the two producers cannot
+    agree on spelling by construction, because `_extract_arg` receives
+    `_normalize`d text, so cognition's copy of «عمّان» is `عمان`. That is a
+    property of the INPUT, not a defect — and the outgoing value keeps the net's
+    spelling either way."""
     text = "شو الطقس في عمّان"
-    assert _cognition_extract("weather", _normalize(text)) == _keyword_net(text)[1]
+    cognition_side = _cognition_extract("weather", _normalize(text))
+    net_side = _keyword_net(text)[1]
+    assert _normalize(net_side) == _normalize(cognition_side), (cognition_side, net_side)
 
 
 def test_cognition_arg_is_empty_when_the_turn_names_no_entity():
@@ -216,15 +231,21 @@ def test_entity_shaped_tools_are_declared_not_guessed():
 
 
 def test_merge_rule_normalizes_both_sides_before_choosing():
-    """`src/dispatcher.py:985-995`. At `b5f3953` the rule was
-    `if net_arg != arg: arg = net_arg` — an unconditional overwrite. Because
-    `cognition._normalize` folds tashkeel (:271) and the net's `clean` (:674)
-    does not, the compare is unequal for `عمّان` on EVERY turn, so the
-    refinement always fired. The resolved entity must now be the same from
-    both sides, which makes the branch a no-op for a correct input."""
-    cognition_side = _cognition_extract("weather", _normalize("شو الطقس في عمّان"))
+    """The merge branch, in `FrontDoorDispatcher.handle`. At the A-3 baseline the
+    body was `if net_arg != arg: arg = net_arg` — an unconditional overwrite, and
+    the reason the WORSE side won on every shadda'd city.
+
+    THE FIX IS ON THE NET'S SIDE: an entity-shaped tool's `net_arg` is passed
+    through `entity_from_phrase` BEFORE the shared assignment, so the value that
+    reaches the registry is already an entity. Both assertions are needed —
+    idempotence proves the shared `arg = net_arg` can no longer carry filler
+    downstream, and fold-equality proves the branch is a no-op when both sides
+    name the same place."""
     net_side = _keyword_net("شو الطقس في عمّان")[1]
-    assert _entity(cognition_side) == _entity(net_side)
+    assert _entity(net_side) == net_side, net_side
+    cognition_side = _cognition_extract("weather", _normalize("شو الطقس في عمّان"))
+    assert _entity(cognition_side) == cognition_side, cognition_side
+    assert _normalize(net_side) == _normalize(cognition_side)
 
 
 def test_refinement_log_line_names_the_router_not_cognition():
@@ -272,8 +293,11 @@ def test_glued_arabic_comma_does_not_hide_the_imperative():
 def test_normalize_splits_on_arabic_punctuation():
     """The primitive itself, stated directly. Arabic punctuation must become a
     separator; ASCII `.` must NOT, or every URL in the BM25 index
-    (`src/associative.py:19` imports this function) would shatter."""
-    assert _normalize("تمام،ذكّرني").split() == ["تمام", "ذكّرني"]
+    (`src/associative.py:19` imports this function) would shatter.
+
+    The tokens come back TASHKEEL-FOLDED, which is what this function has
+    always done (`:271`) and is what `entity_key` relies on."""
+    assert _normalize("تمام،ذكّرني").split() == ["تمام", "ذكرني"]
     assert _normalize("شو الطقس؟").split() == ["شو", "الطقس"]
     assert _normalize("بكرة،اليوم").split() == ["بكرة", "اليوم"]
     # ASCII full stop and colon survive — a URL is one token
@@ -291,6 +315,44 @@ def test_normalize_splits_on_arabic_punctuation():
 def test_punctuation_split_does_not_change_the_schedule_route(phrase: str):
     """The split must not disturb a turn that already routed correctly."""
     assert deduce(phrase).tool == "schedule", phrase
+
+
+# --------------------------------------------------------------------------
+# THE RETRIEVAL CONSEQUENCE OF THE SPLIT — disclosed, not incidental
+# --------------------------------------------------------------------------
+
+
+def test_a_punctuated_stopword_is_now_the_stopword_it_is():
+    """A-3a's separator reaches RECALL as well as routing, and the change is
+    correct — so it is pinned here rather than left to be discovered.
+
+    `src/associative.py` imports `_normalize` and feeds `STOPWORDS` through
+    `_tokens`. Before the split, «اليوم؟» was a SINGLE token that was NOT in
+    `STOPWORDS` — the question mark made it a different word — so an
+    interrogative could retrieve against the word «today». Now it splits and is
+    filtered, which is what the stopword list always meant.
+
+    The honest cost: a short question can now fall below `INJECT_MIN_TOKENS` and
+    inject nothing. That is the intended direction — return nothing rather than
+    inject the wrong thing — and the next guard pins the other end of it."""
+    from src.associative import STOPWORDS, _tokens
+
+    assert "اليوم" in STOPWORDS
+    assert "اليوم" not in _tokens("اليوم؟")
+
+
+def test_empty_hit_set_still_yields_the_honest_empty_block():
+    """A query that clears the token floor but matches nothing must produce the
+    empty injection block (`src/associative.py:262`), never a fabricated one.
+
+    This guard also exists because coverage of that line MOVED: the punctuated
+    stopword above now short-circuits earlier in the query path, so the branch is
+    reached by a different test. The behaviour is unchanged; only which guard
+    exercises it is. A floor that a punctuation fix can push under is a floor
+    nobody was watching."""
+    from src.associative import build_injection_block
+
+    assert build_injection_block([]) == ""
 
 
 # --------------------------------------------------------------------------
