@@ -115,12 +115,126 @@ _SEED_TTS_LEXICON: Final[dict[str, str]] = {
 }
 
 
+# V2-COMPOSE (numerals→spoken words): digits must never reach Fish — spoken
+# Arabic says numbers as words. Jordanian-flavored forms matching the voice
+# RAG doctrine (vault/Knowledge/fish_voice_style.md): اتناشر، مية وخمسين.
+_AR_INDIC_DIGITS: Final = str.maketrans("٠١٢٣٤٥٦٧٨٩", "0123456789")
+_NUM_ONES: Final[dict[int, str]] = {
+    0: "صفر",
+    1: "واحد",
+    2: "تنين",
+    3: "تلاتة",
+    4: "أربعة",
+    5: "خمسة",
+    6: "ستة",
+    7: "سبعة",
+    8: "تمانية",
+    9: "تسعة",
+}
+_NUM_TEENS: Final[dict[int, str]] = {
+    10: "عشرة",
+    11: "حداش",
+    12: "اتناش",
+    13: "تلتاش",
+    14: "أربعتاش",
+    15: "خمستاش",
+    16: "ستاش",
+    17: "سبعتاش",
+    18: "تمنتاش",
+    19: "تسعتاش",
+}
+_NUM_TENS: Final[dict[int, str]] = {
+    20: "عشرين",
+    30: "تلاتين",
+    40: "أربعين",
+    50: "خمسين",
+    60: "ستين",
+    70: "سبعين",
+    80: "تمانين",
+    90: "تسعين",
+}
+_NUM_HUNDREDS: Final[dict[int, str]] = {
+    100: "مية",
+    200: "ميتين",
+    300: "تلاتمية",
+    400: "أربعمية",
+    500: "خمسمية",
+    600: "ستمية",
+    700: "سبعمية",
+    800: "تمنمية",
+    900: "تسعمية",
+}
+_NUM_RE: Final = re.compile(r"\d+(?:[:.٫/]\d+)+|\d+")
+
+
+def _spell_sub_hundred(n: int) -> str:
+    """Spell 0..99 in spoken Jordanian Arabic (ones-first with و)."""
+    if n < 10:
+        return _NUM_ONES[n]
+    if n < 20:
+        return _NUM_TEENS[n]
+    tens, ones = (n // 10) * 10, n % 10
+    if not ones:
+        return _NUM_TENS[tens]
+    return f"{_NUM_ONES[ones]} و{_NUM_TENS[tens]}"
+
+
+def _spell_integer(n: int) -> str:
+    """Spell a non-negative integer; huge values fall back to digit words so
+    no digit ever survives (the only contract this helper guarantees)."""
+    if n < 100:
+        return _spell_sub_hundred(n)
+    if n < 1000:
+        hundreds, rest = (n // 100) * 100, n % 100
+        head = _NUM_HUNDREDS[hundreds]
+        return head if not rest else f"{head} و{_spell_sub_hundred(rest)}"
+    if n < 100000:
+        thousands, rest = n // 1000, n % 1000
+        if thousands == 1:
+            head = "ألف"
+        elif thousands == 2:
+            head = "ألفين"
+        elif thousands < 11:
+            head = f"{_spell_sub_hundred(thousands)} آلاف"
+        else:
+            head = f"{_spell_sub_hundred(thousands)} ألف"
+        if not rest:
+            return head
+        return f"{head} و{_spell_integer(rest)}" if rest < 100 else f"{head} {_spell_integer(rest)}"
+    return " ".join(_NUM_ONES[int(d)] for d in str(n))
+
+
+def _spell_number_token(token: str) -> str:
+    """Spell one digit-run: decimals via فاصلة, clock/slash runs joined with و,
+    plain integers via _spell_integer. Never returns a digit."""
+    for sep in (":", "/", "٫"):
+        if sep in token:
+            return " و".join(_spell_integer(int(p)) for p in token.split(sep))
+    if "." in token:
+        int_part, _, frac_part = token.partition(".")
+        head = _spell_integer(int(int_part)) if int_part else "صفر"
+        tail = " ".join(_NUM_ONES[int(d)] for d in frac_part) if frac_part else ""
+        return f"{head} فاصلة {tail}" if tail else head
+    return _spell_integer(int(token))
+
+
+def spell_numerals(text: str) -> str:
+    """Replace every digit run (Western + Arabic-Indic) with spoken Arabic
+    words. Pure and never-blocking: any failure returns the input."""
+    try:
+        text = text.translate(_AR_INDIC_DIGITS)
+        return _NUM_RE.sub(lambda m: _spell_number_token(m.group()), text)
+    except Exception:  # noqa: BLE001 — shaping must never block synthesis
+        return text
+
+
 def shape_for_tts(text: str, notes: list[DialectNote] | None = None) -> str:
     """Emoji-strip + quote-strip + laughter-token drop + whole-word pronunciation
     lexicon (owner notes override the seed) + trailing-harakat skeleton, so the
     engine never forces MSA tanween on dialect endings and never renders «هههه»
     as an out-of-context laugh. Pure and never-blocking: any internal failure
-    returns the input."""
+    returns the input.
+    V2-COMPOSE: numerals become spoken words here (digits never reach Fish)."""
     original = text
     try:
         text = _EMOJI_RE.sub(" ", text)
@@ -128,6 +242,7 @@ def shape_for_tts(text: str, notes: list[DialectNote] | None = None) -> str:
         text = re.sub(r"[ \t]{2,}", " ", text).strip()
         if text:
             text = " ".join(w for w in text.split() if not _LAUGHTER_TOKEN_RE.match(w))
+            text = spell_numerals(text)
             lex = dict(_SEED_TTS_LEXICON)
             for note in notes or []:
                 lex[note.term] = note.phonetic

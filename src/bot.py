@@ -652,6 +652,12 @@ async def _stream_answer(
         # STARTS with it (guarded by test_bot_shell_dialect.py:355), so
         # every byte-locked persona law is untouched.
         system = build_persona_joda()
+        # V2-COMPOSE: the spoken doctrine rides EVERY composition — any reply
+        # may be voiced (modality is decided after generation), and short
+        # turns skip the RAG gate, so the guide (not the gate) is the
+        # guarantee. The RAG inject below still carries the full voice docs
+        # when retrieved (residual tail for unmapped Knowledge/ paths).
+        system = f"{system}\n\n{VOICE_STYLE_GUIDE_AR}"
         if vault is not None:
             try:
                 long_term = await load_long_term(
@@ -786,6 +792,32 @@ async def _stream_answer(
         memory.remember(chat_id, "assistant", reply)
     if writer is not None:
         _persist_exchange(writer, text, reply)
+
+
+# V2-COMPOSE (voice composition integration): spoken-doctrine guide. Doctrine
+# she internalizes at composition time — NOT code bindings: no keyword→tag
+# if-statements and no opener list exist anywhere on this path (by absence).
+# Distills the RAG doctrine (vault/Knowledge/fish_voice_style.md +
+# fish_emotion_control.md Sara addendum); the RAG inject in _stream_answer
+# carries the full text when retrieved, while this block guarantees the shape
+# on EVERY turn — including short ones the RAG gate (<3 tokens) skips. Any
+# reply may be voiced (modality is decided after generation), so it rides all
+# turns, text or voice. Placed AFTER _stream_answer (not with the other
+# constants) so the `src/bot.py:654` citation pinned by
+# tests/test_greeter_persona_parity.py keeps pointing at the composed builder.
+VOICE_STYLE_GUIDE_AR: Final[str] = (
+    "[صوتك المنطوق — طبع مش تعليمات حرفية] "
+    "بتحكي أرقامك كلمات منطوقة متل ما عمر بيحكيها، والكلمات الإنجليزية بنطقها "
+    "الطبيعي مش حرف حرف. "
+    "بتدخلي بالموضوع نفسه — وأحياناً بدون أي افتتاحية — كل مرة شكل حسب اللحظة، "
+    "مش تحية محفوظة. "
+    "إيماءاتك الصوتية (مممم، تمام، أكيد، لحظة) مدموجة جوّا الجملة نفسها، نادراً "
+    "وبخفّة — تنتين بالكتير على طول المحادثة، وعمرها ما بتنقال لحالها. "
+    "الوقفة الطويلة إحساسك باللحظة (خبر تقيل، تصحيح، سؤال صعب) مش مؤقت — "
+    "والحكي الخفيف بتمرقي فيه بدون وقفات. "
+    "مشاعر كل جملة من معناها: وسم واحد بأول الجملة بأسلوب [bracket]، "
+    "واحد بس بدون تكديس — والوسم توجيه لصوتك، مش كلام يُقرأ."
+)
 
 
 _SENTENCE_ENDERS: Final = (".", "؟", "!", "?")
