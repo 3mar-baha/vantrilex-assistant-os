@@ -142,10 +142,17 @@ DEFERRED_CLASS_B: dict[tuple[str, str, str], str] = {
         "`VaultClient.__init__`, whose real span is inside the class at 520-835; 353 is "
         "not in it."
     ),
-    ("src/bot_shell.py", "src/dispatcher.py:805", "handle"): (
-        "HALF-RANGE CLAIM, not a stale one. Line 805 is `class FrontDoorDispatcher:` and "
-        "the same parenthetical gives `handle` at :885, which IS exact. One symbol, two "
-        "citations: pairing 805 with `handle` is a reading, not a decidable claim."
+    ("src/action_log.py", "src/dispatcher.py:885", "FrontDoorDispatcher.handle"): (
+        "STALE post-C1 (7bc4a33, +29). Line 885 now reads `self,` inside `_store_verdict` "
+        "(884-898); `FrontDoorDispatcher.handle` (`async def`) is at 914 (span 914-1052). "
+        "Src-owned prose - re-point to :914 in the src round."
+    ),
+    ("src/bot_shell.py", "src/dispatcher.py:834", "handle"): (
+        "HALF-RANGE CLAIM, not a stale one. One symbol, two citations: pairing 834 with "
+        "`handle` is a reading, not a decidable claim. Re-derived post-src-round: "
+        "line 834 IS `class FrontDoorDispatcher:`, and the same parenthetical gives "
+        "`handle` at bare `:914` (Class A, undiscovered by design); `async def handle` "
+        "is at 914 (span 914-1052)."
     ),
     ("src/tool_overlay.py", "src/tools.py:287", "ToolRegistry._do_<name>"): (
         "SYNTHETIC NAME. The cited line is in fact the right one - "
@@ -160,9 +167,10 @@ DEFERRED_CLASS_B: dict[tuple[str, str, str], str] = {
         "citation appears twice in the citing file; one entry covers both."
     ),
     ("tests/test_bot_shell_repl.py", "src/dispatcher.py:744", "handle"): (
-        "STALE ON BOTH HALVES. Line 744 is inside `_keyword_net` (672-771), and the same "
-        "parenthetical puts `handle` at :824, which is a comment inside `__init__`; "
-        "`handle` is at 885."
+        'STALE ON BOTH HALVES. Re-derived post-C1 (7bc4a33): line 744 is `"create_task",` '
+        "inside `_keyword_net` (701-800), and the same parenthetical puts `handle` at "
+        ":824, which is now the `ack = DEFAULT_ACK_AR` clamp line; `handle` is at 914 "
+        "(span 914-1052)."
     ),
     ("tests/test_greeter_persona_parity.py", "src/bot.py:195", "SARA_PERSONA_AR"): (
         "IMPORT, NOT A DEFINITION. `SARA_PERSONA_AR` has no `def` in `src/bot.py` - it is "
@@ -170,8 +178,9 @@ DEFERRED_CLASS_B: dict[tuple[str, str, str], str] = {
         "no span in the cited file can host it."
     ),
     ("tests/test_greeter_persona_parity.py", "src/dispatcher.py:1076", "_plain_messages"): (
-        "STALE, and the citing file says so itself: the line above records that "
-        "`_plain_messages` is at 1159. Line 1076 is inside `_tool_lane` (1056-1156)."
+        "STALE, and the citing file says so itself: the comment above records that "
+        "`_plain_messages` is at 1200. Re-derived post-C1 (7bc4a33): line 1076 is "
+        "`skill_block = (` inside `handle` (914-1052); `_tool_lane` is 1097-1197."
     ),
     ("tests/test_makefile_gate.py", "tests/test_quality_gate.py:65", "make"): (
         "DISCOVERY FALSE POSITIVE. `make` is the English word in the prose, not a Python "

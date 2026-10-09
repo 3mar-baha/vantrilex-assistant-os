@@ -318,10 +318,11 @@ async def test_the_greeting_instruction_bytes_are_unchanged(fake_bot):
 # at a line without that symbol is a false claim about the tree, which is what
 # CLAUDE.md §5.1 Directive 6 exists to prevent.
 #
-# Measured stale at d34d84a, all four of them:
-#   `src/dispatcher.py:744`  -> the class is at 805
-#   `:824`                   -> `handle` is at 885
-#   `src/dispatcher.py:1076` -> `_plain_messages` is at 1159
+# Measured stale at d34d84a, all four of them; dispatcher symbols re-shifted by
+# the C1 insertion 7bc4a33 (`_strip_ack_echo` at 264-290 plus the seam hunk):
+#   `src/dispatcher.py:744`  -> the class is at 834
+#   `:824`                   -> `handle` is at 914
+#   `src/dispatcher.py:1076` -> `_plain_messages` is at 1200
 #   `src/bot.py:615`         -> 615 is `acoustic: str = ""`; the call site is 644
 CITATION_ANCHORS: dict[str, tuple[str, ...]] = {
     "src/dispatcher.py": (
