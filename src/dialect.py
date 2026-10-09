@@ -112,6 +112,12 @@ _SEED_TTS_LEXICON: Final[dict[str, str]] = {
     "هلأ": "هلَّأ",
     "وين": "وين",
     "حكي": "حَكي",
+    # node-A additions (TTS shaping fixes): units/location/Latin initials
+    # «كم/س» must surface as words (never letter-spelled); «بالعمان» Jordanian
+    # short form; «CI» deliberate unrushed letter names.
+    "كم/س": "كيلومتر بالساعة",
+    "بالعمان": "بعمان",
+    "CI": "سي آي",
 }
 
 
@@ -164,6 +170,10 @@ _NUM_HUNDREDS: Final[dict[int, str]] = {
     800: "تمنمية",
     900: "تسعمية",
 }
+# Node-A symbol cleanup (owner TTS leak 2026): raw `= > < |` + backticks reach
+# the engine and get read aloud / double the neighboring word — space them out
+# before synthesis so «الكود = 404» never renders doubled.
+_SYMBOL_RE: Final = re.compile(r"[=><|`]+")
 _NUM_RE: Final = re.compile(r"\d+(?:[:.٫/]\d+)+|\d+")
 
 
@@ -204,9 +214,61 @@ def _spell_integer(n: int) -> str:
     return " ".join(_NUM_ONES[int(d)] for d in str(n))
 
 
+def _clock_period(hour24: int) -> str:
+    """Jordanian day-period for a 24h hour."""
+    if 5 <= hour24 <= 11:
+        return "الصبح"
+    if 12 <= hour24 <= 14:
+        return "الظهر"
+    if 15 <= hour24 <= 17:
+        return "العصر"
+    if 18 <= hour24 <= 21:
+        return "المسا"
+    return "بالليل"
+
+
+def _spell_clock_minute(m: int) -> str:
+    """Minute words via the file's Jordanian forms; ones-2 takes the joined
+    «اتنين» shape («سبعة واتنين وتلاتين») after the hour connector."""
+    words = _spell_sub_hundred(m)
+    if m == 2 or (m > 20 and m % 10 == 2):
+        words = "اتنين" + words[len("تنين") :]
+    return words
+
+
+def _spell_clock(token: str) -> str | None:
+    """Spell clock-like HH:MM (24h → 12h Jordanian + period); None when the
+    token is not a valid clock (hour 0–23, minute 00–59, minute 2 digits)."""
+    if token.count(":") != 1:
+        return None
+    h_part, m_part = token.split(":")
+    if not h_part.isdigit() or not m_part.isdigit() or len(m_part) != 2:
+        return None
+    hour, minute = int(h_part), int(m_part)
+    if not 0 <= hour <= 23 or not 0 <= minute <= 59:
+        return None
+    hour12 = 12 if hour == 0 else (hour - 12 if hour > 12 else hour)
+    hour_words = _spell_sub_hundred(hour12)
+    period = _clock_period(hour)
+    if minute == 0:
+        return f"{hour_words} بالزبط {period}"
+    if minute == 15:
+        return f"{hour_words} وربع {period}"
+    if minute == 30:
+        return f"{hour_words} ونص {period}"
+    if minute == 45:
+        return f"{hour_words} إلا ربع {period}"
+    return f"{hour_words} و{_spell_clock_minute(minute)} {period}"
+
+
 def _spell_number_token(token: str) -> str:
-    """Spell one digit-run: decimals via فاصلة, clock/slash runs joined with و,
-    plain integers via _spell_integer. Never returns a digit."""
+    """Spell one digit-run: clock HH:MM via 12h Jordanian + period, decimals
+    via فاصلة, clock/slash runs joined with و, plain integers via
+    _spell_integer. Never returns a digit."""
+    if ":" in token:
+        clock = _spell_clock(token)
+        if clock is not None:
+            return clock
     for sep in (":", "/", "٫"):
         if sep in token:
             return " و".join(_spell_integer(int(p)) for p in token.split(sep))
@@ -239,6 +301,7 @@ def shape_for_tts(text: str, notes: list[DialectNote] | None = None) -> str:
     try:
         text = _EMOJI_RE.sub(" ", text)
         text = _QUOTE_RE.sub("", text)
+        text = _SYMBOL_RE.sub(" ", text)
         text = re.sub(r"[ \t]{2,}", " ", text).strip()
         if text:
             text = " ".join(w for w in text.split() if not _LAUGHTER_TOKEN_RE.match(w))
