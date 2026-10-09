@@ -121,6 +121,17 @@ _SEED_TTS_LEXICON: Final[dict[str, str]] = {
 }
 
 
+# Node-C2 glue-guard allowlist (2026-10-09): the model occasionally fuses two
+# words into one whitespace-delimited token («بكراما») and Fish synthesizes
+# the fused token as-is. Explicit whole-token map ONLY — never a general
+# splitter; anything not listed here passes through untouched.
+_GLUE_GUARD_ALLOWLIST: Final[dict[str, str]] = {
+    "بكراما": "بكرا ما",
+    "وسهلاًهلا": "وسهلاً هلا",
+    "بفحصلكعدد": "بفحصلك عدد",
+    "مشكلةما": "مشكلة ما",
+    "إنجازكواو": "إنجازك واو",
+}
 # V2-COMPOSE (numerals→spoken words): digits must never reach Fish — spoken
 # Arabic says numbers as words. Jordanian-flavored forms matching the voice
 # RAG doctrine (vault/Knowledge/fish_voice_style.md): اتناشر، مية وخمسين.
@@ -316,6 +327,9 @@ def shape_for_tts(text: str, notes: list[DialectNote] | None = None) -> str:
             )
             text = pattern.sub(lambda m: lex[m.group()], text)
             text = " ".join(_TRAILING_HARAKAT_RE.sub("", word) for word in text.split())
+            text = " ".join(
+                _GLUE_GUARD_ALLOWLIST.get(word, word) for word in text.split()
+            )
         return text
     except Exception:  # noqa: BLE001 — shaping must never block synthesis
         return original

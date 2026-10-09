@@ -261,6 +261,35 @@ def parse_rag_domains(reply: str) -> tuple[str, ...]:
     return kept or ("none",)
 
 
+def _strip_ack_echo(ack: str, body: str) -> str:
+    """Drop one ack-echo prefix from a narration/tool body (composition seam).
+
+    The ack yielded at A8 is already spoken; when the narration body starts
+    with the same ack text, stacking repeats it. Prefix-only, at most one
+    occurrence, so legitimate mid-reply repetition survives. Pure and
+    never-blocking: on any doubt the body is returned unchanged.
+    """
+    try:
+        if not ack or not body:
+            return body
+        if not isinstance(ack, str) or not isinstance(body, str):
+            return body
+        needle = ack.strip()
+        if not needle:
+            return body
+        text = body.lstrip()
+        if text == needle:
+            return ""
+        if not text.startswith(needle):
+            return body
+        rest = text[len(needle):]
+        if rest and rest[0] not in (" ", "\t", "\n", "\r", "،", ".", "؟", "!", "…", ":", "؛", "-", "–", "—", "\"", "'", "»", "«"):
+            return body
+        return rest.lstrip()
+    except Exception:  # noqa: BLE001 — dedupe never blocks chat
+        return body
+
+
 # Remediation 2.1 (owner directive 2026-09-03, audit C-1): deterministic
 # anti-hallucination keyword net — a defense line BEHIND the router. When the
 # router misses (tool="none") or emits an unknown tool while the text clearly
@@ -1002,12 +1031,24 @@ class FrontDoorDispatcher:
             self._store_verdict(user_text, route, ack, tool, arg)
         yield ack
         if tool != "none":
+            _first = True
             async for delta in self._tool_lane(tool, arg, route, user_text, system, history, tools):
+                if _first:
+                    _first = False
+                    delta = _strip_ack_echo(ack, delta)
+                    if not delta:
+                        continue
                 yield delta
             return
+        _first = True
         async for delta in self._gateway.stream_chat(
             self._plain_messages(system, history, user_text), tier=_ROUTES[route]
         ):
+            if _first:
+                _first = False
+                delta = _strip_ack_echo(ack, delta)
+                if not delta:
+                    continue
             yield delta
 
     def set_skill_vault(self, vault: Any) -> None:
