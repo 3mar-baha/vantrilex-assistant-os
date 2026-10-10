@@ -154,6 +154,12 @@ DEFERRED_CLASS_B: dict[tuple[str, str, str], str] = {
         "`handle` at bare `:914` (Class A, undiscovered by design); `async def handle` "
         "is at 914 (span 914-1052)."
     ),
+    ("src/bot_shell.py", "src/dispatcher.py:1200", "_plain_messages"): (
+        "STALE post-ruff-format (8748eac, +19 from the tuple expansion at ~L285). "
+        "Line 1200 is now a `# round DROPPED the job ids` comment inside `_tool_lane` "
+        "(1116-1216); `def _plain_messages` is at 1219 (span 1219-1226). Src-owned "
+        "prose - re-point to :1219 in the src round."
+    ),
     ("src/tool_overlay.py", "src/tools.py:287", "ToolRegistry._do_<name>"): (
         "SYNTHETIC NAME. The cited line is in fact the right one - "
         '`handler = getattr(self, f"_do_{tool}", None)` - but `<name>` is a template '

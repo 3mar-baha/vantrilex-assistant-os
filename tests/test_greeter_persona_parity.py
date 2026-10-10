@@ -319,10 +319,11 @@ async def test_the_greeting_instruction_bytes_are_unchanged(fake_bot):
 # CLAUDE.md §5.1 Directive 6 exists to prevent.
 #
 # Measured stale at d34d84a, all four of them; dispatcher symbols re-shifted by
-# the C1 insertion 7bc4a33 (`_strip_ack_echo` at 264-290 plus the seam hunk):
-#   `src/dispatcher.py:744`  -> the class is at 834
-#   `:824`                   -> `handle` is at 914
-#   `src/dispatcher.py:1076` -> `_plain_messages` is at 1200
+# the C1 insertion 7bc4a33 (`_strip_ack_echo` at 264-290 plus the seam hunk),
+# then +19 again by the ruff-format 8748eac (tuple expansion at ~L285):
+#   `src/dispatcher.py:744`  -> the class is at 853
+#   `:824`                   -> `handle` is at 933
+#   `src/dispatcher.py:1076` -> `_plain_messages` is at 1219
 #   `src/bot.py:615`         -> 615 is `acoustic: str = ""`; the call site is 644
 CITATION_ANCHORS: dict[str, tuple[str, ...]] = {
     "src/dispatcher.py": (
