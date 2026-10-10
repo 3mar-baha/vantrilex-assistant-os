@@ -147,18 +147,13 @@ DEFERRED_CLASS_B: dict[tuple[str, str, str], str] = {
         "(884-898); `FrontDoorDispatcher.handle` (`async def`) is at 914 (span 914-1052). "
         "Src-owned prose - re-point to :914 in the src round."
     ),
-    ("src/bot_shell.py", "src/dispatcher.py:834", "handle"): (
-        "HALF-RANGE CLAIM, not a stale one. One symbol, two citations: pairing 834 with "
-        "`handle` is a reading, not a decidable claim. Re-derived post-src-round: "
-        "line 834 IS `class FrontDoorDispatcher:`, and the same parenthetical gives "
-        "`handle` at bare `:914` (Class A, undiscovered by design); `async def handle` "
-        "is at 914 (span 914-1052)."
-    ),
-    ("src/bot_shell.py", "src/dispatcher.py:1200", "_plain_messages"): (
-        "STALE post-ruff-format (8748eac, +19 from the tuple expansion at ~L285). "
-        "Line 1200 is now a `# round DROPPED the job ids` comment inside `_tool_lane` "
-        "(1116-1216); `def _plain_messages` is at 1219 (span 1219-1226). Src-owned "
-        "prose - re-point to :1219 in the src round."
+    ("src/bot_shell.py", "src/dispatcher.py:853", "handle"): (
+        "HALF-RANGE CLAIM, not a stale one. One symbol, two citations: pairing 853 with "
+        "`handle` is a reading, not a decidable claim. Re-derived post-ruff-format "
+        "(8748eac) and re-pointed in e3790a7: "
+        "line 853 IS `class FrontDoorDispatcher:`, and the same parenthetical gives "
+        "`handle` at bare `:933` (Class A, undiscovered by design); `async def handle` "
+        "is at 933 (span 933-1071)."
     ),
     ("src/tool_overlay.py", "src/tools.py:287", "ToolRegistry._do_<name>"): (
         "SYNTHETIC NAME. The cited line is in fact the right one - "
