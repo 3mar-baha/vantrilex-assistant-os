@@ -1,7 +1,7 @@
 """Terminal 1 — Sara's clean chat REPL: the front door with no transport around it.
 
 This module owns PRESENTATION ONLY. Every turn is handed to `FrontDoorDispatcher`
-(`src/dispatcher.py:834`, `handle` at `:914`) and the dispatcher's deltas are
+(`src/dispatcher.py:853`, `handle` at `:933`) and the dispatcher's deltas are
 yielded back verbatim, token by token. There is deliberately no second code path:
 
   * it binds EXACTLY ONE symbol from `src.persona` — `build_persona_joda`, the
@@ -27,7 +27,7 @@ this file with `ast` and assert exactly that, so the constraint is checked
 rather than remembered.
 
 Dialect, closed (owner decision 2026-09-30): the terminal used to pass no
-`system` prompt at all. `_plain_messages` (`src/dispatcher.py:1200`) emits a
+`system` prompt at all. `_plain_messages` (`src/dispatcher.py:1219`) emits a
 system message only when `system` is truthy, so the FAST conversation call left
 the model with a bare user turn and it answered in MSA. The seam already existed
 and the Telegram route already used it (`src/bot.py:654`); the terminal never
