@@ -282,8 +282,27 @@ def _strip_ack_echo(ack: str, body: str) -> str:
             return ""
         if not text.startswith(needle):
             return body
-        rest = text[len(needle):]
-        if rest and rest[0] not in (" ", "\t", "\n", "\r", "،", ".", "؟", "!", "…", ":", "؛", "-", "–", "—", "\"", "'", "»", "«"):
+        rest = text[len(needle) :]
+        if rest and rest[0] not in (
+            " ",
+            "\t",
+            "\n",
+            "\r",
+            "،",
+            ".",
+            "؟",
+            "!",
+            "…",
+            ":",
+            "؛",
+            "-",
+            "–",
+            "—",
+            '"',
+            "'",
+            "»",
+            "«",
+        ):
             return body
         return rest.lstrip()
     except Exception:  # noqa: BLE001 — dedupe never blocks chat

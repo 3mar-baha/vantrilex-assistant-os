@@ -327,9 +327,7 @@ def shape_for_tts(text: str, notes: list[DialectNote] | None = None) -> str:
             )
             text = pattern.sub(lambda m: lex[m.group()], text)
             text = " ".join(_TRAILING_HARAKAT_RE.sub("", word) for word in text.split())
-            text = " ".join(
-                _GLUE_GUARD_ALLOWLIST.get(word, word) for word in text.split()
-            )
+            text = " ".join(_GLUE_GUARD_ALLOWLIST.get(word, word) for word in text.split())
         return text
     except Exception:  # noqa: BLE001 — shaping must never block synthesis
         return original

@@ -5,14 +5,14 @@ narration / tool body already starts with the ack text yielded at A8, the
 duplicate is dropped instead of stacking. Pure, never-blocking, prefix-only.
 """
 
+import json
+
 import httpx
 
 from src.dispatcher import FrontDoorDispatcher, _strip_ack_echo
 from src.gateway import OmniRouteClient
 from tests.test_dispatcher import CHAINS
 from tests.test_omniroute_gateway import _chunk, _collect, _Scripted, _sse
-
-import json
 
 
 def _router_json(route: str, ack: str) -> str:
@@ -50,9 +50,7 @@ async def test_dup_ack_dropped_at_plain_seam(make_settings):
         httpx.Response(200, content=_sse(_chunk(f"{ack} الجواب الحقيقي"))),
     )
     async with _gateway(script) as client:
-        out = await _collect(
-            FrontDoorDispatcher(client, make_settings()).handle("طلب عادي")
-        )
+        out = await _collect(FrontDoorDispatcher(client, make_settings()).handle("طلب عادي"))
     assert out[0] == ack
     assert "".join(out[1:]).strip() == "الجواب الحقيقي"
     assert "".join(out).count(ack) == 1
@@ -65,9 +63,7 @@ async def test_distinct_ack_kept_at_plain_seam(make_settings):
         httpx.Response(200, content=_sse(_chunk("الجواب الحقيقي"))),
     )
     async with _gateway(script) as client:
-        out = await _collect(
-            FrontDoorDispatcher(client, make_settings()).handle("طلب عادي")
-        )
+        out = await _collect(FrontDoorDispatcher(client, make_settings()).handle("طلب عادي"))
     assert out == [ack, "الجواب الحقيقي"]
 
 
@@ -75,13 +71,9 @@ async def test_mid_reply_repetition_survives(make_settings):
     ack = "من عيوني هسا"
     script = _Scripted(
         httpx.Response(200, content=_sse(_router_json("direct", ack))),
-        httpx.Response(
-            200, content=_sse(_chunk("الجواب"), _chunk(f" ومن عيوني هسا مكمل"))
-        ),
+        httpx.Response(200, content=_sse(_chunk("الجواب"), _chunk(" ومن عيوني هسا مكمل"))),
     )
     async with _gateway(script) as client:
-        out = await _collect(
-            FrontDoorDispatcher(client, make_settings()).handle("طلب عادي")
-        )
+        out = await _collect(FrontDoorDispatcher(client, make_settings()).handle("طلب عادي"))
     assert out[0] == ack
     assert "ومن عيوني هسا مكمل" in "".join(out[1:])
